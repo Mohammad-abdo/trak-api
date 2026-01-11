@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url= env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -20,7 +20,7 @@ model User {
   countryCode             String?   @map("country_code") @default("+1")
   contactNumber           String?   @map("contact_number")
   gender                  String?
-  emailVerifiedAt         DateTime? @map("email_verified_at")@db.Timestamp
+  emailVerifiedAt         DateTime? @map("email_verified_at") @db.Timestamp
   address                 String?   @db.Text
   userType                String?   @map("user_type") @db.VarChar(20)
   playerId                String?   @map("player_id")
@@ -29,7 +29,7 @@ model User {
   latitude                String?
   longitude               String?
   currentHeading           Float?    @map("current_heading")
-  lastNotificationSeen    DateTime? @map("last_notification_seen")@db.Timestamp
+  lastNotificationSeen    DateTime? @map("last_notification_seen") @db.Timestamp
   status                  String    @default("pending") @db.VarChar(20)
   isOnline                Boolean   @default(false) @map("is_online")
   isAvailable             Boolean   @default(false) @map("is_available")
@@ -39,9 +39,9 @@ model User {
   timezone                String?   @default("UTC")
   serviceId               Int?      @map("service_id")
   isVerifiedDriver        Boolean   @default(false) @map("is_verified_driver")
-  lastLocationUpdateAt    DateTime? @map("last_location_update_at")@db.Timestamp
-  otpVerifyAt            DateTime? @map("otp_verify_at")@db.Timestamp
-  lastActivedAt           DateTime? @map("last_actived_at")@db.Timestamp
+  lastLocationUpdateAt    DateTime? @map("last_location_update_at") @db.Timestamp
+  otpVerifyAt            DateTime? @map("otp_verify_at") @db.Timestamp
+  lastActivedAt           DateTime? @map("last_actived_at") @db.Timestamp
   appVersion              String?   @map("app_version")
   referralCode            String?   @unique @map("referral_code")
   partnerReferralCode     String?   @map("partner_referral_code")
@@ -158,9 +158,9 @@ model RideRequest {
   id                                  Int       @id @default(autoincrement())
   riderId                            Int       @map("rider_id")
   serviceId                           Int?      @map("service_id")
-  datetime                            DateTime?@db.Timestamp
+  datetime                            DateTime? @db.Timestamp
   isSchedule                          Boolean   @default(false) @map("is_schedule")
-  scheduleDatetime                    DateTime? @map("schedule_datetime")@db.Timestamp
+  scheduleDatetime                    DateTime? @map("schedule_datetime") @db.Timestamp
   isPrepaid                           Boolean   @default(false) @map("is_prepaid")
   paymentReference                    String?   @map("payment_reference")
   rideAttempt                         Int       @default(0) @map("ride_attempt")
@@ -171,7 +171,7 @@ model RideRequest {
   extraChargesAmount                  Float     @default(0) @map("extra_charges_amount") @db.Double
   driverId                            Int?      @map("driver_id")
   riderequestInDriverId               Int?      @map("riderequest_in_driver_id")
-  riderequestInDatetime               DateTime? @map("riderequest_in_datetime")@db.Timestamp
+  riderequestInDatetime               DateTime? @map("riderequest_in_datetime") @db.Timestamp
   startLatitude                       String?   @map("start_latitude")
   startLongitude                      String?   @map("start_longitude")
   startAddress                        String?   @map("start_address") @db.Text
@@ -216,7 +216,7 @@ model RideRequest {
   isRideForOther                     Boolean   @default(false) @map("is_ride_for_other")
   otherRiderData                     Json?     @map("other_rider_data")
   dropLocation                       Json?     @map("drop_location")
-  datetimeUtc                        DateTime? @map("datetime_utc")@db.Timestamp
+  datetimeUtc                        DateTime? @map("datetime_utc") @db.Timestamp
   multiDropLocation                  Json?     @map("multi_drop_location")
   surcharge                          Float     @default(0) @db.Double
   discount                           Float     @default(0) @db.Double
@@ -224,8 +224,8 @@ model RideRequest {
   tripType                           String?   @map("trip_type")
   flightNumber                       String?   @map("flight_number")
   pickupPoint                        String?   @map("pickup_point")
-  preferredPickupTime               DateTime? @map("preferred_pickup_time")@db.Timestamp
-  preferredDropoffTime              DateTime? @map("preferred_dropoff_time")@db.Timestamp
+  preferredPickupTime               DateTime? @map("preferred_pickup_time") @db.Timestamp
+  preferredDropoffTime              DateTime? @map("preferred_dropoff_time") @db.Timestamp
   airportPickup                      Boolean   @default(false) @map("airport_pickup")
   airportDropoff                     Boolean   @default(false) @map("airport_dropoff")
   zonePickup                         Boolean   @default(false) @map("zone_pickup")
@@ -444,7 +444,7 @@ model RideRequestHistory {
   id            Int       @id @default(autoincrement())
   rideRequestId Int       @map("ride_request_id")
   historyType   String?   @map("history_type")
-  datetime      DateTime?@db.Timestamp
+  datetime      DateTime? @db.Timestamp
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
 
@@ -516,7 +516,7 @@ model Notification {
   notifiableType  String   @map("notifiable_type")
   notifiableId    Int      @map("notifiable_id")
   data            Json
-  readAt          DateTime? @map("read_at")@db.Timestamp
+  readAt          DateTime? @map("read_at") @db.Timestamp
   isRead          Boolean  @default(false) @map("is_read")
   createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
@@ -585,7 +585,7 @@ model Airport {
   isoCountry  String?   @map("iso_country")
   isoRegion   String?   @map("iso_region")
   municipality String?
-  deletedAt   DateTime? @map("deleted_at")@db.Timestamp
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamp
   createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
 
@@ -600,7 +600,7 @@ model Faq {
   answer    String?   @db.Text
   answerAr  String?   @map("answer_ar") @db.Text
   type      String?
-  deletedAt DateTime? @map("deleted_at")@db.Timestamp
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp
   createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
 
@@ -641,7 +641,7 @@ model SurgePrice {
   value     Float?    @db.Double
   fromTime  Json?     @map("from_time")
   toTime    Json?     @map("to_time")
-  deletedAt DateTime? @map("deleted_at")@db.Timestamp
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp
   createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
   updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
 
@@ -768,8 +768,8 @@ model AdminLoginDevice {
   userId    Int       @map("user_id")
   ipAddress String?   @map("ip_address")
   userAgent String?   @map("user_agent")
-  loginAt   DateTime? @map("login_at")@db.Timestamp
-  logoutAt  DateTime? @map("logout_at")@db.Timestamp
+  loginAt   DateTime? @map("login_at") @db.Timestamp
+  logoutAt  DateTime? @map("logout_at") @db.Timestamp
   isActive  Boolean   @default(true) @map("is_active")
   sessionId String?   @map("session_id")
   createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
