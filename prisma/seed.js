@@ -681,7 +681,7 @@ async function main() {
     data: {
       title: 'About Us',
       titleAr: 'من نحن',
-      description: 'Learn more about Ala Elsareea and our mission to provide safe and reliable transportation.',
+      description: 'Learn more about Tovo and our mission to provide safe and reliable transportation.',
       descriptionAr: 'تعرف على المزيد حول على السريع ومهمتنا في توفير النقل الآمن والموثوق.',
       slug: 'about-us',
       status: 1
@@ -714,7 +714,7 @@ async function main() {
   console.log('Creating frontend data...')
   await prisma.frontendData.create({
     data: {
-      title: 'Welcome to Ala Elsareea',
+      title: 'Welcome to Tovo',
       titleAr: 'مرحبًا بك في على السريع',
       subtitle: 'Your trusted ride-hailing service',
       subtitleAr: 'خدمة النقل الموثوقة',

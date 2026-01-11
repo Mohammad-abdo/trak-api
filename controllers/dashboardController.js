@@ -348,7 +348,7 @@ export const appsetting = async (req, res) => {
         res.json({
             success: true,
             data: {
-                appName: "Ala Elsareea",
+                appName: "Tovo",
                 version: "1.0.0",
                 currency: "USD",
                 currencySymbol: "$",

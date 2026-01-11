@@ -1,6 +1,6 @@
-# Driver Project Backend
+# Tovo Backend
 
-Node.js + Express backend API for the Driver Project taxi management system with Prisma ORM and MySQL.
+Node.js + Express backend API for Tovo taxi/ride-hailing management system with Prisma ORM and MySQL.
 
 ## Features
 

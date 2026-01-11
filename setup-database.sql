@@ -1,4 +1,4 @@
--- Database Setup Script for Ala Elsareea
+-- Database Setup Script for Tovo
 -- Run this script in MySQL to create the database
 
 -- Create the database

@@ -104,7 +104,7 @@ const generateInvoicePDF = (rideRequest) => {
             doc.moveDown();
 
             // Company/App Info (you can customize this)
-            doc.fontSize(10).text("Ala Elsareea", { align: "left" });
+            doc.fontSize(10).text("Tovo", { align: "left" });
             doc.text("Taxi Service", { align: "left" });
             doc.moveDown();
 

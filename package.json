@@ -1,7 +1,7 @@
 {
-  "name": "ala-elsareea-backend",
+  "name": "tovo-backend",
   "version": "1.0.0",
-  "description": "Ala Elsareea - Taxi/Ride-hailing backend API",
+  "description": "Tovo - Taxi/Ride-hailing backend API",
   "main": "server.js",
   "type": "module",
   "scripts": {
