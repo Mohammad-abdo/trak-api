@@ -46,8 +46,8 @@ model User {
   referralCode            String?   @unique @map("referral_code")
   partnerReferralCode     String?   @map("partner_referral_code")
   rememberToken           String?   @map("remember_token")
-  createdAt               DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt               DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   // Relations
   fleet                   User?     @relation("FleetDrivers", fields: [fleetId], references: [id])
@@ -112,8 +112,8 @@ model Region {
   coordinates Json?
   status      Int      @default(1)
   timezone    String?  @default("UTC")
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   services    Service[]
   surgePrices SurgePrice[]
@@ -142,8 +142,8 @@ model Service {
   cancellationFee       Float?   @map("cancellation_fee") @db.Double
   description           String?  @db.Text
   descriptionAr         String?  @map("description_ar") @db.Text
-  createdAt             DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt             DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   region                Region?  @relation(fields: [regionId], references: [id])
   users                 User[]
@@ -230,8 +230,8 @@ model RideRequest {
   airportDropoff                     Boolean   @default(false) @map("airport_dropoff")
   zonePickup                         Boolean   @default(false) @map("zone_pickup")
   zoneDropoff                        Boolean   @default(false) @map("zone_dropoff")
-  createdAt                          DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt                          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt                          DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt                          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   // Relations
   rider                              User      @relation("RiderRideRequests", fields: [riderId], references: [id])
@@ -263,9 +263,9 @@ model Payment {
   paymentStatus String    @default("pending") @map("payment_status") @db.VarChar(20)
   paymentGateway String?  @map("payment_gateway")
   transactionId String?   @map("transaction_id")
-  paymentDate   DateTime  @default(now()) @map("payment_date") @db.DateTime
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  paymentDate   DateTime  @default(now()) @map("payment_date") @db.DateTime(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   rideRequest   RideRequest @relation("RideRequestPayments", fields: [rideRequestId], references: [id])
   user          User        @relation("PaymentUser", fields: [userId], references: [id])
@@ -282,8 +282,8 @@ model Wallet {
   userId    Int      @unique @map("user_id")
   balance   Float    @default(0) @db.Double
   currency  String   @default("USD")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user      User     @relation(fields: [userId], references: [id])
   histories WalletHistory[]
@@ -301,8 +301,8 @@ model WalletHistory {
   description     String?   @db.Text
   transactionType String    @map("transaction_type")
   rideRequestId   Int?      @map("ride_request_id")
-  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   wallet          Wallet    @relation(fields: [walletId], references: [id])
   user            User      @relation(fields: [userId], references: [id])
@@ -330,8 +330,8 @@ model Coupon {
   descriptionAr       String?  @map("description_ar") @db.Text
   regionIds           String?  @map("region_ids") @db.Text
   serviceIds           Json?    @map("service_ids")
-  createdAt           DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt           DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("coupons")
 }
@@ -344,8 +344,8 @@ model Document {
   status        Int      @default(1)
   isRequired    Boolean  @default(false) @map("is_required")
   hasExpiryDate Boolean  @default(false) @map("has_expiry_date")
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   driverDocuments DriverDocument[]
 
@@ -358,8 +358,8 @@ model DriverDocument {
   documentId Int       @map("document_id")
   isVerified Boolean   @default(false) @map("is_verified")
   expireDate DateTime? @map("expire_date") @db.Date
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   driver     User      @relation(fields: [driverId], references: [id])
   document   Document  @relation(fields: [documentId], references: [id])
@@ -378,8 +378,8 @@ model Complaint {
   description   String?  @db.Text
   rideRequestId Int?     @map("ride_request_id")
   status        String?  @default("pending") @db.VarChar(20)
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   driver        User?    @relation("DriverComplaints", fields: [driverId], references: [id])
   rider         User?    @relation("RiderComplaints", fields: [riderId], references: [id])
@@ -393,8 +393,8 @@ model ComplaintComment {
   id          Int       @id @default(autoincrement())
   complaintId Int       @map("complaint_id")
   comment     String?   @db.Text
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   complaint   Complaint @relation(fields: [complaintId], references: [id])
 
@@ -408,8 +408,8 @@ model RideRequestBid {
   bidAmount     Float?    @map("bid_amount") @db.Double
   isBidAccept   Boolean   @default(false) @map("is_bid_accept")
   notes         String?   @db.Text
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   rideRequest   RideRequest @relation(fields: [rideRequestId], references: [id])
   driver        User        @relation(fields: [driverId], references: [id])
@@ -427,8 +427,8 @@ model RideRequestRating {
   rating        Float    @db.Double
   comment       String?  @db.Text
   ratingBy      String?  @map("rating_by")
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   rideRequest   RideRequest @relation(fields: [rideRequestId], references: [id])
   rider         User        @relation("RiderRatings", fields: [riderId], references: [id])
@@ -445,8 +445,8 @@ model RideRequestHistory {
   rideRequestId Int       @map("ride_request_id")
   historyType   String?   @map("history_type")
   datetime      DateTime? @db.Timestamp
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   rideRequest   RideRequest @relation(fields: [rideRequestId], references: [id])
 
@@ -460,8 +460,8 @@ model WithdrawRequest {
   amount    Float    @db.Double
   currency  String   @default("USD")
   status    Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user      User     @relation(fields: [userId], references: [id])
 
@@ -483,8 +483,8 @@ model UserDetail {
   workLongitude   String?  @map("work_longitude")
   homeLatitude    String?  @map("home_latitude")
   homeLongitude   String?  @map("home_longitude")
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user            User     @relation(fields: [userId], references: [id])
 
@@ -502,8 +502,8 @@ model UserBankAccount {
   routingNumber   String?  @map("routing_number")
   bankIban        String?  @map("bank_iban")
   bankSwift       String?  @map("bank_swift")
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user            User     @relation(fields: [userId], references: [id])
 
@@ -518,8 +518,8 @@ model Notification {
   data            Json
   readAt          DateTime? @map("read_at") @db.Timestamp
   isRead          Boolean  @default(false) @map("is_read")
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("notifications")
   @@index([notifiableType, notifiableId])
@@ -532,8 +532,8 @@ model Sos {
   nameAr    String?  @map("name_ar") @db.Text
   contactNumber String? @map("contact_number")
   status    Int      @default(1)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("sos")
   @@index([userId])
@@ -547,8 +547,8 @@ model PaymentGateway {
   isTest    Boolean  @default(true) @map("is_test")
   testValue Json?    @map("test_value")
   liveValue Json?    @map("live_value")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("payment_gateways")
   @@index([type])
@@ -558,8 +558,8 @@ model Setting {
   id        Int      @id @default(autoincrement())
   key       String   @unique
   value     String?  @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("settings")
 }
@@ -568,8 +568,8 @@ model AppSetting {
   id        Int      @id @default(autoincrement())
   key       String   @unique
   value     String?  @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("app_settings")
 }
@@ -586,8 +586,8 @@ model Airport {
   isoRegion   String?   @map("iso_region")
   municipality String?
   deletedAt   DateTime? @map("deleted_at") @db.Timestamp
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("airports")
   @@index([airportId])
@@ -601,8 +601,8 @@ model Faq {
   answerAr  String?   @map("answer_ar") @db.Text
   type      String?
   deletedAt DateTime? @map("deleted_at") @db.Timestamp
-  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("faqs")
   @@index([type])
@@ -614,8 +614,8 @@ model Cancellation {
   nameAr    String?  @map("name_ar") @db.Text
   type      String?
   status    Int      @default(1)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("cancellations")
   @@index([type])
@@ -626,8 +626,8 @@ model AdditionalFees {
   title     String?
   titleAr   String?  @map("title_ar") @db.Text
   status    Int      @default(1)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("additional_fees")
 }
@@ -642,8 +642,8 @@ model SurgePrice {
   fromTime  Json?     @map("from_time")
   toTime    Json?     @map("to_time")
   deletedAt DateTime? @map("deleted_at") @db.Timestamp
-  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   service   Service?  @relation(fields: [serviceId], references: [id])
   region    Region?   @relation(fields: [regionId], references: [id])
@@ -659,8 +659,8 @@ model ManageZone {
   longitude   String?
   description String?  @db.Text
   status      Int      @default(1)
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   pickupZonePrices  ZonePrice[] @relation("PickupZone")
   dropoffZonePrices ZonePrice[] @relation("DropoffZone")
@@ -674,8 +674,8 @@ model ZonePrice {
   zonePickup  Int?     @map("zone_pickup")
   zoneDropoff Int?     @map("zone_dropoff")
   price       Float?   @db.Double
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   pickupZone  ManageZone? @relation("PickupZone", fields: [zonePickup], references: [id], onDelete: SetNull)
   dropoffZone ManageZone? @relation("DropoffZone", fields: [zoneDropoff], references: [id], onDelete: SetNull)
@@ -690,8 +690,8 @@ model DriverService {
   driverId  Int      @map("driver_id")
   serviceId Int      @map("service_id")
   status    Int      @default(1)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   driver    User     @relation(fields: [driverId], references: [id])
   service   Service  @relation(fields: [serviceId], references: [id])
@@ -710,8 +710,8 @@ model Review {
   riderRating   Float?   @map("rider_rating") @db.Double
   driverReview  String?  @map("driver_review") @db.Text
   riderReview   String?  @map("rider_review") @db.Text
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("reviews")
   @@index([driverId])
@@ -725,8 +725,8 @@ model PushNotification {
   message   String?  @db.Text
   forRider  Boolean  @default(false) @map("for_rider")
   forDriver Boolean  @default(false) @map("for_driver")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("push_notifications")
 }
@@ -738,8 +738,8 @@ model CustomerSupport {
   userId          Int       @map("user_id")
   status          String?   @default("pending") @db.VarChar(20)
   resolutionDetail String?  @map("resolution_detail") @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user            User      @relation(fields: [userId], references: [id])
   chatHistories   SupportChathistory[]
@@ -754,8 +754,8 @@ model SupportChathistory {
   supportId   Int       @map("support_id")
   message     String?   @db.Text
   senderType  String?   @map("sender_type")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   support     CustomerSupport @relation(fields: [supportId], references: [id])
 
@@ -772,8 +772,8 @@ model AdminLoginDevice {
   logoutAt  DateTime? @map("logout_at") @db.Timestamp
   isActive  Boolean   @default(true) @map("is_active")
   sessionId String?   @map("session_id")
-  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   user      User      @relation(fields: [userId], references: [id])
 
@@ -800,8 +800,8 @@ model AdminLoginHistory {
   isMobile         Boolean  @default(false) @map("is_mobile")
   isDesktop        Boolean  @default(false) @map("is_desktop")
   isTablet         Boolean  @default(false) @map("is_tablet")
-  createdAt        DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt        DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("admin_login_history")
   @@index([userId])
@@ -815,8 +815,8 @@ model Pages {
   descriptionAr String? @map("description_ar") @db.Text
   slug        String?  @unique
   status      Int      @default(1)
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("pages")
   @@index([slug])
@@ -827,8 +827,8 @@ model MailTemplate {
   subject     String?
   description String?  @db.LongText
   type        String?
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("mail_templates")
   @@index([type])
@@ -839,8 +839,8 @@ model LanguageDefaultList {
   languageName String?  @map("languageName")
   languageCode String?  @map("languageCode")
   countryCode  String?  @map("countryCode")
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   languageLists LanguageList[]
 
@@ -857,8 +857,8 @@ model LanguageList {
   isRtl        Int      @default(0) @map("is_rtl")
   isDefault    Int      @default(0) @map("is_default")
   status       Int      @default(0)
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   languageDefaultList LanguageDefaultList? @relation(fields: [languageId], references: [id])
   languageWithKeywords LanguageWithKeyword[]
@@ -872,8 +872,8 @@ model LanguageVersionDetail {
   id                Int      @id @default(autoincrement())
   defaultLanguageId Int?     @map("default_language_id")
   versionNo         Int      @default(1) @map("version_no")
-  createdAt         DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt         DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("language_version_details")
 }
@@ -882,8 +882,8 @@ model Screen {
   id        Int      @id @default(autoincrement())
   screenId  Int?     @map("screenId")
   screenName String? @map("screenName")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   defaultKeywords DefaultKeyword[]
   languageWithKeywords LanguageWithKeyword[]
@@ -898,8 +898,8 @@ model DefaultKeyword {
   keywordId   Int?     @map("keyword_id")
   keywordName String?  @map("keyword_name")
   keywordValue String? @map("keyword_value")
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   screen      Screen?  @relation(fields: [screenId], references: [id])
   languageWithKeywords LanguageWithKeyword[]
@@ -915,8 +915,8 @@ model LanguageWithKeyword {
   keywordId    Int?     @map("keyword_id")
   screenId     Int?     @map("screen_id")
   keywordValue String?  @map("keyword_value")
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   languageList LanguageList @relation(fields: [languageId], references: [id])
   defaultKeyword DefaultKeyword? @relation(fields: [keywordId], references: [id])
@@ -937,8 +937,8 @@ model FrontendData {
   type        String?
   description String?  @db.Text
   descriptionAr String? @map("description_ar") @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("frontend_data")
   @@index([type])
@@ -950,8 +950,8 @@ model SMSSetting {
   type      String?
   status    Int      @default(1)
   values    Json?
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   smsTemplates SMSTemplatRide[]
 
@@ -966,8 +966,8 @@ model SMSTemplatRide {
   smsId         Int?     @map("sms_id")
   type          String?
   rideStatus    String?  @map("ride_status")
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   smsSetting    SMSSetting? @relation(fields: [smsId], references: [id])
 
@@ -981,8 +981,8 @@ model Permission {
   name      String
   guardName String   @default("web") @map("guard_name")
   parentId  Int?     @map("parent_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   parent    Permission? @relation("PermissionParent", fields: [parentId], references: [id])
   subpermissions Permission[] @relation("PermissionParent")
@@ -997,8 +997,8 @@ model Role {
   id        Int      @id @default(autoincrement())
   name      String
   guardName String   @default("web") @map("guard_name")
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("roles")
   @@unique([name, guardName])
