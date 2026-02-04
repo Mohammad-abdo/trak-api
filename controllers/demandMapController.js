@@ -13,14 +13,13 @@ export const getDemandZones = async (req, res) => {
         const end = new Date(today);
         end.setHours(23, 59, 59, 999);
 
-        // Get today's new ride requests
+        // Get today's ride requests (any status with coordinates for demand heatmap)
         const rides = await prisma.rideRequest.findMany({
             where: {
                 createdAt: {
                     gte: start,
                     lte: end,
                 },
-                status: "new_ride_requested",
                 startLatitude: { not: null },
                 startLongitude: { not: null },
             },

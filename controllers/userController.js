@@ -227,8 +227,28 @@ export const updateProfile = async (req, res) => {
                 lastName: true,
                 email: true,
                 contactNumber: true,
+                latitude: true,
+                longitude: true,
+                isOnline: true,
+                isAvailable: true,
             },
         });
+
+        if (latitude !== undefined && longitude !== undefined && req.user.userType === "driver") {
+            try {
+                const { emitDriverLocationUpdate } = await import("../utils/socketService.js");
+                const io = req.app.get("io") || global.io;
+                if (io) {
+                    emitDriverLocationUpdate(io, req.user.id, {
+                        ...user,
+                        latitude: user.latitude ?? latitude,
+                        longitude: user.longitude ?? longitude,
+                    });
+                }
+            } catch (e) {
+                console.warn("Socket emit driver location:", e.message);
+            }
+        }
 
         res.json({
             success: true,

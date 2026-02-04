@@ -73,3 +73,18 @@ export const emitRideRequestToDrivers = (io, driverIds, rideRequest) => {
     });
 };
 
+/**
+ * Broadcast driver location update to all clients (e.g. admin tracking page)
+ */
+export const emitDriverLocationUpdate = (io, driverId, data) => {
+    if (!io) return;
+    io.emit("driver-location-update", {
+        driverId,
+        lat: data.latitude,
+        lng: data.longitude,
+        name: data.firstName || data.lastName ? `${data.firstName || ""} ${data.lastName || ""}`.trim() : undefined,
+        status: data.isOnline ? (data.isAvailable ? "online" : "busy") : "offline",
+        isAvailable: data.isAvailable,
+    });
+};
+

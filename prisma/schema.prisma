@@ -98,6 +98,10 @@ model User {
   // Admin login tracking
   adminLoginDevices AdminLoginDevice[]
 
+  // Tourist trips
+  touristTripsAsRider  TouristTrip[] @relation("TouristTripRider")
+  touristTripsAsDriver TouristTrip[] @relation("TouristTripDriver")
+
   @@index([userType, status])
   @@index([email])
   @@index([contactNumber])
@@ -153,6 +157,7 @@ model Service {
   rideRequests    RideRequest[]
   driverServices  DriverService[]
   surgePrices     SurgePrice[]
+  touristTrips    TouristTrip[]
 
   @@index([vehicleCategoryId])
   @@map("services")
@@ -1055,6 +1060,7 @@ model VehicleCategory {
   zones           CategoryZone[]
   pricingRules    PricingRule[]
   services        Service[]
+  touristTrips    TouristTrip[]
 
   @@index([serviceCategoryId])
   @@index([status])
@@ -1161,6 +1167,11 @@ model TouristTrip {
   status                  String   @default("pending") @db.VarChar(20)
   createdAt               DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt               DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+
+  rider            User             @relation("TouristTripRider", fields: [riderId], references: [id])
+  driver           User?            @relation("TouristTripDriver", fields: [driverId], references: [id])
+  vehicleCategory  VehicleCategory? @relation(fields: [vehicleCategoryId], references: [id])
+  service          Service?         @relation(fields: [serviceId], references: [id])
 
   @@index([riderId])
   @@index([driverId])

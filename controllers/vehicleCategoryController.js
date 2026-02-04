@@ -60,15 +60,16 @@ export const getVehicleCategories = async (req, res) => {
     }
 };
 
-// @desc    Get vehicle category by ID
+// @desc    Get vehicle category by ID with stats
 // @route   GET /api/vehicle-categories/:id
 // @access  Public
 export const getVehicleCategoryById = async (req, res) => {
     try {
         const { id } = req.params;
+        const categoryId = parseInt(id);
 
         const category = await prisma.vehicleCategory.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: categoryId },
             include: {
                 serviceCategory: true,
                 features: true,
@@ -77,6 +78,9 @@ export const getVehicleCategoryById = async (req, res) => {
                     include: {
                         geographicZone: true,
                     },
+                },
+                services: {
+                    select: { id: true, name: true, nameAr: true },
                 },
             },
         });
@@ -88,9 +92,44 @@ export const getVehicleCategoryById = async (req, res) => {
             });
         }
 
+        const rideWhere = {
+            OR: [
+                { vehicleCategoryId: categoryId },
+                { service: { vehicleCategoryId: categoryId } },
+            ],
+        };
+        const completedRideWhere = { status: "completed", ...rideWhere };
+
+        // Stats: drivers (via services), rides, completed rides, total revenue
+        const [driversCount, ridesCount, completedRidesCount, revenueResult] = await Promise.all([
+            prisma.user.count({
+                where: {
+                    userType: "driver",
+                    service: { vehicleCategoryId: categoryId },
+                },
+            }),
+            prisma.rideRequest.count({ where: rideWhere }),
+            prisma.rideRequest.count({ where: completedRideWhere }),
+            prisma.rideRequest.aggregate({
+                where: completedRideWhere,
+                _sum: { totalAmount: true },
+            }),
+        ]);
+
+        const totalRevenue = Number(revenueResult._sum?.totalAmount ?? 0);
+
         res.json({
             success: true,
-            data: category,
+            data: {
+                ...category,
+                stats: {
+                    driversCount,
+                    ridesCount,
+                    completedRidesCount,
+                    servicesCount: category.services?.length ?? 0,
+                    totalRevenue,
+                },
+            },
         });
     } catch (error) {
         console.error("Get vehicle category by ID error:", error);

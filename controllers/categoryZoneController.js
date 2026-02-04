@@ -26,6 +26,9 @@ export const getCategoryZones = async (req, res) => {
                         id: true,
                         name: true,
                         nameAr: true,
+                        serviceCategory: {
+                            select: { id: true, name: true, nameAr: true },
+                        },
                     },
                 },
                 geographicZone: {
@@ -33,6 +36,7 @@ export const getCategoryZones = async (req, res) => {
                         id: true,
                         name: true,
                         nameAr: true,
+                        radius: true,
                     },
                 },
             },

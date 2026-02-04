@@ -20,47 +20,57 @@ export const getTouristTrips = async (req, res) => {
 
         const trips = await prisma.touristTrip.findMany({
             where,
-            include: {
-                rider: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        displayName: true,
-                        contactNumber: true,
-                    },
-                },
-                driver: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        displayName: true,
-                        contactNumber: true,
-                    },
-                },
-                vehicleCategory: {
-                    select: {
-                        id: true,
-                        name: true,
-                        nameAr: true,
-                        capacity: true,
-                    },
-                },
-                service: {
-                    select: {
-                        id: true,
-                        name: true,
-                        nameAr: true,
-                    },
-                },
-            },
             orderBy: { createdAt: "desc" },
         });
 
+        const riderIds = [...new Set(trips.map((t) => t.riderId).filter(Boolean))];
+        const driverIds = [...new Set(trips.map((t) => t.driverId).filter(Boolean))];
+        const vehicleCategoryIds = [...new Set(trips.map((t) => t.vehicleCategoryId).filter(Boolean))];
+        const serviceIds = [...new Set(trips.map((t) => t.serviceId).filter(Boolean))];
+
+        const [riders, drivers, vehicleCategories, services] = await Promise.all([
+            riderIds.length
+                ? prisma.user.findMany({
+                      where: { id: { in: riderIds } },
+                      select: { id: true, firstName: true, lastName: true, displayName: true, contactNumber: true },
+                  })
+                : [],
+            driverIds.length
+                ? prisma.user.findMany({
+                      where: { id: { in: driverIds } },
+                      select: { id: true, firstName: true, lastName: true, displayName: true, contactNumber: true },
+                  })
+                : [],
+            vehicleCategoryIds.length
+                ? prisma.vehicleCategory.findMany({
+                      where: { id: { in: vehicleCategoryIds } },
+                      select: { id: true, name: true, nameAr: true, capacity: true },
+                  })
+                : [],
+            serviceIds.length
+                ? prisma.service.findMany({
+                      where: { id: { in: serviceIds } },
+                      select: { id: true, name: true, nameAr: true },
+                  })
+                : [],
+        ]);
+
+        const riderMap = Object.fromEntries((riders || []).map((u) => [u.id, u]));
+        const driverMap = Object.fromEntries((drivers || []).map((u) => [u.id, u]));
+        const vehicleCategoryMap = Object.fromEntries((vehicleCategories || []).map((v) => [v.id, v]));
+        const serviceMap = Object.fromEntries((services || []).map((s) => [s.id, s]));
+
+        const data = trips.map((trip) => ({
+            ...trip,
+            rider: trip.riderId ? riderMap[trip.riderId] ?? null : null,
+            driver: trip.driverId ? driverMap[trip.driverId] ?? null : null,
+            vehicleCategory: trip.vehicleCategoryId ? vehicleCategoryMap[trip.vehicleCategoryId] ?? null : null,
+            service: trip.serviceId ? serviceMap[trip.serviceId] ?? null : null,
+        }));
+
         res.json({
             success: true,
-            data: trips,
+            data,
         });
     } catch (error) {
         console.error("Get tourist trips error:", error);

@@ -1,5 +1,6 @@
 import prisma from "../utils/prisma.js";
 import { generateExcel, generatePDF, generateCSV, formatDate, formatCurrency } from "../utils/exportUtils.js";
+import { calculateTripPrice } from "../utils/pricingCalculator.js";
 
 // @desc    Create ride request
 // @route   POST /api/ride-requests/save-riderequest
@@ -8,6 +9,7 @@ export const createRideRequest = async (req, res) => {
     try {
         const {
             serviceId,
+            vehicleCategoryId, // New field
             startLatitude,
             startLongitude,
             endLatitude,
@@ -24,58 +26,105 @@ export const createRideRequest = async (req, res) => {
             dropLocation,
         } = req.body;
 
-        // Get service details
-        const service = await prisma.service.findUnique({
-            where: { id: serviceId },
-        });
+        let rideData = {
+            riderId: req.user.id,
+            startLatitude,
+            startLongitude,
+            endLatitude,
+            endLongitude,
+            startAddress,
+            endAddress,
+            distance,
+            duration,
+            isSchedule,
+            scheduleDatetime: scheduleDatetime ? new Date(scheduleDatetime) : null,
+            paymentType: paymentType || "cash",
+            seatCount: seatCount || 1,
+            dropLocation: dropLocation ? JSON.parse(JSON.stringify(dropLocation)) : null,
+        };
 
-        if (!service) {
-            return res.status(404).json({
-                success: false,
-                message: "Service not found",
+        if (vehicleCategoryId) {
+            // New Flow: Vehicle Category Based
+            const priceResult = await calculateTripPrice(
+                vehicleCategoryId,
+                parseFloat(distance),
+                parseFloat(duration)
+            );
+
+            if (!priceResult.success) {
+                return res.status(400).json({
+                    success: false,
+                    message: priceResult.error
+                });
+            }
+
+            // Get Vehicle Category Details
+            const vehicleCategory = await prisma.vehicleCategory.findUnique({
+                where: { id: parseInt(vehicleCategoryId) },
+                include: { serviceCategory: true }
             });
-        }
 
-        // Calculate fare
-        const baseFare = service.baseFare || 0;
-        const perDistanceCharge =
-            (distance - (service.minimumDistance || 0)) *
-            (service.perDistance || 0);
-        const perMinuteCharge = duration * (service.perMinuteDrive || 0);
-        const subtotal = baseFare + perDistanceCharge + perMinuteCharge;
-        const totalAmount = Math.max(subtotal, service.minimumFare || 0);
+            rideData = {
+                ...rideData,
+                vehicleCategoryId: parseInt(vehicleCategoryId),
+                baseFare: priceResult.breakdown.baseFare,
+                minimumFare: priceResult.breakdown.minimumFare,
+                baseDistance: priceResult.breakdown.baseDistance,
+                perDistance: priceResult.breakdown.perKmRate,
+                perDistanceCharge: priceResult.breakdown.distanceCharge,
+                perMinuteDrive: 0, // Simplified for now or implicitly included in breakdown
+                subtotal: priceResult.totalAmount, // Assuming subtotal = total for now
+                totalAmount: priceResult.totalAmount,
+                pricingData: JSON.stringify(priceResult.breakdown), // Store detailed breakdown
+                serviceData: JSON.stringify({ // Mock service data for legacy compatibility
+                    name: vehicleCategory.name,
+                    id: vehicleCategory.serviceCategoryId // Linking to service category as service ID proxy
+                }),
+                serviceId: vehicleCategory.serviceCategoryId // Use service category ID as fallback
+            };
 
-        // Create ride request
-        const rideRequest = await prisma.rideRequest.create({
-            data: {
-                riderId: req.user.id,
+        } else if (serviceId) {
+            // Legacy Flows
+            const service = await prisma.service.findUnique({
+                where: { id: serviceId },
+            });
+
+            if (!service) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Service not found",
+                });
+            }
+
+            const baseFare = service.baseFare || 0;
+            const perDistanceCharge = (distance - (service.minimumDistance || 0)) * (service.perDistance || 0);
+            const perMinuteCharge = duration * (service.perMinuteDrive || 0);
+            const subtotal = baseFare + perDistanceCharge + perMinuteCharge;
+            const totalAmount = Math.max(subtotal, service.minimumFare || 0);
+
+            rideData = {
+                ...rideData,
                 serviceId,
-                startLatitude,
-                startLongitude,
-                endLatitude,
-                endLongitude,
-                startAddress,
-                endAddress,
-                distance,
-                duration,
-                isSchedule,
-                scheduleDatetime: scheduleDatetime
-                    ? new Date(scheduleDatetime)
-                    : null,
-                paymentType: paymentType || "cash",
-                seatCount: seatCount || 1,
                 baseFare,
                 minimumFare: service.minimumFare,
                 baseDistance: service.minimumDistance,
                 perDistance: service.perDistance,
                 perDistanceCharge,
                 perMinuteDrive: service.perMinuteDrive,
-                perMinuteDriveCharge,
                 subtotal,
                 totalAmount,
-                dropLocation: dropLocation ? JSON.parse(JSON.stringify(dropLocation)) : null,
                 serviceData: JSON.parse(JSON.stringify(service)),
-            },
+            };
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Either serviceId or vehicleCategoryId is required"
+            });
+        }
+
+        // Create ride request
+        const rideRequest = await prisma.rideRequest.create({
+            data: rideData,
         });
 
         res.status(201).json({

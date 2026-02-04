@@ -1,4 +1,7 @@
 import prisma from "../utils/prisma.js";
+import { calculateTripPrice } from "../utils/pricingCalculator.js";
+// Import vehicle search if needed, or we rely on vehicleCategoryController for search
+
 
 // @desc    Get service list
 // @route   GET /api/services/service-list
@@ -235,6 +238,36 @@ export const deleteService = async (req, res) => {
 // @access  Public
 export const estimatePriceTime = async (req, res) => {
     try {
+        if (req.body.vehicleCategoryId) {
+            // New Logic: Use Pricing Calculator Utility
+            const { vehicleCategoryId, distance, duration } = req.body;
+
+            const priceResult = await calculateTripPrice(
+                vehicleCategoryId,
+                parseFloat(distance),
+                parseFloat(duration)
+            );
+
+            if (!priceResult.success) {
+                return res.status(400).json({
+                    success: false,
+                    message: priceResult.error
+                });
+            }
+
+            return res.json({
+                success: true,
+                data: {
+                    estimatedPrice: priceResult.totalAmount,
+                    estimatedTime: duration,
+                    distance,
+                    breakdown: priceResult.breakdown,
+                    vehicleCategory: priceResult.vehicleCategory
+                }
+            });
+        }
+
+        // Legacy Logic
         const { serviceId, distance, duration } = req.body;
 
         const service = await prisma.service.findUnique({
