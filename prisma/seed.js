@@ -927,6 +927,475 @@ async function main() {
   console.log(`   - Payments: 1`)
   console.log(`   - Ratings: 2`)
   console.log(`   - Complaints: 1`)
+
+  // ===================================
+  // Multi-Service Platform Data
+  // ===================================
+
+  // Create Service Categories
+  console.log('Creating service categories...')
+  const passengerCategory = await prisma.serviceCategory.create({
+    data: {
+      name: 'Passenger Transport',
+      nameAr: 'نقل ركاب',
+      slug: 'passenger-transport',
+      description: 'Transport services for passengers',
+      descriptionAr: 'خدمات نقل للركاب',
+      icon: '🚗',
+      status: 1
+    }
+  })
+
+  const cargoCategory = await prisma.serviceCategory.create({
+    data: {
+      name: 'Cargo Transport',
+      nameAr: 'نقل بضائع',
+      slug: 'cargo-transport',
+      description: 'Transport services for goods and cargo',
+      descriptionAr: 'خدمات نقل للبضائع والحمولات',
+      icon: '🚚',
+      status: 1
+    }
+  })
+
+  const additionalCategory = await prisma.serviceCategory.create({
+    data: {
+      name: 'Additional Services',
+      nameAr: 'خدمات إضافية',
+      slug: 'additional-services',
+      description: 'Other transport services',
+      descriptionAr: 'خدمات نقل أخرى',
+      icon: '🛴',
+      status: 1
+    }
+  })
+
+  // Create Vehicle Categories for Passenger Transport
+  console.log('Creating vehicle categories for passengers...')
+  const regularCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: passengerCategory.id,
+      name: 'Regular',
+      nameAr: 'عادية',
+      slug: 'regular',
+      description: 'Standard economical passenger vehicles',
+      descriptionAr: 'مركبات ركاب اقتصادية قياسية',
+      icon: '🚗',
+      capacity: 4,
+      status: 1
+    }
+  })
+
+  const mediumCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: passengerCategory.id,
+      name: 'Medium',
+      nameAr: 'متوسطة',
+      slug: 'medium',
+      description: 'Mid-range comfort passenger vehicles',
+      descriptionAr: 'مركبات ركاب متوسطة المدى',
+      icon: '🚙',
+      capacity: 4,
+      status: 1
+    }
+  })
+
+  const vipCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: passengerCategory.id,
+      name: 'VIP',
+      nameAr: 'VIP',
+      slug: 'vip',
+      description: 'Luxury premium passenger vehicles',
+      descriptionAr: 'مركبات ركاب فاخرة ومميزة',
+      icon: '✨',
+      capacity: 4,
+      status: 1
+    }
+  })
+
+  // Create Vehicle Categories for Cargo Transport
+  console.log('Creating vehicle categories for cargo...')
+  const suzukiCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: cargoCategory.id,
+      name: 'Suzuki',
+      nameAr: 'سوزوكي',
+      slug: 'suzuki',
+      description: 'Small cargo transport vehicles',
+      descriptionAr: 'مركبات نقل حمولات صغيرة',
+      icon: '🚐',
+      capacity: 2,
+      maxLoad: 500,
+      status: 1
+    }
+  })
+
+  const quarterTruckCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: cargoCategory.id,
+      name: 'Quarter Truck',
+      nameAr: 'ربع نقل',
+      slug: 'quarter-truck',
+      description: 'Medium cargo transport vehicles',
+      descriptionAr: 'مركبات نقل حمولات متوسطة',
+      icon: '🚚',
+      capacity: 2,
+      maxLoad: 1000,
+      status: 1
+    }
+  })
+
+  const quarterTruck3TonCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: cargoCategory.id,
+      name: 'Quarter Truck (3 Ton)',
+      nameAr: 'ربع نقل (3 أطنان)',
+      slug: 'quarter-truck-3ton',
+      description: 'Large cargo transport vehicles (3 ton capacity)',
+      descriptionAr: 'مركبات نقل حمولات كبيرة (3 أطنان)',
+      icon: '🚛',
+      capacity: 2,
+      maxLoad: 3000,
+      status: 1
+    }
+  })
+
+  const jumboCategory = await prisma.vehicleCategory.create({
+    data: {
+      serviceCategoryId: cargoCategory.id,
+      name: 'Jumbo',
+      nameAr: 'جامبو',
+      slug: 'jumbo',
+      description: 'Extra-large cargo transport vehicles',
+      descriptionAr: 'مركبات نقل حمولات كبيرة جداً',
+      icon: '🚛',
+      capacity: 2,
+      maxLoad: 5000,
+      status: 1
+    }
+  })
+
+  // Create Category Features for Passenger Vehicles
+  console.log('Creating category features...')
+  const featureSets = {
+    regular: ['Air Conditioning', 'GPS Navigation', 'Music System'],
+    regularAr: ['تكييف هواء', 'نظام ملاحة GPS', 'نظام موسيقى'],
+    medium: ['Air Conditioning', 'GPS Navigation', 'Premium Sound', 'Leather Seats'],
+    mediumAr: ['تكييف هواء', 'نظام ملاحة GPS', 'نظام صوتي مميز', 'مقاعد جلدية'],
+    vip: ['Air Conditioning', 'GPS Navigation', 'Premium Sound', 'Leather Seats', 'WiFi', 'Bottled Water'],
+    vipAr: ['تكييف هواء', 'نظام ملاحة GPS', 'نظام صوتي مميز', 'مقاعد جلدية', 'واي فاي', 'مياه معبأة']
+  }
+
+  for (let i = 0; i < featureSets.regular.length; i++) {
+    await prisma.categoryFeature.create({
+      data: {
+        vehicleCategoryId: regularCategory.id,
+        name: featureSets.regular[i],
+        nameAr: featureSets.regularAr[i],
+        icon: '✓',
+        status: 1
+      }
+    })
+  }
+
+  for (let i = 0; i < featureSets.medium.length; i++) {
+    await prisma.categoryFeature.create({
+      data: {
+        vehicleCategoryId: mediumCategory.id,
+        name: featureSets.medium[i],
+        nameAr: featureSets.mediumAr[i],
+        icon: '✓',
+        status: 1
+      }
+    })
+  }
+
+  for (let i = 0; i < featureSets.vip.length; i++) {
+    await prisma.categoryFeature.create({
+      data: {
+        vehicleCategoryId: vipCategory.id,
+        name: featureSets.vip[i],
+        nameAr: featureSets.vipAr[i],
+        icon: '✓',
+        status: 1
+      }
+    })
+  }
+
+  // Create Geographic Zones
+  console.log('Creating geographic zones...')
+  const downtownZone = await prisma.geographicZone.create({
+    data: {
+      name: 'Downtown Area',
+      nameAr: 'منطقة وسط البلد',
+      regionId: region1.id,
+      centerLat: 24.7136,
+      centerLng: 46.6753,
+      radius: 10.0,
+      coordinates: JSON.stringify({
+        type: 'Polygon',
+        coordinates: [[
+          [46.6553, 24.6936],
+          [46.6953, 24.6936],
+          [46.6953, 24.7336],
+          [46.6553, 24.7336],
+          [46.6553, 24.6936]
+        ]]
+      }),
+      status: 1
+    }
+  })
+
+  const northZone = await prisma.geographicZone.create({
+    data: {
+      name: 'North District',
+      nameAr: 'المنطقة الشمالية',
+      regionId: region2.id,
+      centerLat: 24.8,
+      centerLng: 46.7,
+      radius: 15.0,
+      coordinates: JSON.stringify({
+        type: 'Polygon',
+        coordinates: [[
+          [46.65, 24.75],
+          [46.75, 24.75],
+          [46.75, 24.85],
+          [46.65, 24.85],
+          [46.65, 24.75]
+        ]]
+      }),
+      status: 1
+    }
+  })
+
+  const aleppoZone = await prisma.geographicZone.create({
+    data: {
+      name: 'Aleppo Area',
+      nameAr: 'منطقة حلب',
+      regionId: region1.id,
+      centerLat: 36.2021,
+      centerLng: 37.1343,
+      radius: 20.0,
+      coordinates: JSON.stringify({
+        type: 'Polygon',
+        coordinates: [[
+          [37.0843, 36.1521],
+          [37.1843, 36.1521],
+          [37.1843, 36.2521],
+          [37.0843, 36.2521],
+          [37.0843, 36.1521]
+        ]]
+      }),
+      status: 1
+    }
+  })
+
+  // Create Category-Zone Mappings
+  console.log('Creating category-zone mappings...')
+  await prisma.categoryZone.createMany({
+    data: [
+      { vehicleCategoryId: regularCategory.id, geographicZoneId: downtownZone.id, status: 1 },
+      { vehicleCategoryId: regularCategory.id, geographicZoneId: northZone.id, status: 1 },
+      { vehicleCategoryId: mediumCategory.id, geographicZoneId: downtownZone.id, status: 1 },
+      { vehicleCategoryId: mediumCategory.id, geographicZoneId: northZone.id, status: 1 },
+      { vehicleCategoryId: vipCategory.id, geographicZoneId: downtownZone.id, status: 1 },
+      { vehicleCategoryId: suzukiCategory.id, geographicZoneId: downtownZone.id, status: 1 },
+      { vehicleCategoryId: suzukiCategory.id, geographicZoneId: northZone.id, status: 1 },
+      { vehicleCategoryId: quarterTruckCategory.id, geographicZoneId: downtownZone.id, status: 1 },
+      { vehicleCategoryId: quarterTruckCategory.id, geographicZoneId: northZone.id, status: 1 },
+      { vehicleCategoryId: quarterTruck3TonCategory.id, geographicZoneId: northZone.id, status: 1 },
+      { vehicleCategoryId: jumboCategory.id, geographicZoneId: northZone.id, status: 1 },
+    ]
+  })
+
+  // Create Pricing Rules
+  console.log('Creating pricing rules...')
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: regularCategory.id,
+      baseFare: 10.0,
+      baseDistance: 5.0,
+      minimumFare: 15.0,
+      perDistanceAfterBase: 2.0,
+      perMinuteDrive: 0.5,
+      perMinuteWait: 0.3,
+      waitingTimeLimit: 5.0,
+      cancellationFee: 5.0,
+      commissionType: 'percentage',
+      adminCommission: 15.0,
+      fleetCommission: 5.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: mediumCategory.id,
+      baseFare: 15.0,
+      baseDistance: 5.0,
+      minimumFare: 20.0,
+      perDistanceAfterBase: 3.0,
+      perMinuteDrive: 0.7,
+      perMinuteWait: 0.4,
+      waitingTimeLimit: 5.0,
+      cancellationFee: 7.0,
+      commissionType: 'percentage',
+      adminCommission: 18.0,
+      fleetCommission: 7.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: vipCategory.id,
+      baseFare: 25.0,
+      baseDistance: 5.0,
+      minimumFare: 35.0,
+      perDistanceAfterBase: 5.0,
+      perMinuteDrive: 1.2,
+      perMinuteWait: 0.8,
+      waitingTimeLimit: 5.0,
+      cancellationFee: 15.0,
+      commissionType: 'percentage',
+      adminCommission: 20.0,
+      fleetCommission: 10.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: suzukiCategory.id,
+      baseFare: 20.0,
+      baseDistance: 5.0,
+      minimumFare: 25.0,
+      perDistanceAfterBase: 3.5,
+      perMinuteDrive: 0.6,
+      perMinuteWait: 0.3,
+      waitingTimeLimit: 10.0,
+      cancellationFee: 10.0,
+      commissionType: 'percentage',
+      adminCommission: 15.0,
+      fleetCommission: 5.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: quarterTruckCategory.id,
+      baseFare: 30.0,
+      baseDistance: 5.0,
+      minimumFare: 40.0,
+      perDistanceAfterBase: 5.0,
+      perMinuteDrive: 0.8,
+      perMinuteWait: 0.5,
+      waitingTimeLimit: 10.0,
+      cancellationFee: 15.0,
+      commissionType: 'percentage',
+      adminCommission: 18.0,
+      fleetCommission: 7.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: quarterTruck3TonCategory.id,
+      baseFare: 45.0,
+      baseDistance: 5.0,
+      minimumFare: 60.0,
+      perDistanceAfterBase: 7.0,
+      perMinuteDrive: 1.0,
+      perMinuteWait: 0.6,
+      waitingTimeLimit: 15.0,
+      cancellationFee: 20.0,
+      commissionType: 'percentage',
+      adminCommission: 20.0,
+      fleetCommission: 8.0,
+      status: 1
+    }
+  })
+
+  await prisma.pricingRule.create({
+    data: {
+      vehicleCategoryId: jumboCategory.id,
+      baseFare: 60.0,
+      baseDistance: 5.0,
+      minimumFare: 80.0,
+      perDistanceAfterBase: 10.0,
+      perMinuteDrive: 1.5,
+      perMinuteWait: 0.8,
+      waitingTimeLimit: 15.0,
+      cancellationFee: 25.0,
+      commissionType: 'percentage',
+      adminCommission: 22.0,
+      fleetCommission: 10.0,
+      status: 1
+    }
+  })
+
+  // Create Sample Tourist Trips
+  console.log('Creating sample tourist trips...')
+  await prisma.touristTrip.create({
+    data: {
+      riderId: rider1.id,
+      driverId: driver1.id,
+      vehicleCategoryId: vipCategory.id,
+      serviceId: service2.id,
+      startDate: new Date('2026-03-01'),
+      endDate: new Date('2026-03-05'),
+      startLocation: 'Riyadh Downtown',
+      startLatitude: '24.7136',
+      startLongitude: '46.6753',
+      destinations: JSON.stringify([
+        { name: 'Historical Diriyah', lat: 24.7324, lng: 46.5740 },
+        { name: 'Edge of the World', lat: 25.0939, lng: 45.8925 },
+        { name: 'Riyadh Boulevard', lat: 24.7715, lng: 46.6731 }
+      ]),
+      totalAmount: 1500.0,
+      paymentStatus: 'paid',
+      paymentType: 'card',
+      requiresDedicatedDriver: true,
+      notes: 'Multi-day VIP tour around Riyadh',
+      notesAr: 'جولة VIP متعددة الأيام في الرياض',
+      status: 'confirmed'
+    }
+  })
+
+  await prisma.touristTrip.create({
+    data: {
+      riderId: rider2.id,
+      vehicleCategoryId: mediumCategory.id,
+      startDate: new Date('2026-03-15'),
+      endDate: new Date('2026-03-17'),
+      startLocation: 'Jeddah Corniche',
+      startLatitude: '21.5433',
+      startLongitude: '39.1728',
+      destinations: JSON.stringify([
+        { name: 'Al-Balad Historic District', lat: 21.4858, lng: 39.1925 },
+        { name: 'King Fahd Fountain', lat: 21.5250, lng: 39.1561 }
+      ]),
+      totalAmount: 800.0,
+      paymentStatus: 'pending',
+      paymentType: 'cash',
+      requiresDedicatedDriver: true,
+      notes: 'Weekend tour in Jeddah',
+      notesAr: 'جولة عطلة نهاية الأسبوع في جدة',
+      status: 'pending'
+    }
+  })
+
+  console.log('')
+  console.log('✅ Multi-service platform data seeded successfully!')
+  console.log('   - Service Categories: 3 (Passenger, Cargo, Additional)')
+  console.log('   - Vehicle Categories: 7 (Regular, Medium, VIP, Suzuki, Quarter Truck, 3-Ton, Jumbo)')
+  console.log('   - Geographic Zones: 3')
+  console.log('   - Pricing Rules: 7')
+  console.log('   - Tourist Trips: 2')
+
   console.log('')
   console.log('🔑 Test Credentials:')
   console.log('   Admin: admin@alaelsareea.com / password123')

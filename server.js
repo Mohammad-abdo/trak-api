@@ -62,6 +62,13 @@ import placesRoutes from './routes/places.js';
 import userNotificationRoutes from './routes/userNotifications.js';
 import mqttRoutes from './routes/mqtt.js';
 import scheduledRideRoutes from './routes/scheduledRides.js';
+import serviceCategoryRoutes from './routes/serviceCategoryRoutes.js';
+import vehicleCategoryRoutes from './routes/vehicleCategoryRoutes.js';
+import pricingRuleRoutes from './routes/pricingRuleRoutes.js';
+import geographicZoneRoutes from './routes/geographicZoneRoutes.js';
+import touristTripRoutes from './routes/touristTripRoutes.js';
+import categoryFeatureRoutes from './routes/categoryFeatureRoutes.js';
+import categoryZoneRoutes from './routes/categoryZoneRoutes.js';
 
 dotenv.config();
 
@@ -71,10 +78,10 @@ const __dirname = dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-    cors: {
-        origin: process.env.FRONTEND_URL || "*",
-        methods: ["GET", "POST"],
-    },
+  cors: {
+    origin: process.env.FRONTEND_URL || "*",
+    methods: ["GET", "POST"],
+  },
 });
 const PORT = process.env.PORT || 5000;
 
@@ -149,6 +156,15 @@ app.use('/api/user-notifications', userNotificationRoutes);
 app.use('/api/mqtt', mqttRoutes);
 app.use('/api/rides', scheduledRideRoutes);
 
+// Multi-Service Platform Routes
+app.use('/api/service-categories', serviceCategoryRoutes);
+app.use('/api/vehicle-categories', vehicleCategoryRoutes);
+app.use('/api/pricing-rules', pricingRuleRoutes);
+app.use('/api/geographic-zones', geographicZoneRoutes);
+app.use('/api/tourist-trips', touristTripRoutes);
+app.use('/api/category-features', categoryFeatureRoutes);
+app.use('/api/category-zones', categoryZoneRoutes);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
@@ -156,29 +172,29 @@ app.get('/api/health', (req, res) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+  console.log('Client connected:', socket.id);
 
-    // Join user-specific room
-    socket.on('join-user-room', (userId) => {
-        socket.join(`user-${userId}`);
-        console.log(`User ${userId} joined their room`);
-    });
+  // Join user-specific room
+  socket.on('join-user-room', (userId) => {
+    socket.join(`user-${userId}`);
+    console.log(`User ${userId} joined their room`);
+  });
 
-    // Join driver room
-    socket.on('join-driver-room', (driverId) => {
-        socket.join(`driver-${driverId}`);
-        console.log(`Driver ${driverId} joined their room`);
-    });
+  // Join driver room
+  socket.on('join-driver-room', (driverId) => {
+    socket.join(`driver-${driverId}`);
+    console.log(`Driver ${driverId} joined their room`);
+  });
 
-    // Handle ride request updates
-    socket.on('subscribe-ride', (rideId) => {
-        socket.join(`ride-${rideId}`);
-        console.log(`Subscribed to ride ${rideId}`);
-    });
+  // Handle ride request updates
+  socket.on('subscribe-ride', (rideId) => {
+    socket.join(`ride-${rideId}`);
+    console.log(`Subscribed to ride ${rideId}`);
+  });
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
 });
 
 // Make io available globally for use in controllers and scheduled services
@@ -188,16 +204,16 @@ global.io = io;
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    message: 'Something went wrong!', 
-    error: process.env.NODE_ENV === 'development' ? err.message : {} 
+  res.status(500).json({
+    success: false,
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : {}
   });
 });
 
 // Initialize MQTT on server start
 if (process.env.MQTT_HOST) {
-    initializeMQTT();
+  initializeMQTT();
 }
 
 // Initialize scheduled ride activation service
