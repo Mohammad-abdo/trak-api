@@ -11,4 +11,3 @@ CREATE DATABASE IF NOT EXISTS ala_elsareea CHARACTER SET utf8mb4 COLLATE utf8mb4
 -- Note: After running this script, execute the following commands in the backend directory:
 -- 1. npm run prisma:generate
 -- 2. npm run prisma:migrate (or npm run prisma:push for development)
-
