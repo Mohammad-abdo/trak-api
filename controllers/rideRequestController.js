@@ -1,6 +1,7 @@
 import prisma from "../utils/prisma.js";
 import { generateExcel, generatePDF, generateCSV, formatDate, formatCurrency } from "../utils/exportUtils.js";
 import { calculateTripPrice } from "../utils/pricingCalculator.js";
+import * as promotionService from "../services/promotionService.js";
 
 // @desc    Create ride request
 // @route   POST /api/ride-requests/save-riderequest
@@ -122,10 +123,29 @@ export const createRideRequest = async (req, res) => {
             });
         }
 
+        // Apply promotion (coupon) if provided
+        const promotionResult = await promotionService.applyPromotion({
+            userId: req.user.id,
+            bookingType: "RIDE",
+            vehicleCategoryId: rideData.vehicleCategoryId || null,
+            totalPrice: rideData.totalAmount,
+            bookingDate: rideData.scheduleDatetime || new Date(),
+            code: couponCode || null,
+        });
+        if (promotionResult.applied) {
+            rideData.totalAmount = promotionResult.finalPrice;
+            rideData.couponDiscount = promotionResult.discount;
+            rideData.couponData = promotionResult.promotion ? JSON.stringify(promotionResult.promotion) : null;
+        }
+
         // Create ride request
         const rideRequest = await prisma.rideRequest.create({
             data: rideData,
         });
+
+        if (promotionResult.applied && promotionResult.promotion?.id) {
+            await promotionService.recordPromotionUsage(promotionResult.promotion.id, req.user.id, String(rideRequest.id));
+        }
 
         res.status(201).json({
             success: true,

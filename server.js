@@ -20,6 +20,7 @@ import documentRoutes from './routes/documents.js';
 import complaintRoutes from './routes/complaints.js';
 import complaintCommentRoutes from './routes/complaintComments.js';
 import couponRoutes from './routes/coupons.js';
+import promotionRoutes from './routes/promotions.js';
 import dashboardRoutes from './routes/dashboard.js';
 import adminRoutes from './routes/admin.js';
 import driverDocumentRoutes from './routes/driverDocuments.js';
@@ -69,6 +70,9 @@ import geographicZoneRoutes from './routes/geographicZoneRoutes.js';
 import touristTripRoutes from './routes/touristTripRoutes.js';
 import categoryFeatureRoutes from './routes/categoryFeatureRoutes.js';
 import categoryZoneRoutes from './routes/categoryZoneRoutes.js';
+import dedicatedBookingRoutes from './routes/dedicatedBookings.js';
+import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
+import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 
 dotenv.config();
 
@@ -113,6 +117,7 @@ app.use('/api/documents', documentRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/complaint-comments', complaintCommentRoutes);
 app.use('/api/coupons', couponRoutes);
+app.use('/api/promotions', promotionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/driver-documents', driverDocumentRoutes);
@@ -164,6 +169,7 @@ app.use('/api/geographic-zones', geographicZoneRoutes);
 app.use('/api/tourist-trips', touristTripRoutes);
 app.use('/api/category-features', categoryFeatureRoutes);
 app.use('/api/category-zones', categoryZoneRoutes);
+app.use('/api/dedicated-bookings', dedicatedBookingRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -191,6 +197,8 @@ io.on('connection', (socket) => {
     socket.join(`ride-${rideId}`);
     console.log(`Subscribed to ride ${rideId}`);
   });
+
+  registerDedicatedBookingHandlers(socket, io);
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
@@ -221,7 +229,6 @@ import cron from 'node-cron';
 import { activateScheduledRides } from './utils/scheduledRideService.js';
 
 // Start scheduled ride activation cron job
-// Runs every minute to check for rides that need activation
 cron.schedule('* * * * *', async () => {
   try {
     await activateScheduledRides();
@@ -230,7 +237,16 @@ cron.schedule('* * * * *', async () => {
   }
 });
 
-console.log('Scheduled ride activation service started (runs every minute)');
+// Dedicated booking auto-complete: ACTIVE -> COMPLETED when startedAt + duration exceeded
+cron.schedule('* * * * *', async () => {
+  try {
+    await runAutoComplete();
+  } catch (error) {
+    console.error('Error in dedicated booking auto-complete:', error);
+  }
+});
+
+console.log('Scheduled ride activation and dedicated booking auto-complete running (every minute)');
 
 // Start server
 httpServer.listen(PORT, () => {

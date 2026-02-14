@@ -18,6 +18,10 @@ async function main() {
   await prisma.wallet.deleteMany()
   await prisma.payment.deleteMany()
   await prisma.rideRequest.deleteMany()
+  await prisma.bookingLocationUpdate.deleteMany()
+  await prisma.bookingInvoice.deleteMany()
+  await prisma.dedicatedBooking.deleteMany()
+  await prisma.touristTrip.deleteMany()
   await prisma.userBankAccount.deleteMany()
   await prisma.userDetail.deleteMany()
   await prisma.driverService.deleteMany()
@@ -31,6 +35,11 @@ async function main() {
   await prisma.sos.deleteMany()
   await prisma.pages.deleteMany()
   await prisma.frontendData.deleteMany()
+  await prisma.categoryZone.deleteMany()
+  await prisma.pricingRule.deleteMany()
+  await prisma.vehicleCategory.deleteMany()
+  await prisma.serviceCategory.deleteMany()
+  await prisma.geographicZone.deleteMany()
 
   // Create Regions
   console.log('Creating regions...')
@@ -1337,6 +1346,114 @@ async function main() {
     }
   })
 
+  // Create Dedicated Bookings (طلبات الحجز الخاص) — أسعار بالجنيه المصري
+  console.log('Creating dedicated bookings...')
+  const bookingDate1 = new Date('2026-03-10')
+  const startTime1 = new Date('2026-03-10T09:00:00.000Z')
+  await prisma.dedicatedBooking.create({
+    data: {
+      userId: rider1.id,
+      driverId: driver1.id,
+      vehicleCategoryId: regularCategory.id,
+      pickupAddress: 'ميدان التحرير، القاهرة',
+      pickupLat: 30.0444,
+      pickupLng: 31.2357,
+      dropoffAddress: 'مدينة نصر، القاهرة',
+      dropoffLat: 30.0731,
+      dropoffLng: 31.3456,
+      bookingDate: bookingDate1,
+      startTime: startTime1,
+      durationHours: 4,
+      pricingType: 'PER_HOUR',
+      baseFare: 50,
+      pricePerHour: 80,
+      totalPrice: 370,
+      status: 'COMPLETED',
+      paymentStatus: 'CAPTURED',
+      startedAt: startTime1,
+      endedAt: new Date('2026-03-10T13:00:00.000Z'),
+      notes: 'حجز سائق خاص لمدة 4 ساعات - القاهرة'
+    }
+  })
+
+  const bookingDate2 = new Date('2026-03-15')
+  const startTime2 = new Date('2026-03-15T10:00:00.000Z')
+  await prisma.dedicatedBooking.create({
+    data: {
+      userId: rider2.id,
+      driverId: driver2.id,
+      vehicleCategoryId: mediumCategory.id,
+      pickupAddress: 'المعادي، القاهرة',
+      pickupLat: 29.9602,
+      pickupLng: 31.2569,
+      dropoffAddress: 'الشيخ زايد، 6 أكتوبر',
+      dropoffLat: 30.0442,
+      dropoffLng: 30.9765,
+      bookingDate: bookingDate2,
+      startTime: startTime2,
+      durationHours: 6,
+      pricingType: 'PER_HOUR',
+      baseFare: 60,
+      pricePerHour: 100,
+      totalPrice: 660,
+      status: 'ACTIVE',
+      paymentStatus: 'PREAUTHORIZED',
+      startedAt: startTime2,
+      notes: 'نقل من المعادي إلى الشيخ زايد - نصف يوم'
+    }
+  })
+
+  const bookingDate3 = new Date('2026-03-20')
+  const startTime3 = new Date('2026-03-20T08:00:00.000Z')
+  await prisma.dedicatedBooking.create({
+    data: {
+      userId: rider3.id,
+      vehicleCategoryId: vipCategory.id,
+      pickupAddress: 'مدينة نصر، القاهرة',
+      pickupLat: 30.0731,
+      pickupLng: 31.3456,
+      dropoffAddress: 'الإسكندرية - الكورنيش',
+      dropoffLat: 31.2001,
+      dropoffLng: 29.9187,
+      bookingDate: bookingDate3,
+      startTime: startTime3,
+      durationHours: 12,
+      pricingType: 'PER_DAY',
+      distanceKm: 220,
+      numberOfDays: 1,
+      baseFare: 200,
+      pricePerHour: 150,
+      totalPrice: 2500,
+      status: 'PENDING',
+      paymentStatus: 'UNPAID',
+      notes: 'رحلة يوم كامل القاهرة - الإسكندرية (VIP)'
+    }
+  })
+
+  await prisma.dedicatedBooking.create({
+    data: {
+      userId: rider1.id,
+      driverId: driver1.id,
+      vehicleCategoryId: regularCategory.id,
+      pickupAddress: '6 أكتوبر، الجيزة',
+      pickupLat: 30.0442,
+      pickupLng: 30.9765,
+      dropoffAddress: 'الهرم، الجيزة',
+      dropoffLat: 29.9792,
+      dropoffLng: 31.1342,
+      bookingDate: new Date('2026-03-25'),
+      startTime: new Date('2026-03-25T14:00:00.000Z'),
+      durationHours: 2,
+      pricingType: 'PER_HOUR',
+      baseFare: 40,
+      pricePerHour: 70,
+      totalPrice: 180,
+      status: 'DRIVER_ASSIGNED',
+      paymentStatus: 'UNPAID',
+      notes: 'جولة سريعة أكتوبر - الهرم'
+    }
+  })
+
   // Create Sample Tourist Trips
   console.log('Creating sample tourist trips...')
   await prisma.touristTrip.create({
@@ -1394,6 +1511,7 @@ async function main() {
   console.log('   - Vehicle Categories: 7 (Regular, Medium, VIP, Suzuki, Quarter Truck, 3-Ton, Jumbo)')
   console.log('   - Geographic Zones: 3')
   console.log('   - Pricing Rules: 7')
+  console.log('   - Dedicated Bookings: 4 (طلبات الحجز الخاص - بالجنيه المصري)')
   console.log('   - Tourist Trips: 2')
 
   console.log('')

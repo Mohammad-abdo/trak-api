@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticate, authorize } from "../middleware/auth.js";
+import adminPromotions from "./adminPromotions.js";
 
 const router = express.Router();
 
@@ -7,7 +8,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(authorize("admin"));
 
-// TODO: Add admin routes here
+router.use("/promotions", adminPromotions);
 
 export default router;
 

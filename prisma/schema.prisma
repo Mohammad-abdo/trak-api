@@ -102,6 +102,10 @@ model User {
   touristTripsAsRider  TouristTrip[] @relation("TouristTripRider")
   touristTripsAsDriver TouristTrip[] @relation("TouristTripDriver")
 
+  // Dedicated private bookings (isolated feature)
+  dedicatedBookingsAsUser   DedicatedBooking[] @relation("DedicatedBookingUser")
+  dedicatedBookingsAsDriver DedicatedBooking[] @relation("DedicatedBookingDriver")
+
   @@index([userType, status])
   @@index([email])
   @@index([contactNumber])
@@ -346,6 +350,70 @@ model Coupon {
   updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   @@map("coupons")
+}
+
+// ----- Promotion Engine (scalable, works with Ride + Dedicated Booking) -----
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PromotionBookingType {
+  RIDE
+  DEDICATED
+  ALL
+}
+
+model Promotion {
+  id            String               @id @default(uuid())
+  code          String               @unique
+  discountType  DiscountType         @map("discount_type")
+  discountValue Float                @map("discount_value") @db.Double
+  startDate     DateTime             @map("start_date") @db.DateTime(6)
+  endDate       DateTime             @map("end_date") @db.DateTime(6)
+  usageLimit    Int?                 @map("usage_limit")
+  usagePerUser  Int?                 @map("usage_per_user")
+  bookingType   PromotionBookingType @default(ALL) @map("booking_type")
+  startHour     Int?                 @map("start_hour")
+  endHour       Int?                 @map("end_hour")
+  isActive      Boolean              @default(true) @map("is_active")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.DateTime(6)
+
+  categories PromotionCategory[]
+  usages     PromotionUsage[]
+
+  @@index([code])
+  @@index([isActive, startDate, endDate])
+  @@map("promotions")
+}
+
+model PromotionCategory {
+  id                 Int      @id @default(autoincrement())
+  promotionId        String   @map("promotion_id")
+  vehicleCategoryId Int      @map("vehicle_category_id")
+
+  promotion        Promotion        @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  vehicleCategory  VehicleCategory  @relation(fields: [vehicleCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, vehicleCategoryId])
+  @@index([promotionId])
+  @@index([vehicleCategoryId])
+  @@map("promotion_categories")
+}
+
+model PromotionUsage {
+  id          Int      @id @default(autoincrement())
+  promotionId String   @map("promotion_id")
+  userId      Int      @map("user_id")
+  bookingId   String?  @map("booking_id") @db.VarChar(191)
+  usedAt      DateTime @default(now()) @map("used_at") @db.DateTime(6)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+
+  @@index([promotionId])
+  @@index([userId])
+  @@map("promotion_usages")
 }
 
 model Document {
@@ -681,13 +749,14 @@ model ManageZone {
 }
 
 model ZonePrice {
-  id          Int      @id @default(autoincrement())
-  serviceIds  Json?    @map("service_ids")
-  zonePickup  Int?     @map("zone_pickup")
-  zoneDropoff Int?     @map("zone_dropoff")
-  price       Float?   @db.Double
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(6)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+  id                 Int      @id @default(autoincrement())
+  serviceIds         Json?    @map("service_ids")
+  zonePickup         Int?     @map("zone_pickup")
+  zoneDropoff        Int?     @map("zone_dropoff")
+  price              Float?   @db.Double
+  beyondZonePercent  Float?   @map("beyond_zone_percent") @db.Double
+  createdAt          DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   pickupZone  ManageZone? @relation("PickupZone", fields: [zonePickup], references: [id], onDelete: SetNull)
   dropoffZone ManageZone? @relation("DropoffZone", fields: [zoneDropoff], references: [id], onDelete: SetNull)
@@ -1055,12 +1124,14 @@ model VehicleCategory {
   createdAt         DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
-  serviceCategory ServiceCategory   @relation(fields: [serviceCategoryId], references: [id])
-  features        CategoryFeature[]
-  zones           CategoryZone[]
-  pricingRules    PricingRule[]
-  services        Service[]
-  touristTrips    TouristTrip[]
+  serviceCategory   ServiceCategory    @relation(fields: [serviceCategoryId], references: [id])
+  features          CategoryFeature[]
+  zones             CategoryZone[]
+  pricingRules      PricingRule[]
+  services          Service[]
+  touristTrips      TouristTrip[]
+  dedicatedBookings DedicatedBooking[]
+  promotionCategories PromotionCategory[]
 
   @@index([serviceCategoryId])
   @@index([status])
@@ -1177,4 +1248,120 @@ model TouristTrip {
   @@index([driverId])
   @@index([status])
   @@map("tourist_trips")
+}
+
+// ========== DEDICATED PRIVATE BOOKING SYSTEM (isolated feature) ==========
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  DRIVER_ASSIGNED
+  ON_THE_WAY
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PREAUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+model DedicatedBooking {
+  id                 String         @id @default(uuid())
+  userId             Int            @map("user_id")
+  driverId           Int?           @map("driver_id")
+  vehicleCategoryId Int            @map("vehicle_category_id")
+
+  pickupAddress      String         @map("pickup_address") @db.VarChar(500)
+  pickupLat          Float          @map("pickup_lat") @db.Double
+  pickupLng          Float          @map("pickup_lng") @db.Double
+
+  dropoffAddress     String         @map("dropoff_address") @db.VarChar(500)
+  dropoffLat         Float          @map("dropoff_lat") @db.Double
+  dropoffLng         Float          @map("dropoff_lng") @db.Double
+
+  bookingDate        DateTime       @map("booking_date") @db.Date
+  startTime          DateTime       @map("start_time") @db.DateTime(6)
+  durationHours     Int            @map("duration_hours")
+
+  pricingType        String?        @default("PER_HOUR") @map("pricing_type") @db.VarChar(20)
+  distanceKm         Float?         @map("distance_km") @db.Double
+  numberOfDays       Int?           @map("number_of_days")
+
+  baseFare           Float          @map("base_fare") @db.Double
+  pricePerHour       Float          @map("price_per_hour") @db.Double
+  totalPrice         Float          @map("total_price") @db.Double
+
+  status             BookingStatus  @default(PENDING)
+  paymentStatus      PaymentStatus  @default(UNPAID) @map("payment_status")
+
+  startedAt          DateTime?      @map("started_at") @db.DateTime(6)
+  endedAt            DateTime?      @map("ended_at") @db.DateTime(6)
+  cancelledAt        DateTime?      @map("cancelled_at") @db.DateTime(6)
+
+  notes              String?        @db.Text
+  stripePaymentIntentId String?     @map("stripe_payment_intent_id")
+  createdAt          DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt          DateTime       @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+
+  user            User             @relation("DedicatedBookingUser", fields: [userId], references: [id])
+  driver          User?            @relation("DedicatedBookingDriver", fields: [driverId], references: [id])
+  vehicleCategory VehicleCategory  @relation(fields: [vehicleCategoryId], references: [id])
+
+  invoice         BookingInvoice?
+  locationUpdates BookingLocationUpdate[]
+
+  @@index([userId])
+  @@index([driverId])
+  @@index([vehicleCategoryId])
+  @@index([status])
+  @@index([bookingDate])
+  @@index([startTime])
+  @@map("dedicated_bookings")
+}
+
+model BookingInvoice {
+  id        Int       @id @default(autoincrement())
+  bookingId String    @unique @map("booking_id")
+  subtotal  Float     @db.Double
+  tax       Float     @default(0) @db.Double
+  discount  Float     @default(0) @db.Double
+  total     Float     @db.Double
+  issuedAt DateTime  @map("issued_at") @db.DateTime(6)
+  paidAt    DateTime? @map("paid_at") @db.DateTime(6)
+
+  booking DedicatedBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_invoices")
+}
+
+model BookingLocationUpdate {
+  id        Int      @id @default(autoincrement())
+  bookingId String   @map("booking_id")
+  lat       Float    @db.Double
+  lng       Float    @db.Double
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  booking DedicatedBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_location_updates")
+}
+
+// إعدادات تسعير الحجز الخاص (يدخلها الأدمن: لكل كم، لكل يوم، لكل رحلة + أساسي/ساعة)
+model DedicatedBookingPricing {
+  id            Int      @id @default(autoincrement())
+  pricePerKm    Float    @default(0) @map("price_per_km") @db.Double
+  pricePerDay   Float    @default(0) @map("price_per_day") @db.Double
+  pricePerTrip  Float    @default(0) @map("price_per_trip") @db.Double
+  baseFare      Float    @default(0) @map("base_fare") @db.Double
+  pricePerHour  Float    @default(0) @map("price_per_hour") @db.Double
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime(6)
+
+  @@map("dedicated_booking_pricing")
 }

@@ -182,5 +182,129 @@ export const getZonePrices = async (req, res) => {
     }
 };
 
+// @desc    Create zone price
+// @route   POST /api/manage-zones/zone-prices
+// @access  Private
+export const createZonePrice = async (req, res) => {
+    try {
+        const { zonePickup, zoneDropoff, serviceIds, price, beyondZonePercent } = req.body;
+
+        if (!zonePickup || !zoneDropoff) {
+            return res.status(400).json({
+                success: false,
+                message: "Zone pickup and zone dropoff are required",
+            });
+        }
+
+        const zonePrice = await prisma.zonePrice.create({
+            data: {
+                zonePickup: parseInt(zonePickup),
+                zoneDropoff: parseInt(zoneDropoff),
+                serviceIds: serviceIds != null && serviceIds !== '' ? (Array.isArray(serviceIds) ? serviceIds : [Number(serviceIds)].filter((n) => !Number.isNaN(n))) : null,
+                price: price != null ? parseFloat(price) : null,
+                beyondZonePercent: beyondZonePercent != null && beyondZonePercent !== '' ? parseFloat(beyondZonePercent) : null,
+            },
+        });
+
+        const withRelations = await prisma.zonePrice.findUnique({
+            where: { id: zonePrice.id },
+            include: {
+                pickupZone: { select: { id: true, name: true } },
+                dropoffZone: { select: { id: true, name: true } },
+            },
+        });
+
+        res.json({
+            success: true,
+            message: "Zone price saved successfully",
+            data: withRelations,
+        });
+    } catch (error) {
+        console.error("Create zone price error:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+// @desc    Update zone price
+// @route   PUT /api/manage-zones/zone-prices/:id
+// @access  Private
+export const updateZonePrice = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { zonePickup, zoneDropoff, serviceIds, price, beyondZonePercent } = req.body;
+
+        const data = {};
+        if (zonePickup != null) data.zonePickup = parseInt(zonePickup);
+        if (zoneDropoff != null) data.zoneDropoff = parseInt(zoneDropoff);
+        if (serviceIds !== undefined) data.serviceIds = (serviceIds === null || serviceIds === '') ? null : (Array.isArray(serviceIds) ? serviceIds : [Number(serviceIds)].filter((n) => !Number.isNaN(n)));
+        if (price != null) data.price = parseFloat(price);
+        if (beyondZonePercent !== undefined) data.beyondZonePercent = (beyondZonePercent === null || beyondZonePercent === '') ? null : parseFloat(beyondZonePercent);
+
+        const zonePrice = await prisma.zonePrice.update({
+            where: { id: parseInt(id) },
+            data,
+        });
+
+        const withRelations = await prisma.zonePrice.findUnique({
+            where: { id: zonePrice.id },
+            include: {
+                pickupZone: { select: { id: true, name: true } },
+                dropoffZone: { select: { id: true, name: true } },
+            },
+        });
+
+        res.json({
+            success: true,
+            message: "Zone price updated successfully",
+            data: withRelations,
+        });
+    } catch (error) {
+        console.error("Update zone price error:", error);
+        if (error.code === "P2025") {
+            return res.status(404).json({
+                success: false,
+                message: "Zone price not found",
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+// @desc    Delete zone price
+// @route   DELETE /api/manage-zones/zone-prices/:id
+// @access  Private
+export const deleteZonePrice = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        await prisma.zonePrice.delete({
+            where: { id: parseInt(id) },
+        });
+
+        res.json({
+            success: true,
+            message: "Zone price deleted successfully",
+        });
+    } catch (error) {
+        console.error("Delete zone price error:", error);
+        if (error.code === "P2025") {
+            return res.status(404).json({
+                success: false,
+                message: "Zone price not found",
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
 
 
