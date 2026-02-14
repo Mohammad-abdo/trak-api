@@ -1,4 +1,5 @@
 import * as service from '../services/promotionService.js';
+import { sendPromotionNotification } from '../services/promotionNotificationService.js';
 import { validate, idParamSchema, createPromotionSchema, updatePromotionSchema, validatePromotionSchema } from '../validators/promotionValidators.js';
 
 /**

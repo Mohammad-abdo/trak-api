@@ -17,6 +17,18 @@ export function promotionErrorHandler(err, req, res, next) {
       errors: err.errors.map((e) => ({ path: e.path.join('.'), message: e.message })),
     });
   }
+  if (err.code === 'P2002') {
+    return res.status(409).json({ success: false, message: 'PROMOTION_CODE_EXISTS' });
+  }
+  if (err.code === 'P2025') {
+    return res.status(404).json({ success: false, message: 'PROMOTION_NOT_FOUND' });
+  }
+  if (err.code && String(err.code).startsWith('P')) {
+    return res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'development' ? err.message : 'Database error. Ensure promotions migration has been run.',
+    });
+  }
   const code = err.message;
   const status = CODE_TO_HTTP[code] ?? 500;
   return res.status(status).json({
