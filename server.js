@@ -187,19 +187,11 @@ try {
   const swaggerUi = swaggerUiModule.default;
   const swaggerJsdoc = swaggerJsdocModule.default;
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  const serverUrl = isProduction
-    ? process.env.PRODUCTION_URL || `http://localhost:${process.env.PORT || 5001}`
-    : `http://localhost:${process.env.PORT || 5001}`;
-
   const swaggerOptions = {
     definition: {
       openapi: '3.0.0',
       info: { title: 'OFFER_GO Mobile User API', version: '1.0.0', description: 'Mobile API for the OFFER_GO app – User side' },
-      servers: [
-        { url: serverUrl, description: isProduction ? 'Production server' : 'Dev server' },
-        ...(isProduction ? [{ url: `http://localhost:${process.env.PORT || 5001}`, description: 'Local Dev server' }] : []),
-      ],
+      servers: [{ url: '/' }],
       components: {
         securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
       },
@@ -220,8 +212,23 @@ try {
   };
 
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
-  console.log(`📚 Swagger UI available at ${serverUrl}/api-docs`);
+
+  // Serve swagger spec dynamically so the server URL always matches the current host
+  app.get('/api-docs/swagger.json', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    const dynamicSpec = {
+      ...swaggerSpec,
+      servers: [{ url: `${proto}://${host}`, description: 'Current server' }],
+    };
+    res.json(dynamicSpec);
+  });
+
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    swaggerOptions: { url: '/api-docs/swagger.json' },
+  }));
+  console.log(`📚 Swagger UI available at /api-docs`);
 } catch (e) {
   console.warn('⚠️  Swagger UI not available. Run: npm install swagger-jsdoc swagger-ui-express');
 }
