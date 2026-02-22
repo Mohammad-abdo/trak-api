@@ -194,6 +194,30 @@ try {
       servers: [{ url: '/' }],
       components: {
         securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+        schemas: {
+          UserFull: {
+            type: 'object',
+            properties: {
+              id:            { type: 'integer', example: 1 },
+              firstName:     { type: 'string',  example: 'Mohamed' },
+              lastName:      { type: 'string',  example: 'Ahmed' },
+              email:         { type: 'string',  example: 'user@mail.com' },
+              contactNumber: { type: 'string',  example: '01234567890' },
+              countryCode:   { type: 'string',  example: '+20' },
+              userType:      { type: 'string',  example: 'rider' },
+              status:        { type: 'string',  example: 'active' },
+              avatar:        { type: 'string',  nullable: true },
+              gender:        { type: 'string',  nullable: true },
+              address:       { type: 'string',  nullable: true },
+              latitude:      { type: 'string',  nullable: true },
+              longitude:     { type: 'string',  nullable: true },
+              isOnline:      { type: 'boolean', example: false },
+              isAvailable:   { type: 'boolean', example: true },
+              referralCode:  { type: 'string',  example: 'USR1234567890' },
+              createdAt:     { type: 'string',  format: 'date-time' },
+            },
+          },
+        },
       },
       security: [{ bearerAuth: [] }],
       tags: [
