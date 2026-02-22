@@ -20,6 +20,7 @@ export async function create(req, res, next) {
       startHour: body.startHour ?? null,
       endHour: body.endHour ?? null,
       isActive: body.isActive !== false,
+      imageUrl: body.imageUrl ?? null,
       categoryIds: Array.isArray(body.categoryIds) ? body.categoryIds.map(Number) : [],
     };
     const promotion = await service.createPromotion(payload);
@@ -94,6 +95,24 @@ export async function toggle(req, res, next) {
   try {
     const { params } = validate(idParamSchema, { params: req.params });
     const promotion = await service.togglePromotion(params.id);
+    res.json({ success: true, data: promotion });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/admin/promotions/:id/image
+ * Expects multipart/form-data with field "image" (file).
+ */
+export async function uploadImage(req, res, next) {
+  try {
+    const { params } = validate(idParamSchema, { params: req.params });
+    if (!req.file || !req.file.filename) {
+      return res.status(400).json({ success: false, message: 'No image file uploaded' });
+    }
+    const imageUrl = `/uploads/promotions/${req.file.filename}`;
+    const promotion = await service.updatePromotion(params.id, { imageUrl });
     res.json({ success: true, data: promotion });
   } catch (err) {
     next(err);

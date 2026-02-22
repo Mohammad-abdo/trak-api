@@ -159,6 +159,7 @@ export async function createPromotion(data) {
     startHour: data.startHour != null ? parseInt(data.startHour, 10) : null,
     endHour: data.endHour != null ? parseInt(data.endHour, 10) : null,
     isActive: data.isActive !== false,
+    imageUrl: data.imageUrl || null,
     categoryIds: data.categoryIds || [],
   });
 }

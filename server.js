@@ -71,6 +71,7 @@ import touristTripRoutes from './routes/touristTripRoutes.js';
 import categoryFeatureRoutes from './routes/categoryFeatureRoutes.js';
 import categoryZoneRoutes from './routes/categoryZoneRoutes.js';
 import dedicatedBookingRoutes from './routes/dedicatedBookings.js';
+import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 
@@ -175,6 +176,47 @@ app.use('/api/dedicated-bookings', dedicatedBookingRoutes);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
+
+// Mobile User API Routes
+app.use('/apimobile/user', mobileUserRoutes);
+
+// Swagger UI (optional – only if packages installed)
+try {
+  const swaggerUiModule = await import('swagger-ui-express');
+  const swaggerJsdocModule = await import('swagger-jsdoc');
+  const swaggerUi = swaggerUiModule.default;
+  const swaggerJsdoc = swaggerJsdocModule.default;
+
+  const swaggerOptions = {
+    definition: {
+      openapi: '3.0.0',
+      info: { title: 'OFFER_GO Mobile User API', version: '1.0.0', description: 'Mobile API for the OFFER_GO app – User side' },
+      servers: [{ url: `http://localhost:${process.env.PORT || 5001}`, description: 'Dev server' }],
+      components: {
+        securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+      },
+      security: [{ bearerAuth: [] }],
+      tags: [
+        { name: 'Auth', description: 'Authentication' },
+        { name: 'Home', description: 'Home screen' },
+        { name: 'Services', description: 'Service selection' },
+        { name: 'Booking', description: 'Booking' },
+        { name: 'Offers', description: 'Driver offers & trip tracking' },
+        { name: 'My Bookings', description: 'User booking history' },
+        { name: 'Wallet', description: 'Wallet' },
+        { name: 'Profile', description: 'Profile & addresses' },
+        { name: 'Static', description: 'Static pages & notifications' },
+      ],
+    },
+    apis: ['./routes/user/mobileUserRoutes.js'],
+  };
+
+  const swaggerSpec = swaggerJsdoc(swaggerOptions);
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+  console.log(`📚 Swagger UI available at http://localhost:${process.env.PORT || 5001}/api-docs`);
+} catch (e) {
+  console.warn('⚠️  Swagger UI not available. Run: npm install swagger-jsdoc swagger-ui-express');
+}
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {

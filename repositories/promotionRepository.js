@@ -24,7 +24,13 @@ export async function findByCode(code) {
 export async function findById(id) {
   return prisma.promotion.findUnique({
     where: { id },
-    include: { categories: true },
+    include: {
+      categories: { include: { vehicleCategory: { select: { id: true, name: true, nameAr: true } } } },
+      usages: {
+        orderBy: { usedAt: 'desc' },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, contactNumber: true } } },
+      },
+    },
   });
 }
 

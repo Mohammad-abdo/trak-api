@@ -11,10 +11,11 @@ const CODE_TO_HTTP = {
 
 export function promotionErrorHandler(err, req, res, next) {
   if (err instanceof ZodError) {
+    const issues = err.issues ?? [];
     return res.status(400).json({
       success: false,
       message: 'Validation failed',
-      errors: err.errors.map((e) => ({ path: e.path.join('.'), message: e.message })),
+      errors: issues.map((e) => ({ path: (e.path || []).join('.'), message: e.message })),
     });
   }
   if (err.code === 'P2002') {
@@ -28,6 +29,12 @@ export function promotionErrorHandler(err, req, res, next) {
       success: false,
       message: process.env.NODE_ENV === 'development' ? err.message : 'Database error. Ensure promotions migration has been run.',
     });
+  }
+  if (err.message === 'INVALID_IMAGE_TYPE') {
+    return res.status(400).json({ success: false, message: 'Invalid image type. Use JPEG, PNG, GIF or WebP.' });
+  }
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ success: false, message: 'Image too large. Max 5MB.' });
   }
   const code = err.message;
   const status = CODE_TO_HTTP[code] ?? 500;

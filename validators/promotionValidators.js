@@ -21,6 +21,7 @@ export const createPromotionSchema = z.object({
       startHour: optionalIntHour.optional(),
       endHour: optionalIntHour.optional(),
       isActive: z.boolean().optional().default(true),
+      imageUrl: z.string().max(512).optional(),
       categoryIds: z.array(z.coerce.number().int().positive()).optional().default([]),
     })
     .refine((b) => !b.startDate || !b.endDate || new Date(b.endDate) >= new Date(b.startDate), {
@@ -43,6 +44,7 @@ export const updatePromotionSchema = z.object({
     startHour: optionalIntHour.optional(),
     endHour: optionalIntHour.optional(),
     isActive: z.boolean().optional(),
+    imageUrl: z.string().max(512).optional(),
     categoryIds: z.array(z.coerce.number().int().positive()).optional(),
   }).refine((b) => !b.startDate || !b.endDate || new Date(b.endDate) >= new Date(b.startDate), {
     message: 'endDate must be >= startDate',
