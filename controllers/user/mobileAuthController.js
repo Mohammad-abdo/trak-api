@@ -56,7 +56,8 @@ export const login = async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid phone or password' });
         }
 
-        if (user.status !== 'active') {
+        const blockedStatuses = ['inactive', 'banned', 'deleted', 'suspended'];
+        if (blockedStatuses.includes(user.status)) {
             return res.status(403).json({ success: false, message: `Account is ${user.status}. Contact support.` });
         }
 
@@ -107,9 +108,6 @@ export const register = async (req, res) => {
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || nameParts[0];
 
-        const otp = '123456'; // Fixed OTP for now
-        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
         const user = await prisma.user.create({
             data: {
                 firstName,
@@ -118,10 +116,8 @@ export const register = async (req, res) => {
                 contactNumber: phone,
                 password: hashedPassword,
                 userType: 'rider',
-                status: 'pending',
+                status: 'active',
                 avatar: null,
-                otp,
-                otpExpiresAt,
                 referralCode: `USR${Date.now()}`,
             },
             select: fullUserSelect,
