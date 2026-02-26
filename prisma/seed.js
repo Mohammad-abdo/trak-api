@@ -42,6 +42,7 @@ async function main() {
   await prisma.geographicZone.deleteMany()
   await prisma.notification.deleteMany()
   await prisma.userAddress.deleteMany()
+  await prisma.userBankCard.deleteMany()
 
   // Create Regions
   console.log('Creating regions...')
@@ -246,6 +247,27 @@ async function main() {
     }
   })
 
+  // Mobile API test user (login: phone 01234567890 / password Test1234)
+  const mobileTestUser = await prisma.user.create({
+    data: {
+      firstName: 'Mobile',
+      lastName: 'Tester',
+      email: 'mobile.test@example.com',
+      username: 'mobile_tester',
+      password: await bcrypt.hash('Test1234', 10),
+      contactNumber: '01234567890',
+      userType: 'rider',
+      status: 'active',
+      displayName: 'Mobile Tester',
+      address: 'Cairo, Egypt',
+      latitude: '30.0444',
+      longitude: '31.2357',
+      isOnline: false,
+      isAvailable: false,
+      isVerified: true
+    }
+  })
+
   // Create Drivers
   console.log('Creating drivers...')
   const driver1 = await prisma.user.create({
@@ -424,6 +446,14 @@ async function main() {
     }
   })
 
+  await prisma.wallet.create({
+    data: {
+      userId: mobileTestUser.id,
+      balance: 350.0,
+      currency: 'SAR'
+    }
+  })
+
   // User saved addresses (for GET /apimobile/user/addresses) – rider1
   console.log('Creating user addresses...')
   await prisma.userAddress.create({
@@ -457,6 +487,50 @@ async function main() {
     }
   })
 
+  await prisma.userAddress.create({
+    data: {
+      userId: mobileTestUser.id,
+      title: 'Home',
+      address: 'Cairo, Downtown',
+      latitude: '30.0444',
+      longitude: '31.2357',
+      isDefault: true
+    }
+  })
+  await prisma.userAddress.create({
+    data: {
+      userId: mobileTestUser.id,
+      title: 'Office',
+      address: 'Nasr City, Cairo',
+      latitude: '30.0731',
+      longitude: '31.3456',
+      isDefault: false
+    }
+  })
+
+  await prisma.userBankCard.create({
+    data: {
+      userId: mobileTestUser.id,
+      cardHolderName: 'Mobile Tester',
+      lastFourDigits: '4242',
+      brand: 'visa',
+      expiryMonth: 12,
+      expiryYear: 2028,
+      isDefault: true
+    }
+  })
+  await prisma.userBankCard.create({
+    data: {
+      userId: mobileTestUser.id,
+      cardHolderName: 'Mobile Tester',
+      lastFourDigits: '5555',
+      brand: 'mastercard',
+      expiryMonth: 6,
+      expiryYear: 2027,
+      isDefault: false
+    }
+  })
+
   // Notifications for rider1 (for GET /apimobile/user/notifications)
   console.log('Creating notifications...')
   await prisma.notification.create({
@@ -485,6 +559,16 @@ async function main() {
       data: { title: 'Don\'t forget to rate', body: 'Rate your last trip and help us improve.' },
       isRead: true,
       readAt: new Date()
+    }
+  })
+
+  await prisma.notification.create({
+    data: {
+      type: 'ride_completed',
+      notifiableType: 'user',
+      notifiableId: mobileTestUser.id,
+      data: { title: 'Trip completed', body: 'Your trip has been completed. Thank you!', rideRequestId: null },
+      isRead: false
     }
   })
 
@@ -982,6 +1066,76 @@ async function main() {
     }
   })
 
+  const rideMobilePending = await prisma.rideRequest.create({
+    data: {
+      riderId: mobileTestUser.id,
+      serviceId: service1.id,
+      datetime: new Date(),
+      isSchedule: false,
+      rideAttempt: 1,
+      distanceUnit: 'km',
+      totalAmount: 28.0,
+      surgeAmount: 0,
+      subtotal: 28.0,
+      extraChargesAmount: 0,
+      startLatitude: '30.0444',
+      startLongitude: '31.2357',
+      startAddress: 'Cairo, Downtown',
+      endLatitude: '30.0731',
+      endLongitude: '31.3456',
+      endAddress: 'Nasr City, Cairo',
+      distance: 8.0,
+      duration: 15,
+      seatCount: 1,
+      status: 'pending',
+      rideHasBid: false,
+      baseFare: 10.0,
+      minimumFare: 15.0,
+      perDistance: 2.5,
+      perMinuteDrive: 0.5,
+      paymentType: 'card',
+      otp: '1234',
+      isRiderRated: false,
+      isDriverRated: false
+    }
+  })
+
+  const rideMobileCompleted = await prisma.rideRequest.create({
+    data: {
+      riderId: mobileTestUser.id,
+      serviceId: service1.id,
+      datetime: new Date(),
+      isSchedule: false,
+      rideAttempt: 1,
+      distanceUnit: 'km',
+      totalAmount: 45.0,
+      surgeAmount: 0,
+      subtotal: 45.0,
+      extraChargesAmount: 0,
+      driverId: driver1.id,
+      startLatitude: '30.0444',
+      startLongitude: '31.2357',
+      startAddress: 'Cairo, Downtown',
+      endLatitude: '30.05',
+      endLongitude: '31.25',
+      endAddress: 'Giza',
+      distance: 12.0,
+      duration: 22,
+      seatCount: 1,
+      status: 'completed',
+      rideHasBid: false,
+      baseFare: 10.0,
+      minimumFare: 15.0,
+      perDistance: 2.5,
+      perDistanceCharge: 30.0,
+      perMinuteDrive: 0.5,
+      perMinuteDriveCharge: 11.0,
+      paymentType: 'card',
+      isRiderRated: true,
+      isDriverRated: true
+    }
+  })
+
   // Wallet operations for rider1 (so GET /apimobile/user/wallet/operations returns data)
   const walletR1 = await prisma.wallet.findFirst({ where: { userId: rider1.id } })
   if (walletR1) {
@@ -1015,6 +1169,43 @@ async function main() {
         type: 'credit',
         amount: 325.50,
         balance: 500,
+        description: 'Top up',
+        transactionType: 'topup'
+      }
+    })
+  }
+
+  const walletMobile = await prisma.wallet.findFirst({ where: { userId: mobileTestUser.id } })
+  if (walletMobile) {
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletMobile.id,
+        userId: mobileTestUser.id,
+        type: 'credit',
+        amount: 200,
+        balance: 200,
+        description: 'Top up',
+        transactionType: 'topup'
+      }
+    })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletMobile.id,
+        userId: mobileTestUser.id,
+        type: 'debit',
+        amount: 50,
+        balance: 150,
+        description: 'Ride payment',
+        transactionType: 'ride_payment'
+      }
+    })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletMobile.id,
+        userId: mobileTestUser.id,
+        type: 'credit',
+        amount: 200,
+        balance: 350,
         description: 'Top up',
         transactionType: 'topup'
       }
@@ -1095,7 +1286,7 @@ async function main() {
   console.log('📊 Summary:')
   console.log(`   - Regions: 2`)
   console.log(`   - Services: 3`)
-  console.log(`   - Users: 7 (1 admin, 1 fleet, 3 riders, 3 drivers)`)
+  console.log(`   - Users: 8 (1 admin, 1 fleet, 4 riders incl. mobile test user, 3 drivers)`)
   console.log(`   - Documents: 4`)
   console.log(`   - Coupons: 3`)
   console.log(`   - FAQs: 4`)
@@ -1687,6 +1878,12 @@ async function main() {
   console.log('   Fleet: fleet@alaelsareea.com / password123')
   console.log('   Rider: ahmed@example.com / password123')
   console.log('   Driver: khalid@example.com / password123')
+  console.log('')
+  console.log('📱 Mobile API test user (for /apimobile/user/*):')
+  console.log('   Phone: 01234567890')
+  console.log('   Password: Test1234')
+  console.log('   → Use POST /apimobile/user/auth/login with { "phone": "01234567890", "password": "Test1234" }')
+  console.log('   → Then use the returned token in Authorization: Bearer <token> to test profile, wallet, bank-cards, booking, etc.')
 }
 
 main()

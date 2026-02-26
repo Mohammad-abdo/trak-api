@@ -190,7 +190,18 @@ try {
   const swaggerOptions = {
     definition: {
       openapi: '3.0.0',
-      info: { title: 'OFFER_GO Mobile User API', version: '1.0.0', description: 'Mobile API for the OFFER_GO app – User side' },
+      info: {
+        title: 'OFFER_GO Mobile User API',
+        version: '1.0.0',
+        description: `Mobile API for the OFFER_GO app – User side.
+
+**Test user (after running \`npm run prisma:seed\`):**
+- **Phone:** \`01234567890\`
+- **Password:** \`Test1234\`
+- Get token: **POST** \`/apimobile/user/auth/login\` with body: \`{ "phone": "01234567890", "password": "Test1234" }\`
+- Use the returned \`data.token\` in **Authorization: Bearer <token>** for all protected endpoints.
+- This user has: wallet (350 SAR), 2 addresses, 2 saved cards, bookings, wallet history, notifications.`,
+      },
       servers: [{ url: '/' }],
       components: {
         securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
