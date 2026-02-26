@@ -116,6 +116,9 @@ model User {
   // Mobile user addresses
   addresses UserAddress[]
 
+  // Saved payment cards (last 4 digits + brand for display; never store full number)
+  bankCards UserBankCard[]
+
   @@index([userType, status])
   @@index([email])
   @@index([contactNumber])
@@ -1399,6 +1402,24 @@ model UserAddress {
 
   @@index([userId])
   @@map("user_addresses")
+}
+
+model UserBankCard {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  cardHolderName String?  @map("card_holder_name") @db.VarChar(100)
+  lastFourDigits String   @map("last_four_digits") @db.VarChar(4)
+  brand          String?  @db.VarChar(20)
+  expiryMonth    Int?     @map("expiry_month")
+  expiryYear     Int?     @map("expiry_year")
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_bank_cards")
 }
 
 model ShipmentSize {

@@ -222,7 +222,7 @@ try {
       },
       security: [{ bearerAuth: [] }],
       tags: [
-        { name: 'Auth', description: 'Authentication & verification. Login returns 403 if account not verified. Use resend-otp (phone) or send-otp (with token) then submit-otp to verify.' },
+        { name: 'Auth', description: 'Authentication & verification. Login returns 403 if account not verified. Use resend-otp (with token or by phone) or send-otp (with token) then submit-otp to verify.' },
         { name: 'Home', description: 'Home screen' },
         { name: 'Services', description: 'Service selection' },
         { name: 'Booking', description: 'Booking' },
@@ -230,6 +230,7 @@ try {
         { name: 'My Bookings', description: 'User booking history' },
         { name: 'Wallet', description: 'Wallet' },
         { name: 'Profile', description: 'Profile & addresses' },
+        { name: 'Cards', description: 'Saved payment cards (add, list, delete)' },
         { name: 'Static', description: 'Static pages & notifications' },
       ],
     },

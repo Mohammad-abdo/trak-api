@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { authenticate } from '../../middleware/auth.js';
 
 // Auth
-import { login, register, sendOtp, submitOtp, resendOtp, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
+import { login, register, sendOtp, submitOtp, resendOtp, logout, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
 // Home
 import { sliderOffers, getAllServices as homeGetAllServices, getLastCurrentUserBooking } from '../../controllers/user/mobileHomeController.js';
 // Services
@@ -20,6 +20,8 @@ import { getMyBookings, filterBookings, addReview } from '../../controllers/user
 import { lastUserOperations, filterOperations } from '../../controllers/user/mobileWalletController.js';
 // Profile
 import { myProfile, updateProfile, deleteAccount, getUserAddresses, addAddress, deleteAddress } from '../../controllers/user/mobileProfileController.js';
+// Cards (payment cards)
+import { addBankCard, getBankCards, deleteBankCard } from '../../controllers/user/mobileCardController.js';
 // Static
 import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications } from '../../controllers/user/mobileStaticController.js';
 
@@ -213,7 +215,7 @@ router.post('/auth/register', register);
  *       **Use this when the user is not verified and needs an OTP.** No authentication required.
  *       - Send **phone number** in body; API finds the user and sends a new 6-digit OTP via SMS (expires in 5 min).
  *       - Only works if user exists and is not yet verified (isVerified = false).
- *       - After receiving OTP, user calls **POST /auth/submit-otp** with token (from register) + otp to verify, then can login.
+ *       - Response includes **token**; use it in **POST /auth/submit-otp** with this token + otp to verify, then login.
  *     security: []
  *     requestBody:
  *       required: true
@@ -229,7 +231,7 @@ router.post('/auth/register', register);
  *                 example: "01234567890"
  *     responses:
  *       200:
- *         description: OTP sent successfully to the phone
+ *         description: OTP sent successfully; response includes token for use with submit-otp
  *         content:
  *           application/json:
  *             schema:
@@ -237,6 +239,7 @@ router.post('/auth/register', register);
  *               properties:
  *                 success: { type: boolean, example: true }
  *                 message: { type: string, example: "OTP sent successfully" }
+ *                 token: { type: string, description: "JWT to use in POST /auth/submit-otp with otp body" }
  *       400:
  *         description: Account already verified or phone missing
  *         content:
@@ -304,6 +307,7 @@ router.post('/auth/send-otp', authenticate, sendOtp);
  *             required: [otp]
  *             properties:
  *               otp: { type: string, example: "123456", description: "6-digit OTP received via SMS" }
+ *               token: { type: string, description: "Optional if sent in Authorization header. JWT from register or resend-otp." }
  *     responses:
  *       200:
  *         description: OTP verified – account activated (isVerified = true), can now login
@@ -355,6 +359,31 @@ router.post('/auth/submit-otp', authenticate, submitOtp);
  *         description: Missing latitude or longitude
  */
 router.post('/auth/current-location', authenticate, currentUserLocation);
+
+/**
+ * @swagger
+ * /apimobile/user/logout:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Logout
+ *     description: |
+ *       Logs out the current user. Server sets user isOnline = false. Client must discard the token.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Logged out successfully" }
+ *       401:
+ *         description: Unauthorized – invalid or missing token
+ */
+router.post('/logout', authenticate, logout);
 
 // =============================================
 // HOME SCREEN
@@ -1026,6 +1055,75 @@ router.post('/addresses', authenticate, addAddress);
  *         description: Address deleted
  */
 router.delete('/addresses/:id', authenticate, deleteAddress);
+
+// =============================================
+// BANK CARDS (payment cards)
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/add-bank-card:
+ *   post:
+ *     tags: [Cards]
+ *     summary: Add a payment card (store last 4 digits + metadata only; never send full card number)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lastFourDigits]
+ *             properties:
+ *               cardHolderName: { type: string, example: "John Doe" }
+ *               lastFourDigits: { type: string, example: "4242", description: "Last 4 digits of the card" }
+ *               brand: { type: string, example: "visa", description: "e.g. visa, mastercard" }
+ *               expiryMonth: { type: integer, example: 12, minimum: 1, maximum: 12 }
+ *               expiryYear: { type: integer, example: 2028 }
+ *               isDefault: { type: boolean, default: false }
+ *     responses:
+ *       201:
+ *         description: Card added successfully
+ *       400:
+ *         description: Valid last 4 digits required
+ */
+router.post('/add-bank-card', authenticate, addBankCard);
+
+/**
+ * @swagger
+ * /apimobile/user/bank-cards:
+ *   get:
+ *     tags: [Cards]
+ *     summary: Get user's saved payment cards
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of saved cards (id, cardHolderName, lastFourDigits, brand, expiryMonth, expiryYear, isDefault)
+ */
+router.get('/bank-cards', authenticate, getBankCards);
+
+/**
+ * @swagger
+ * /apimobile/user/bank-cards/{id}:
+ *   delete:
+ *     tags: [Cards]
+ *     summary: Delete a saved payment card
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Card deleted
+ *       404:
+ *         description: Card not found
+ */
+router.delete('/bank-cards/:id', authenticate, deleteBankCard);
 
 // =============================================
 // STATIC PAGES & NOTIFICATIONS

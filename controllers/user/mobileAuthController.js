@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma.js';
-import { generateOtp, getOtpExpiresAt } from '../../utils/otpHelper.js';
+import { generateOtp, getOtpExpiresAt, getTestOtpValue } from '../../utils/otpHelper.js';
 import { sendOtpSms } from '../../utils/smsService.js';
 
 const generateToken = (id) => {
@@ -201,7 +201,8 @@ export const submitOtp = async (req, res) => {
         const userId = req.user.id;
         const { otp } = req.body;
 
-        if (!otp) {
+        const submittedOtp = otp != null ? String(otp).trim() : '';
+        if (!submittedOtp) {
             return res.status(400).json({ success: false, message: 'OTP is required' });
         }
 
@@ -211,11 +212,14 @@ export const submitOtp = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (user.otp !== otp) {
+        const storedOtp = user.otp ? String(user.otp).trim() : '';
+        const testOtp = getTestOtpValue();
+        const otpValid = (testOtp && submittedOtp === testOtp) || (storedOtp && submittedOtp === storedOtp);
+        if (!otpValid) {
             return res.status(400).json({ success: false, message: 'Invalid OTP' });
         }
 
-        if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+        if (!testOtp && user.otpExpiresAt && new Date() > user.otpExpiresAt) {
             return res.status(400).json({ success: false, message: 'OTP has expired' });
         }
 
@@ -280,9 +284,12 @@ export const resendOtp = async (req, res) => {
 
         await sendOtpSms(user.contactNumber || phone, otp);
 
+        const token = generateToken(user.id);
+
         return res.json({
             success: true,
             message: 'OTP sent successfully',
+            token,
         });
     } catch (error) {
         console.error('Resend OTP error:', error);
@@ -290,6 +297,26 @@ export const resendOtp = async (req, res) => {
             success: false,
             message: error.message || 'Failed to resend OTP',
         });
+    }
+};
+
+// @desc    Logout (client should discard token)
+// @route   POST /apimobile/user/logout
+// @access  Private
+export const logout = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await prisma.user.update({
+            where: { id: userId },
+            data: { isOnline: false },
+        });
+        return res.json({
+            success: true,
+            message: 'Logged out successfully',
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Logout failed' });
     }
 };
 
