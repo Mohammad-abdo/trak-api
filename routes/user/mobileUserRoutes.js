@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { authenticate } from '../../middleware/auth.js';
 
 // Auth
-import { login, register, sendOtp, submitOtp, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
+import { login, register, sendOtp, submitOtp, resendOtp, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
 // Home
 import { sliderOffers, getAllServices as homeGetAllServices, getLastCurrentUserBooking } from '../../controllers/user/mobileHomeController.js';
 // Services
@@ -13,7 +13,7 @@ import { getAllServices, chooseService } from '../../controllers/user/mobileServ
 // Booking
 import { serviceVehicleTypes, getShipmentSizes, getShipmentWeights, getPaymentMethods, createBooking } from '../../controllers/user/mobileBookingController.js';
 // Offers
-import { getNearDrivers, acceptDriver, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
+import { getNearDrivers, acceptDriver, cancelDriverOffer, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
 // User Bookings
 import { getMyBookings, filterBookings, addReview } from '../../controllers/user/mobileUserBookingController.js';
 // Wallet
@@ -99,6 +99,10 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
  *         referralCode:
  *           type: string
  *           example: USR1234567890
+ *         isVerified:
+ *           type: boolean
+ *           description: Must be true to login. Verify account via submit-otp after register.
+ *           example: true
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -113,7 +117,13 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
  * /apimobile/user/auth/login:
  *   post:
  *     tags: [Auth]
+ *     operationId: loginWithPhone
  *     summary: Login with phone and password
+ *     description: |
+ *       **Account must be verified to login.** If the account is not verified (isVerified = false):
+ *       - API returns **403** (no token, no session).
+ *       - Response body: `{ "success": false, "message": "Account not verified. Please verify your account first." }`
+ *       - User must verify first: call **POST /auth/resend-otp** with phone to get OTP, then **POST /auth/submit-otp** with token + OTP.
  *     security: []
  *     requestBody:
  *       required: true
@@ -131,7 +141,7 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
  *                 example: "pass1234"
  *     responses:
  *       200:
- *         description: Login successful – returns token + full user info
+ *         description: Login successful – returns token + full user info (user.isVerified will be true)
  *         content:
  *           application/json:
  *             schema:
@@ -146,7 +156,16 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
  *                     user:
  *                       $ref: '#/components/schemas/UserFull'
  *       401:
- *         description: Invalid credentials
+ *         description: Invalid credentials (wrong phone or password)
+ *       403:
+ *         description: Account not verified – cannot login. Use resend-otp (with phone) then submit-otp to verify. No token is issued.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 message: { type: string, example: "Account not verified. Please verify your account first." }
  */
 router.post('/auth/login', login);
 
@@ -155,7 +174,11 @@ router.post('/auth/login', login);
  * /apimobile/user/auth/register:
  *   post:
  *     tags: [Auth]
- *     summary: Register a new user. After success an OTP is auto-generated (123456).
+ *     summary: Register a new user (account is unverified until OTP is submitted)
+ *     description: |
+ *       Creates user with isVerified = false. A random 6-digit OTP is sent via SMS.
+ *       User must call POST /auth/submit-otp (with the returned token) to verify before they can login again.
+ *       To request a new OTP use POST /auth/send-otp (with token) or POST /auth/resend-otp (with phone).
  *     security: []
  *     requestBody:
  *       required: true
@@ -173,11 +196,67 @@ router.post('/auth/login', login);
  *               avatar: { type: string, nullable: true, example: null }
  *     responses:
  *       201:
- *         description: Registered successfully – returns token + user info
+ *         description: Registered – token + user returned (user.isVerified = false). Verify via submit-otp to enable login.
  *       400:
  *         description: Validation error or user exists
  */
 router.post('/auth/register', register);
+
+/**
+ * @swagger
+ * /apimobile/user/auth/resend-otp:
+ *   post:
+ *     tags: [Auth]
+ *     operationId: resendOtpByPhone
+ *     summary: Send OTP by phone number (for unverified account – no token required)
+ *     description: |
+ *       **Use this when the user is not verified and needs an OTP.** No authentication required.
+ *       - Send **phone number** in body; API finds the user and sends a new 6-digit OTP via SMS (expires in 5 min).
+ *       - Only works if user exists and is not yet verified (isVerified = false).
+ *       - After receiving OTP, user calls **POST /auth/submit-otp** with token (from register) + otp to verify, then can login.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 description: User's phone number (as registered)
+ *                 example: "01234567890"
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully to the phone
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "OTP sent successfully" }
+ *       400:
+ *         description: Account already verified or phone missing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 message: { type: string }
+ *       404:
+ *         description: User not found for this phone
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: false }
+ *                 message: { type: string, example: "User not found" }
+ */
+router.post('/auth/resend-otp', resendOtp);
 
 // =============================================
 // AUTH ROUTES  (protected)
@@ -188,12 +267,20 @@ router.post('/auth/register', register);
  * /apimobile/user/auth/send-otp:
  *   post:
  *     tags: [Auth]
- *     summary: Send OTP to user (currently fixed at 123456)
+ *     operationId: sendOtpWithToken
+ *     summary: Send OTP when logged in (for unverified account – requires token)
+ *     description: |
+ *       Sends a new 6-digit OTP via SMS to the **current user's phone** (from token). Use when user has token but is not verified.
+ *       OTP expires in 5 minutes. No body required. For sending OTP by phone without token, use **POST /auth/resend-otp**.
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: OTP sent successfully
+ *         description: OTP sent successfully to user's contact number
+ *       400:
+ *         description: Account already verified
+ *       404:
+ *         description: User not found
  */
 router.post('/auth/send-otp', authenticate, sendOtp);
 
@@ -202,7 +289,10 @@ router.post('/auth/send-otp', authenticate, sendOtp);
  * /apimobile/user/auth/submit-otp:
  *   post:
  *     tags: [Auth]
- *     summary: Verify OTP and activate account. Returns token + full user info.
+ *     summary: Verify OTP and set account as verified (required before login)
+ *     description: |
+ *       Call this after register (using the token from register). Sets isVerified = true and clears OTP.
+ *       Only after successful submit-otp can the user login with phone + password.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -213,10 +303,10 @@ router.post('/auth/send-otp', authenticate, sendOtp);
  *             type: object
  *             required: [otp]
  *             properties:
- *               otp: { type: string, example: "123456" }
+ *               otp: { type: string, example: "123456", description: "6-digit OTP received via SMS" }
  *     responses:
  *       200:
- *         description: OTP verified – account activated
+ *         description: OTP verified – account activated (isVerified = true), can now login
  *       400:
  *         description: Invalid or expired OTP
  */
@@ -225,26 +315,46 @@ router.post('/auth/submit-otp', authenticate, submitOtp);
 /**
  * @swagger
  * /apimobile/user/auth/current-location:
- *   get:
+ *   post:
  *     tags: [Auth]
- *     summary: Get current user's stored location (lat/lng)
+ *     summary: Update current user's location (client sends lat/lng to be stored)
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [latitude, longitude]
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 example: 30.0444
+ *               longitude:
+ *                 type: number
+ *                 example: 31.2357
  *     responses:
  *       200:
- *         description: Location returned
+ *         description: Location updated and returned
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
  *                 data:
  *                   type: object
  *                   properties:
+ *                     user_id: { type: integer }
  *                     latitude: { type: string }
  *                     longitude: { type: string }
+ *                     lastUpdatedAt: { type: string, format: date-time }
+ *       400:
+ *         description: Missing latitude or longitude
  */
-router.get('/auth/current-location', authenticate, currentUserLocation);
+router.post('/auth/current-location', authenticate, currentUserLocation);
 
 // =============================================
 // HOME SCREEN
@@ -488,6 +598,7 @@ router.post('/offers/near-drivers', authenticate, getNearDrivers);
  *   post:
  *     tags: [Offers]
  *     summary: Accept a driver for the booking
+ *     description: Assigns the chosen driver to the booking, sets status to accepted, and returns trip details. Use cancel-driver-offer to remove the driver and choose another.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -498,13 +609,61 @@ router.post('/offers/near-drivers', authenticate, getNearDrivers);
  *             type: object
  *             required: [driver_id, booking_id]
  *             properties:
- *               driver_id: { type: integer }
- *               booking_id: { type: integer }
+ *               driver_id: { type: integer, description: ID of the driver to accept }
+ *               booking_id: { type: integer, description: ID of the ride request/booking }
  *     responses:
  *       200:
  *         description: Driver accepted – returns DriverInfo, vehicle, trip_code, price, from/to, tripStatus
+ *       400:
+ *         description: Missing driver_id or booking_id
+ *       404:
+ *         description: Booking not found
  */
 router.post('/offers/accept-driver', authenticate, acceptDriver);
+
+/**
+ * @swagger
+ * /apimobile/user/offers/cancel-driver-offer:
+ *   post:
+ *     tags: [Offers]
+ *     summary: Cancel driver offer (remove assigned driver from booking)
+ *     description: |
+ *       Removes the currently accepted driver from the booking and sets status back to pending.
+ *       Use this when the rider wants to choose a different driver before the trip starts.
+ *       Driver is notified via Socket.IO (driver-offer-cancelled). After success, rider can call near-drivers and accept-driver again.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [driver_id, booking_id]
+ *             properties:
+ *               driver_id: { type: integer, description: ID of the driver to remove from the booking }
+ *               booking_id: { type: integer, description: ID of the booking }
+ *     responses:
+ *       200:
+ *         description: Driver offer cancelled – booking is pending again
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     booking_id: { type: integer }
+ *                     status: { type: string, example: "pending" }
+ *       400:
+ *         description: Missing params, no driver assigned, or driver does not match booking
+ *       404:
+ *         description: Booking not found
+ */
+router.post('/offers/cancel-driver-offer', authenticate, cancelDriverOffer);
 
 /**
  * @swagger

@@ -189,6 +189,67 @@ export const acceptDriver = async (req, res) => {
     }
 };
 
+// @desc    Cancel driver offer – remove assigned driver from booking so rider can choose another
+// @route   POST /apimobile/user/offers/cancel-driver-offer
+// @access  Private
+export const cancelDriverOffer = async (req, res) => {
+    try {
+        const riderId = req.user.id;
+        const { driver_id, booking_id } = req.body;
+
+        if (!driver_id || !booking_id) {
+            return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
+        }
+
+        const booking = await prisma.rideRequest.findFirst({
+            where: { id: parseInt(booking_id), riderId },
+            select: { id: true, status: true, driverId: true },
+        });
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        if (booking.status !== 'accepted' || !booking.driverId) {
+            return res.status(400).json({
+                success: false,
+                message: 'No driver is assigned to this booking, or booking is not in accepted state',
+            });
+        }
+
+        if (booking.driverId !== parseInt(driver_id)) {
+            return res.status(400).json({ success: false, message: 'Driver does not match this booking' });
+        }
+
+        await prisma.rideRequest.update({
+            where: { id: parseInt(booking_id) },
+            data: {
+                driverId: null,
+                riderequestInDriverId: null,
+                status: 'pending',
+                otp: null,
+            },
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`driver-${driver_id}`).emit('driver-offer-cancelled', {
+                booking_id: parseInt(booking_id),
+                rider_id: riderId,
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Driver offer cancelled. You can select another driver.',
+            data: { booking_id: parseInt(booking_id), status: 'pending' },
+        });
+    } catch (error) {
+        console.error('Cancel driver offer error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to cancel driver offer' });
+    }
+};
+
 // @desc    Track driver (returns latest driver location, opens WebSocket for live tracking)
 // @route   POST /apimobile/user/offers/track-driver
 // @access  Private

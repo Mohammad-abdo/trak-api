@@ -214,6 +214,7 @@ try {
               isOnline:      { type: 'boolean', example: false },
               isAvailable:   { type: 'boolean', example: true },
               referralCode:  { type: 'string',  example: 'USR1234567890' },
+              isVerified:    { type: 'boolean', example: true, description: 'Must be true to login; verify via submit-otp' },
               createdAt:     { type: 'string',  format: 'date-time' },
             },
           },
@@ -221,7 +222,7 @@ try {
       },
       security: [{ bearerAuth: [] }],
       tags: [
-        { name: 'Auth', description: 'Authentication' },
+        { name: 'Auth', description: 'Authentication & verification. Login returns 403 if account not verified. Use resend-otp (phone) or send-otp (with token) then submit-otp to verify.' },
         { name: 'Home', description: 'Home screen' },
         { name: 'Services', description: 'Service selection' },
         { name: 'Booking', description: 'Booking' },

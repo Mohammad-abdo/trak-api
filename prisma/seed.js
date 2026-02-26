@@ -40,6 +40,8 @@ async function main() {
   await prisma.vehicleCategory.deleteMany()
   await prisma.serviceCategory.deleteMany()
   await prisma.geographicZone.deleteMany()
+  await prisma.notification.deleteMany()
+  await prisma.userAddress.deleteMany()
 
   // Create Regions
   console.log('Creating regions...')
@@ -157,7 +159,8 @@ async function main() {
       displayName: 'Admin User',
       address: 'Admin Office, Downtown',
       isOnline: true,
-      isAvailable: true
+      isAvailable: true,
+      isVerified: true
     }
   })
 
@@ -176,7 +179,8 @@ async function main() {
       displayName: 'Fleet Manager',
       address: 'Fleet Office, North District',
       isOnline: true,
-      isAvailable: true
+      isAvailable: true,
+      isVerified: true
     }
   })
 
@@ -197,7 +201,8 @@ async function main() {
       latitude: '24.7136',
       longitude: '46.6753',
       isOnline: false,
-      isAvailable: false
+      isAvailable: false,
+      isVerified: true
     }
   })
 
@@ -216,7 +221,8 @@ async function main() {
       latitude: '24.8',
       longitude: '46.7',
       isOnline: false,
-      isAvailable: false
+      isAvailable: false,
+      isVerified: true
     }
   })
 
@@ -235,7 +241,8 @@ async function main() {
       latitude: '24.75',
       longitude: '46.68',
       isOnline: false,
-      isAvailable: false
+      isAvailable: false,
+      isVerified: true
     }
   })
 
@@ -260,7 +267,8 @@ async function main() {
       isOnline: true,
       isAvailable: true,
       isVerifiedDriver: true,
-      lastActivedAt: new Date()
+      lastActivedAt: new Date(),
+      isVerified: true
     }
   })
 
@@ -283,7 +291,8 @@ async function main() {
       isOnline: true,
       isAvailable: true,
       isVerifiedDriver: true,
-      lastActivedAt: new Date()
+      lastActivedAt: new Date(),
+      isVerified: true
     }
   })
 
@@ -304,7 +313,8 @@ async function main() {
       serviceId: service3.id,
       isOnline: false,
       isAvailable: false,
-      isVerifiedDriver: false
+      isVerifiedDriver: false,
+      isVerified: true
     }
   })
 
@@ -395,6 +405,86 @@ async function main() {
       userId: driver2.id,
       balance: 1800.0,
       currency: 'SAR'
+    }
+  })
+
+  await prisma.wallet.create({
+    data: {
+      userId: rider2.id,
+      balance: 120.0,
+      currency: 'SAR'
+    }
+  })
+
+  await prisma.wallet.create({
+    data: {
+      userId: rider3.id,
+      balance: 80.0,
+      currency: 'SAR'
+    }
+  })
+
+  // User saved addresses (for GET /apimobile/user/addresses) – rider1
+  console.log('Creating user addresses...')
+  await prisma.userAddress.create({
+    data: {
+      userId: rider1.id,
+      title: 'Home',
+      address: '123 Main Street, Downtown',
+      latitude: '24.7136',
+      longitude: '46.6753',
+      isDefault: true
+    }
+  })
+  await prisma.userAddress.create({
+    data: {
+      userId: rider1.id,
+      title: 'Work',
+      address: '456 Business Tower, Financial District',
+      latitude: '24.72',
+      longitude: '46.68',
+      isDefault: false
+    }
+  })
+  await prisma.userAddress.create({
+    data: {
+      userId: rider1.id,
+      title: 'Gym',
+      address: '789 Fitness Center, North District',
+      latitude: '24.75',
+      longitude: '46.70',
+      isDefault: false
+    }
+  })
+
+  // Notifications for rider1 (for GET /apimobile/user/notifications)
+  console.log('Creating notifications...')
+  await prisma.notification.create({
+    data: {
+      type: 'ride_completed',
+      notifiableType: 'user',
+      notifiableId: rider1.id,
+      data: { title: 'Trip completed', body: 'Your trip to 456 Park Avenue has been completed. Thank you for riding!', rideRequestId: null },
+      isRead: false
+    }
+  })
+  await prisma.notification.create({
+    data: {
+      type: 'promo',
+      notifiableType: 'user',
+      notifiableId: rider1.id,
+      data: { title: 'Special offer', body: 'Get 20% off your next ride with code WELCOME20', code: 'WELCOME20' },
+      isRead: false
+    }
+  })
+  await prisma.notification.create({
+    data: {
+      type: 'reminder',
+      notifiableType: 'user',
+      notifiableId: rider1.id,
+      data: { title: 'Don\'t forget to rate', body: 'Rate your last trip and help us improve.' },
+      isRead: true,
+      readAt: new Date()
     }
   })
 
@@ -853,6 +943,83 @@ async function main() {
       isDriverRated: false
     }
   })
+
+  // Last active booking for rider1 (pending/accepted/started/arrived) – so GET last-booking returns data
+  const rideR1Active = await prisma.rideRequest.create({
+    data: {
+      riderId: rider1.id,
+      serviceId: service1.id,
+      datetime: new Date(),
+      isSchedule: false,
+      rideAttempt: 1,
+      distanceUnit: 'km',
+      totalAmount: 35.0,
+      surgeAmount: 0,
+      subtotal: 35.0,
+      extraChargesAmount: 0,
+      driverId: driver1.id,
+      otp: '789012',
+      startLatitude: '24.7136',
+      startLongitude: '46.6753',
+      startAddress: '123 Main Street, Downtown',
+      endLatitude: '24.72',
+      endLongitude: '46.67',
+      endAddress: 'Mall of Arabia',
+      distance: 10.0,
+      duration: 18,
+      seatCount: 1,
+      status: 'accepted',
+      rideHasBid: false,
+      baseFare: 12.0,
+      minimumFare: 18.0,
+      perDistance: 2.0,
+      perDistanceCharge: 20.0,
+      perMinuteDrive: 0.5,
+      perMinuteDriveCharge: 9.0,
+      paymentType: 'cash',
+      isRiderRated: false,
+      isDriverRated: false
+    }
+  })
+
+  // Wallet operations for rider1 (so GET /apimobile/user/wallet/operations returns data)
+  const walletR1 = await prisma.wallet.findFirst({ where: { userId: rider1.id } })
+  if (walletR1) {
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletR1.id,
+        userId: rider1.id,
+        type: 'credit',
+        amount: 200,
+        balance: 200,
+        description: 'Top up',
+        transactionType: 'topup'
+      }
+    })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletR1.id,
+        userId: rider1.id,
+        type: 'debit',
+        amount: 25.50,
+        balance: 174.50,
+        description: 'Ride payment',
+        transactionType: 'ride_payment',
+        rideRequestId: ride1.id
+      }
+    })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletR1.id,
+        userId: rider1.id,
+        type: 'credit',
+        amount: 325.50,
+        balance: 500,
+        description: 'Top up',
+        transactionType: 'topup'
+      }
+    })
+  }
 
   // Create Payments
   console.log('Creating payments...')

@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma.js';
+import { generateOtp, getOtpExpiresAt } from '../../utils/otpHelper.js';
+import { sendOtpSms } from '../../utils/smsService.js';
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET || 'your_jwt_secret_key_here', {
@@ -25,6 +27,7 @@ const fullUserSelect = {
     isOnline: true,
     isAvailable: true,
     referralCode: true,
+    isVerified: true,
     createdAt: true,
 };
 
@@ -59,6 +62,13 @@ export const login = async (req, res) => {
         const blockedStatuses = ['inactive', 'banned', 'deleted', 'suspended'];
         if (blockedStatuses.includes(user.status)) {
             return res.status(403).json({ success: false, message: `Account is ${user.status}. Contact support.` });
+        }
+
+        if (user.isVerified === false) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account not verified. Please verify your account first.',
+            });
         }
 
         await prisma.user.update({ where: { id: user.id }, data: { lastActivedAt: new Date(), isOnline: true } });
@@ -108,6 +118,9 @@ export const register = async (req, res) => {
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || nameParts[0];
 
+        const otp = generateOtp();
+        const otpExpiresAt = getOtpExpiresAt();
+
         const user = await prisma.user.create({
             data: {
                 firstName,
@@ -119,12 +132,17 @@ export const register = async (req, res) => {
                 status: 'active',
                 avatar: null,
                 referralCode: `USR${Date.now()}`,
+                otp,
+                otpExpiresAt,
+                isVerified: false,
             },
             select: fullUserSelect,
         });
 
         // Create wallet
         await prisma.wallet.create({ data: { userId: user.id, balance: 0 } });
+
+        await sendOtpSms(phone, otp);
 
         const token = generateToken(user.id);
 
@@ -139,21 +157,35 @@ export const register = async (req, res) => {
     }
 };
 
-// @desc    Send OTP (fixed 123456 for now)
+// @desc    Send OTP (random 6-digit, expires in 5 minutes)
 // @route   POST /apimobile/user/auth/send-otp
 // @access  Private
 export const sendOtp = async (req, res) => {
     try {
         const userId = req.user.id;
-        const otp = '123456';
-        const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { contactNumber: true, isVerified: true },
+        });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        if (user.isVerified) {
+            return res.status(400).json({ success: false, message: 'Account is already verified' });
+        }
+
+        const otp = generateOtp();
+        const otpExpiresAt = getOtpExpiresAt();
 
         await prisma.user.update({ where: { id: userId }, data: { otp, otpExpiresAt } });
+
+        if (user.contactNumber) {
+            await sendOtpSms(user.contactNumber, otp);
+        }
 
         return res.json({
             success: true,
             message: 'OTP sent successfully',
-            data: { otp }, // For dev only – remove in production
         });
     } catch (error) {
         console.error('Send OTP error:', error);
@@ -189,7 +221,13 @@ export const submitOtp = async (req, res) => {
 
         const updatedUser = await prisma.user.update({
             where: { id: userId },
-            data: { status: 'active', otp: null, otpExpiresAt: null, otpVerifyAt: new Date() },
+            data: {
+                status: 'active',
+                otp: null,
+                otpExpiresAt: null,
+                otpVerifyAt: new Date(),
+                isVerified: true,
+            },
             select: fullUserSelect,
         });
 
@@ -206,29 +244,92 @@ export const submitOtp = async (req, res) => {
     }
 };
 
-// @desc    Get current user location
-// @route   GET /apimobile/user/auth/current-location
+// @desc    Resend OTP by phone (user must exist and not be verified)
+// @route   POST /apimobile/user/auth/resend-otp
+// @access  Public
+export const resendOtp = async (req, res) => {
+    try {
+        const { phone } = req.body;
+
+        if (!phone) {
+            return res.status(400).json({ success: false, message: 'Phone is required' });
+        }
+
+        const user = await prisma.user.findFirst({
+            where: { contactNumber: phone.trim() },
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({
+                success: false,
+                message: 'Account is already verified',
+            });
+        }
+
+        const otp = generateOtp();
+        const otpExpiresAt = getOtpExpiresAt();
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { otp, otpExpiresAt },
+        });
+
+        await sendOtpSms(user.contactNumber || phone, otp);
+
+        return res.json({
+            success: true,
+            message: 'OTP sent successfully',
+        });
+    } catch (error) {
+        console.error('Resend OTP error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to resend OTP',
+        });
+    }
+};
+
+// @desc    Update current user location (user sends lat/lng to be stored)
+// @route   POST /apimobile/user/auth/current-location
 // @access  Private
 export const currentUserLocation = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = await prisma.user.findUnique({
+        const { latitude, longitude } = req.body;
+
+        if (latitude == null || longitude == null) {
+            return res.status(400).json({
+                success: false,
+                message: 'latitude and longitude are required',
+            });
+        }
+
+        const updated = await prisma.user.update({
             where: { id: userId },
+            data: {
+                latitude: String(latitude),
+                longitude: String(longitude),
+                lastLocationUpdateAt: new Date(),
+            },
             select: { id: true, latitude: true, longitude: true, lastLocationUpdateAt: true },
         });
 
         return res.json({
             success: true,
-            message: 'Location retrieved',
+            message: 'Location updated',
             data: {
-                user_id: user.id,
-                latitude: user.latitude,
-                longitude: user.longitude,
-                lastUpdatedAt: user.lastLocationUpdateAt,
+                user_id: updated.id,
+                latitude: updated.latitude,
+                longitude: updated.longitude,
+                lastUpdatedAt: updated.lastLocationUpdateAt,
             },
         });
     } catch (error) {
-        console.error('Get location error:', error);
-        return res.status(500).json({ success: false, message: error.message || 'Failed to get location' });
+        console.error('Update location error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to update location' });
     }
 };
