@@ -1,6 +1,6 @@
 import prisma from '../../utils/prisma.js';
 
-// @desc    Get slider offers (coupons)
+// @desc    Get slider offers (coupons) – data from database only (same as admin dashboard)
 // @route   GET /apimobile/user/home/slider-offers
 // @access  Private
 export const sliderOffers = async (req, res) => {
@@ -34,7 +34,7 @@ export const sliderOffers = async (req, res) => {
                 id: c.id,
                 title: c.title,
                 titleAr: c.titleAr,
-                image: c.imageUrl,
+                image: c.imageUrl ?? null,
                 discountType: c.discountType,
                 discountValue: c.discount,
                 description: c.description,
@@ -50,6 +50,13 @@ export const sliderOffers = async (req, res) => {
         console.error('Slider offers error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to get offers' });
     }
+};
+
+// Main service category image URLs (used when imageUrl is null or column missing)
+const SERVICE_CATEGORY_IMAGES = {
+    'passenger-transport': 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=800',
+    'cargo-transport': 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=800',
+    'additional-services': 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
 };
 
 // @desc    Get all services
@@ -73,10 +80,15 @@ export const getAllServices = async (req, res) => {
             },
         });
 
+        const data = categories.map(cat => ({
+            ...cat,
+            image: SERVICE_CATEGORY_IMAGES[cat.slug] ?? null,
+        }));
+
         return res.json({
             success: true,
             message: 'Services retrieved',
-            data: categories,
+            data,
         });
     } catch (error) {
         console.error('Get services error:', error);

@@ -1416,6 +1416,7 @@ async function main() {
       description: 'Transport services for passengers',
       descriptionAr: 'خدمات نقل للركاب',
       icon: '🚗',
+      imageUrl: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=800',
       status: 1
     }
   })
@@ -1428,6 +1429,7 @@ async function main() {
       description: 'Transport services for goods and cargo',
       descriptionAr: 'خدمات نقل للبضائع والحمولات',
       icon: '🚚',
+      imageUrl: 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=800',
       status: 1
     }
   })
@@ -1440,6 +1442,7 @@ async function main() {
       description: 'Other transport services',
       descriptionAr: 'خدمات نقل أخرى',
       icon: '🛴',
+      imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
       status: 1
     }
   })

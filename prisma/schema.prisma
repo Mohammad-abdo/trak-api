@@ -1114,6 +1114,7 @@ model ServiceCategory {
   description   String?  @db.Text
   descriptionAr String?  @map("description_ar") @db.Text
   icon          String?
+  imageUrl      String?  @map("image_url") @db.VarChar(512)
   status        Int      @default(1)
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
