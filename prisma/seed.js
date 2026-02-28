@@ -14,6 +14,7 @@ async function main() {
   await prisma.complaint.deleteMany()
   await prisma.driverDocument.deleteMany()
   await prisma.document.deleteMany()
+  await prisma.withdrawRequest.deleteMany()
   await prisma.walletHistory.deleteMany()
   await prisma.wallet.deleteMany()
   await prisma.payment.deleteMany()
@@ -45,6 +46,25 @@ async function main() {
   await prisma.userBankCard.deleteMany()
   await prisma.permission.deleteMany()
   await prisma.role.deleteMany()
+
+  // Default app settings (العملة بالجنيه المصري)
+  console.log('Creating default settings...')
+  await prisma.setting.upsert({ where: { key: 'appName' }, update: { value: 'على السريع' }, create: { key: 'appName', value: 'على السريع' } })
+  await prisma.setting.upsert({ where: { key: 'currency' }, update: { value: 'EGP' }, create: { key: 'currency', value: 'EGP' } })
+  await prisma.setting.upsert({ where: { key: 'distanceUnit' }, update: { value: 'km' }, create: { key: 'distanceUnit', value: 'km' } })
+
+  // Payment methods (طرق الدفع)
+  try {
+    await prisma.paymentMethod.deleteMany()
+  } catch (_) {}
+  await prisma.paymentMethod.createMany({
+    data: [
+      { name: 'Bank Card', nameAr: 'بطاقة بنكية', code: 'card', status: 1, sortOrder: 1 },
+      { name: 'E-Wallet', nameAr: 'محفظة إلكترونية', code: 'wallet', status: 1, sortOrder: 2 },
+      { name: 'Fawry', nameAr: 'فوري', code: 'fawry', status: 1, sortOrder: 3 },
+      { name: 'Cash', nameAr: 'كاش', code: 'cash', status: 1, sortOrder: 4 }
+    ]
+  })
 
   // Create Regions
   console.log('Creating regions...')
@@ -345,6 +365,102 @@ async function main() {
     }
   })
 
+  // Extra drivers (Egypt – محافظ سائقين بالجنيه المصري)
+  const driver4 = await prisma.user.create({
+    data: {
+      firstName: 'محمد',
+      lastName: 'علي',
+      email: 'mohamed.ali@example.com',
+      username: 'mohamed_ali_driver',
+      password: hashedPassword,
+      contactNumber: '01001234567',
+      userType: 'driver',
+      status: 'active',
+      displayName: 'محمد علي',
+      address: 'مدينة نصر، القاهرة',
+      latitude: '30.0731',
+      longitude: '31.3456',
+      avatar: 'https://i.pravatar.cc/300?img=15',
+      serviceId: service1.id,
+      isOnline: true,
+      isAvailable: true,
+      isVerifiedDriver: true,
+      lastActivedAt: new Date(),
+      isVerified: true
+    }
+  })
+
+  const driver5 = await prisma.user.create({
+    data: {
+      firstName: 'أحمد',
+      lastName: 'حسن',
+      email: 'ahmed.hassan@example.com',
+      username: 'ahmed_hassan_driver',
+      password: hashedPassword,
+      contactNumber: '01112233445',
+      userType: 'driver',
+      status: 'active',
+      displayName: 'أحمد حسن',
+      address: 'المعادي، القاهرة',
+      latitude: '29.9602',
+      longitude: '31.2569',
+      avatar: 'https://i.pravatar.cc/300?img=22',
+      serviceId: service2.id,
+      isOnline: true,
+      isAvailable: true,
+      isVerifiedDriver: true,
+      lastActivedAt: new Date(),
+      isVerified: true
+    }
+  })
+
+  const driver6 = await prisma.user.create({
+    data: {
+      firstName: 'يوسف',
+      lastName: 'إبراهيم',
+      email: 'youssef.ibrahim@example.com',
+      username: 'youssef_ibrahim_driver',
+      password: hashedPassword,
+      contactNumber: '01223344556',
+      userType: 'driver',
+      status: 'active',
+      displayName: 'يوسف إبراهيم',
+      address: '6 أكتوبر، الجيزة',
+      latitude: '30.0442',
+      longitude: '30.9765',
+      avatar: 'https://i.pravatar.cc/300?img=8',
+      serviceId: service1.id,
+      isOnline: false,
+      isAvailable: true,
+      isVerifiedDriver: true,
+      isVerified: true
+    }
+  })
+
+  const driver7 = await prisma.user.create({
+    data: {
+      firstName: 'خالد',
+      lastName: 'محمود',
+      email: 'khaled.mahmoud@example.com',
+      username: 'khaled_mahmoud_driver',
+      password: hashedPassword,
+      contactNumber: '01556677889',
+      userType: 'driver',
+      status: 'active',
+      displayName: 'خالد محمود',
+      address: 'الشيخ زايد، الجيزة',
+      latitude: '30.05',
+      longitude: '30.98',
+      avatar: 'https://i.pravatar.cc/300?img=11',
+      serviceId: service3.id,
+      isOnline: true,
+      isAvailable: true,
+      isVerifiedDriver: true,
+      lastActivedAt: new Date(),
+      isVerified: true
+    }
+  })
+
   // Create User Details for Drivers
   console.log('Creating driver details...')
   await prisma.userDetail.create({
@@ -379,6 +495,67 @@ async function main() {
     }
   })
 
+  await prisma.userDetail.create({
+    data: {
+      userId: driver4.id,
+      carModel: 'Hyundai i20',
+      carColor: 'Silver',
+      carPlateNumber: 'ط ص ع 1234',
+      carProductionYear: 2022,
+      workAddress: 'مدينة نصر',
+      homeAddress: 'مدينة نصر، القاهرة',
+      workLatitude: '30.0731',
+      workLongitude: '31.3456',
+      homeLatitude: '30.0731',
+      homeLongitude: '31.3456'
+    }
+  })
+  await prisma.userDetail.create({
+    data: {
+      userId: driver5.id,
+      carModel: 'Kia Cerato',
+      carColor: 'White',
+      carPlateNumber: 'ط ص ع 5678',
+      carProductionYear: 2023,
+      workAddress: 'المعادي',
+      homeAddress: 'المعادي، القاهرة',
+      workLatitude: '29.9602',
+      workLongitude: '31.2569',
+      homeLatitude: '29.9602',
+      homeLongitude: '31.2569'
+    }
+  })
+  await prisma.userDetail.create({
+    data: {
+      userId: driver6.id,
+      carModel: 'Chevrolet Optra',
+      carColor: 'Black',
+      carPlateNumber: 'ط ص ع 9012',
+      carProductionYear: 2021,
+      workAddress: '6 أكتوبر',
+      homeAddress: '6 أكتوبر، الجيزة',
+      workLatitude: '30.0442',
+      workLongitude: '30.9765',
+      homeLatitude: '30.0442',
+      homeLongitude: '30.9765'
+    }
+  })
+  await prisma.userDetail.create({
+    data: {
+      userId: driver7.id,
+      carModel: 'Toyota Corolla',
+      carColor: 'Gray',
+      carPlateNumber: 'ط ص ع 3456',
+      carProductionYear: 2023,
+      workAddress: 'الشيخ زايد',
+      homeAddress: 'الشيخ زايد، الجيزة',
+      workLatitude: '30.05',
+      workLongitude: '30.98',
+      homeLatitude: '30.05',
+      homeLongitude: '30.98'
+    }
+  })
+
   // Create Bank Accounts for Drivers
   console.log('Creating bank accounts...')
   await prisma.userBankAccount.create({
@@ -409,13 +586,14 @@ async function main() {
     }
   })
 
-  // Create Wallets
+  // Create Wallets (العملة: جنيه مصري EGP)
+  const defaultCurrency = 'EGP'
   console.log('Creating wallets...')
   await prisma.wallet.create({
     data: {
       userId: rider1.id,
       balance: 500.0,
-      currency: 'SAR'
+      currency: defaultCurrency
     }
   })
 
@@ -423,7 +601,7 @@ async function main() {
     data: {
       userId: driver1.id,
       balance: 2500.0,
-      currency: 'SAR'
+      currency: defaultCurrency
     }
   })
 
@@ -431,7 +609,15 @@ async function main() {
     data: {
       userId: driver2.id,
       balance: 1800.0,
-      currency: 'SAR'
+      currency: defaultCurrency
+    }
+  })
+
+  await prisma.wallet.create({
+    data: {
+      userId: driver3.id,
+      balance: 0,
+      currency: defaultCurrency
     }
   })
 
@@ -439,7 +625,7 @@ async function main() {
     data: {
       userId: rider2.id,
       balance: 120.0,
-      currency: 'SAR'
+      currency: defaultCurrency
     }
   })
 
@@ -447,7 +633,7 @@ async function main() {
     data: {
       userId: rider3.id,
       balance: 80.0,
-      currency: 'SAR'
+      currency: defaultCurrency
     }
   })
 
@@ -455,9 +641,14 @@ async function main() {
     data: {
       userId: mobileTestUser.id,
       balance: 350.0,
-      currency: 'SAR'
+      currency: defaultCurrency
     }
   })
+
+  await prisma.wallet.create({ data: { userId: driver4.id, balance: 3200.0, currency: defaultCurrency } })
+  await prisma.wallet.create({ data: { userId: driver5.id, balance: 2100.0, currency: defaultCurrency } })
+  await prisma.wallet.create({ data: { userId: driver6.id, balance: 950.0, currency: defaultCurrency } })
+  await prisma.wallet.create({ data: { userId: driver7.id, balance: 4100.0, currency: defaultCurrency } })
 
   // User saved addresses (for GET /apimobile/user/addresses) – rider1
   console.log('Creating user addresses...')
@@ -1465,13 +1656,19 @@ async function main() {
       status: 1
     }
   })
+  await prisma.driverService.create({ data: { driverId: driver4.id, serviceId: service1.id, status: 1 } })
+  await prisma.driverService.create({ data: { driverId: driver5.id, serviceId: service2.id, status: 1 } })
+  await prisma.driverService.create({ data: { driverId: driver6.id, serviceId: service1.id, status: 1 } })
+  await prisma.driverService.create({ data: { driverId: driver7.id, serviceId: service3.id, status: 1 } })
 
   console.log('✅ Database seed completed successfully!')
   console.log('')
   console.log('📊 Summary:')
+  console.log(`   - Settings: currency EGP (جنيه مصري), appName, distanceUnit`)
+  console.log(`   - Payment methods: 4 (card, wallet, fawry, cash)`)
   console.log(`   - Regions: 2`)
   console.log(`   - Services: 3`)
-  console.log(`   - Users: 8 (1 admin, 1 fleet, 4 riders incl. mobile test user, 3 drivers)`)
+  console.log(`   - Users: 12 (1 admin, 1 fleet, 4 riders, 7 drivers incl. 4 Egypt drivers)`)
   console.log(`   - Documents: 4`)
   console.log(`   - Coupons: 8 (slider offers)`)
   console.log(`   - Roles: 4 | Permissions: 15+`)
