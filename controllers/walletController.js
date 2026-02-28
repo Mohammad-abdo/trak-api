@@ -224,13 +224,21 @@ export const getWalletByIdForAdmin = async (req, res) => {
         if (!wallet) {
             return res.status(404).json({ success: false, message: "Wallet not found" });
         }
-        const [commissionRow, commissionSum, withdrawalSum, rideEarningsHistory] = await Promise.all([
+        const [commissionRow, commissionDebitSum, commissionCreditSum, withdrawalSum, rideEarningsHistory] = await Promise.all([
             prisma.setting.findUnique({ where: { key: "system_commission_percentage" } }),
             prisma.walletHistory.aggregate({
                 where: {
                     walletId: wallet.id,
                     type: "debit",
                     transactionType: { in: ["system_commission_cash", "system_commission_correction"] },
+                },
+                _sum: { amount: true },
+            }),
+            prisma.walletHistory.aggregate({
+                where: {
+                    walletId: wallet.id,
+                    type: "credit",
+                    transactionType: "system_commission_correction",
                 },
                 _sum: { amount: true },
             }),
@@ -252,7 +260,9 @@ export const getWalletByIdForAdmin = async (req, res) => {
             }),
         ]);
         const systemCommissionPercentage = Math.min(100, Math.max(0, parseFloat(commissionRow?.value) || 15));
-        const fromCash = Math.round(Number(commissionSum._sum?.amount ?? 0) * 100) / 100;
+        const commissionDebits = Math.round(Number(commissionDebitSum._sum?.amount ?? 0) * 100) / 100;
+        const commissionRefunds = Math.round(Number(commissionCreditSum._sum?.amount ?? 0) * 100) / 100;
+        const fromCash = Math.round((commissionDebits - commissionRefunds) * 100) / 100;
         const fromCardRides = Math.round(rideEarningsHistory.reduce((sum, h) => {
             const total = parseFloat(h.rideRequest?.totalAmount ?? 0) || 0;
             const net = parseFloat(h.amount ?? 0) || 0;
@@ -260,15 +270,19 @@ export const getWalletByIdForAdmin = async (req, res) => {
             return sum;
         }, 0) * 100) / 100;
         const totalSystemCommissionDeducted = Math.round((fromCash + fromCardRides) * 100) / 100;
-        const totalWithdrawn = Number(withdrawalSum._sum?.amount ?? 0);
+        const totalWithdrawn = Math.round(Number(withdrawalSum._sum?.amount ?? 0) * 100) / 100;
+        const totalEarningsFromRides = Math.round(rideEarningsHistory.reduce((sum, h) => sum + (parseFloat(h.amount ?? 0) || 0), 0) * 100) / 100;
+        const balanceValue = Math.round((parseFloat(wallet.balance) ?? 0) * 100) / 100;
         res.json({
             success: true,
             data: {
                 ...wallet,
-                balance: parseFloat(wallet.balance) ?? 0,
+                balance: balanceValue,
                 systemCommissionPercentage,
                 totalSystemCommissionDeducted,
                 totalWithdrawn,
+                totalEarningsFromRides,
+                balanceFormula: "balance = sum of all transaction effects (credits - debits). Commission is deducted as fixed EGP per order only; no percentage is applied to wallet balance.",
             },
         });
     } catch (error) {
