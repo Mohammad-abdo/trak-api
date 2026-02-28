@@ -11,6 +11,7 @@ export const sliderOffers = async (req, res) => {
                 id: true,
                 title: true,
                 titleAr: true,
+                imageUrl: true,
                 discountType: true,
                 discount: true,
                 description: true,
@@ -33,7 +34,7 @@ export const sliderOffers = async (req, res) => {
                 id: c.id,
                 title: c.title,
                 titleAr: c.titleAr,
-                image: null, // Coupon model has no image field – set null for now
+                image: c.imageUrl,
                 discountType: c.discountType,
                 discountValue: c.discount,
                 description: c.description,

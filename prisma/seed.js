@@ -687,6 +687,7 @@ async function main() {
         status: 1,
         description: '10% off on your first ride',
         descriptionAr: 'خصم 10% على أول رحلة لك',
+        imageUrl: 'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800',
         serviceIds: [service1.id, service2.id],
         regionIds: JSON.stringify([region1.id])
       },
@@ -705,6 +706,7 @@ async function main() {
         status: 1,
         description: 'Save 20 SAR on rides above 50 SAR',
         descriptionAr: 'وفر 20 ريال على الرحلات فوق 50 ريال',
+        imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800',
         serviceIds: [service1.id, service2.id, service3.id],
         regionIds: JSON.stringify([region1.id, region2.id])
       },
@@ -723,6 +725,7 @@ async function main() {
         status: 1,
         description: '15% off on weekends',
         descriptionAr: 'خصم 15% في عطلة نهاية الأسبوع',
+        imageUrl: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=800',
         serviceIds: [service2.id, service3.id],
         regionIds: JSON.stringify([region1.id, region2.id])
       }
