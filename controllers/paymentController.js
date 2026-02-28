@@ -110,7 +110,7 @@ export const savePayment = async (req, res) => {
             });
         }
 
-        // If wallet payment, deduct from wallet
+        // If wallet payment, deduct from rider wallet
         if (paymentType === "wallet") {
             const wallet = await prisma.wallet.findUnique({
                 where: { userId: rideRequest.riderId },
@@ -133,6 +133,47 @@ export const savePayment = async (req, res) => {
                         balance: newBalance,
                         description: "Ride payment",
                         transactionType: "ride_payment",
+                        rideRequestId: rideRequest.id,
+                    },
+                });
+            }
+        }
+
+        // Credit driver wallet (أرباح الرحلة) — once per payment
+        const amount = rideRequest.totalAmount || payment.amount;
+        const driverId = rideRequest.driverId;
+        if (driverId && amount > 0) {
+            const alreadyCredited = await prisma.walletHistory.findFirst({
+                where: {
+                    rideRequestId: rideRequest.id,
+                    userId: driverId,
+                    type: "credit",
+                    transactionType: "ride_earnings",
+                },
+            });
+            if (!alreadyCredited) {
+                let driverWallet = await prisma.wallet.findUnique({
+                    where: { userId: driverId },
+                });
+                if (!driverWallet) {
+                    driverWallet = await prisma.wallet.create({
+                        data: { userId: driverId, balance: 0 },
+                    });
+                }
+                const newDriverBalance = driverWallet.balance + amount;
+                await prisma.wallet.update({
+                    where: { id: driverWallet.id },
+                    data: { balance: newDriverBalance },
+                });
+                await prisma.walletHistory.create({
+                    data: {
+                        walletId: driverWallet.id,
+                        userId: driverId,
+                        type: "credit",
+                        amount,
+                        balance: newDriverBalance,
+                        description: "Ride earnings",
+                        transactionType: "ride_earnings",
                         rideRequestId: rideRequest.id,
                     },
                 });

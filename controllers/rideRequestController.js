@@ -536,7 +536,7 @@ export const completeRideRequest = async (req, res) => {
         });
 
         // Create payment record
-        await prisma.payment.create({
+        const payment = await prisma.payment.create({
             data: {
                 rideRequestId: rideRequest.id,
                 userId: rideRequest.riderId,
@@ -547,6 +547,35 @@ export const completeRideRequest = async (req, res) => {
                     rideRequest.paymentType === "cash" ? "paid" : "pending",
             },
         });
+
+        // Credit driver wallet for cash (أرباح الرحلة)
+        if (rideRequest.paymentType === "cash" && rideRequest.driverId && totalAmount > 0) {
+            let driverWallet = await prisma.wallet.findUnique({
+                where: { userId: rideRequest.driverId },
+            });
+            if (!driverWallet) {
+                driverWallet = await prisma.wallet.create({
+                    data: { userId: rideRequest.driverId, balance: 0 },
+                });
+            }
+            const newDriverBalance = driverWallet.balance + totalAmount;
+            await prisma.wallet.update({
+                where: { id: driverWallet.id },
+                data: { balance: newDriverBalance },
+            });
+            await prisma.walletHistory.create({
+                data: {
+                    walletId: driverWallet.id,
+                    userId: rideRequest.driverId,
+                    type: "credit",
+                    amount: totalAmount,
+                    balance: newDriverBalance,
+                    description: "Ride earnings (cash)",
+                    transactionType: "ride_earnings",
+                    rideRequestId: rideRequest.id,
+                },
+            });
+        }
 
         const updatedRideRequest = await prisma.rideRequest.findUnique({
             where: { id: rideRequestId },
