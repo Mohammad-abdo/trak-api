@@ -140,7 +140,7 @@ export const savePayment = async (req, res) => {
             }
         }
 
-        // Credit driver wallet (صافي أرباح الرحلة بعد نسبة السستم) — once per payment
+        // Credit driver wallet: store gross (ride total); add net to balance (commission is on total wallet earnings)
         const rideTotal = parseFloat(rideRequest.totalAmount ?? payment.amount ?? 0) || 0;
         const driverId = rideRequest.driverId;
         if (driverId && rideTotal > 0) {
@@ -153,7 +153,7 @@ export const savePayment = async (req, res) => {
                 },
             });
             if (!alreadyCredited) {
-                const { driverShare, systemShare } = await getDriverAndSystemShare(rideTotal);
+                const { driverShare } = await getDriverAndSystemShare(rideTotal);
                 const amountToCredit = driverShare > 0 ? driverShare : 0;
                 if (amountToCredit > 0) {
                     let driverWallet = await prisma.wallet.findUnique({
@@ -175,9 +175,9 @@ export const savePayment = async (req, res) => {
                             walletId: driverWallet.id,
                             userId: driverId,
                             type: "credit",
-                            amount: amountToCredit,
+                            amount: rideTotal,
                             balance: newDriverBalance,
-                            description: `Ride earnings | total: ${rideTotal} | system: ${systemShare} | net: ${amountToCredit}`,
+                            description: `Ride earnings | total: ${rideTotal} | net credited: ${amountToCredit}`,
                             transactionType: "ride_earnings",
                             rideRequestId: rideRequest.id,
                         },

@@ -549,38 +549,37 @@ export const completeRideRequest = async (req, res) => {
             },
         });
 
-        // رحلة كاش: السائق استلم الكاش كاملاً — نخصم نسبة السستم من محفظته (ويُسمح برصيد سالب حتى يُسدد عند دخول أرباح لاحقة)
+        // رحلة كاش: إيداع إجمالي الرحلة كأرباح (الخصم يُطبَّق على إجمالي المحفظة من الإعدادات)
         if (rideRequest.paymentType === "cash" && rideRequest.driverId && totalAmount > 0) {
             const totalNum = Number(totalAmount);
-            const { systemShare } = await getDriverAndSystemShare(totalNum);
-            if (systemShare > 0) {
-                let driverWallet = await prisma.wallet.findUnique({
-                    where: { userId: rideRequest.driverId },
-                });
-                if (!driverWallet) {
-                    driverWallet = await prisma.wallet.create({
-                        data: { userId: rideRequest.driverId, balance: 0 },
-                    });
-                }
-                const currentBalance = parseFloat(driverWallet.balance) || 0;
-                const newDriverBalance = Math.round((currentBalance - systemShare) * 100) / 100;
-                await prisma.wallet.update({
-                    where: { id: driverWallet.id },
-                    data: { balance: newDriverBalance },
-                });
-                await prisma.walletHistory.create({
-                    data: {
-                        walletId: driverWallet.id,
-                        userId: rideRequest.driverId,
-                        type: "debit",
-                        amount: systemShare,
-                        balance: newDriverBalance,
-                        description: "System commission (cash ride)",
-                        transactionType: "system_commission_cash",
-                        rideRequestId: rideRequest.id,
-                    },
+            const { driverShare } = await getDriverAndSystemShare(totalNum);
+            let driverWallet = await prisma.wallet.findUnique({
+                where: { userId: rideRequest.driverId },
+            });
+            if (!driverWallet) {
+                driverWallet = await prisma.wallet.create({
+                    data: { userId: rideRequest.driverId, balance: 0 },
                 });
             }
+            const currentBalance = parseFloat(driverWallet.balance) || 0;
+            const amountToAdd = driverShare > 0 ? driverShare : 0;
+            const newDriverBalance = Math.round((currentBalance + amountToAdd) * 100) / 100;
+            await prisma.wallet.update({
+                where: { id: driverWallet.id },
+                data: { balance: newDriverBalance },
+            });
+            await prisma.walletHistory.create({
+                data: {
+                    walletId: driverWallet.id,
+                    userId: rideRequest.driverId,
+                    type: "credit",
+                    amount: totalNum,
+                    balance: newDriverBalance,
+                    description: "Ride earnings (cash)",
+                    transactionType: "ride_earnings",
+                    rideRequestId: rideRequest.id,
+                },
+            });
         }
 
         const updatedRideRequest = await prisma.rideRequest.findUnique({
