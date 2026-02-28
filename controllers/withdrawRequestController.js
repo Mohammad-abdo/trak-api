@@ -163,10 +163,17 @@ export const deleteWithdrawRequest = async (req, res) => {
 // @desc    Update withdraw request status
 // @route   POST /api/withdraw-requests/update-status/:id
 // @access  Private
+// عند الموافقة (status=1): يخصم المبلغ تلقائياً من الرصيد المتاح في محفظة السائق.
 export const updateWithdrawRequestStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const status = parseInt(req.body?.status ?? req.body, 10);
+        if (Number.isNaN(status) || ![0, 1, 2].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status. Use 0=pending, 1=approved, 2=rejected.",
+            });
+        }
 
         const withdrawRequest = await prisma.withdrawRequest.findUnique({
             where: { id: parseInt(id) },
@@ -179,37 +186,68 @@ export const updateWithdrawRequestStatus = async (req, res) => {
             });
         }
 
-        // If approved, deduct from wallet
-        if (status === 1 && withdrawRequest.status === 0) {
+        const currentStatus = parseInt(withdrawRequest.status, 10);
+        // الموافقة على السحب: خصم إلزامي من الرصيد المتاح
+        if (status === 1 && currentStatus === 0) {
             const wallet = await prisma.wallet.findUnique({
                 where: { userId: withdrawRequest.userId },
             });
 
-            if (wallet && wallet.balance >= withdrawRequest.amount) {
-                await prisma.wallet.update({
-                    where: { id: wallet.id },
-                    data: {
-                        balance: wallet.balance - withdrawRequest.amount,
-                    },
+            if (!wallet) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Wallet not found for this user. Cannot approve withdrawal.",
                 });
+            }
 
-                await prisma.walletHistory.create({
+            const amount = parseFloat(withdrawRequest.amount);
+            const currentBalance = parseFloat(wallet.balance);
+            if (Number.isNaN(amount) || amount <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid withdrawal amount.",
+                });
+            }
+            if (Number.isNaN(currentBalance) || currentBalance < amount) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Insufficient wallet balance. Cannot approve withdrawal.",
+                });
+            }
+
+            const newBalance = currentBalance - amount;
+
+            await prisma.$transaction([
+                prisma.wallet.update({
+                    where: { id: wallet.id },
+                    data: { balance: newBalance },
+                }),
+                prisma.walletHistory.create({
                     data: {
                         walletId: wallet.id,
                         userId: withdrawRequest.userId,
                         type: "debit",
-                        amount: withdrawRequest.amount,
-                        balance: wallet.balance - withdrawRequest.amount,
-                        description: "Withdrawal",
+                        amount,
+                        balance: newBalance,
+                        description: "Withdrawal (approved)",
                         transactionType: "withdrawal",
                     },
-                });
-            }
+                }),
+                prisma.withdrawRequest.update({
+                    where: { id: withdrawRequest.id },
+                    data: { status: 1 },
+                }),
+            ]);
+        } else {
+            // رفض أو أي حالة أخرى: تحديث الحالة فقط
+            await prisma.withdrawRequest.update({
+                where: { id: parseInt(id) },
+                data: { status },
+            });
         }
 
-        const updatedRequest = await prisma.withdrawRequest.update({
+        const updatedRequest = await prisma.withdrawRequest.findUnique({
             where: { id: parseInt(id) },
-            data: { status: parseInt(status) },
         });
 
         res.json({

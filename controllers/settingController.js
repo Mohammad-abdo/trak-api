@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { recalculateWalletsForNewCommissionPercentage } from "./walletController.js";
 
 // @desc    Get settings
 // @route   GET /api/settings/get-setting
@@ -13,6 +14,15 @@ export const getSetting = async (req, res) => {
         settings.forEach((setting) => {
             settingsObj[setting.key] = setting.value;
         });
+        // ضمان وجود نسبة السستم وحفظها في DB إذا غير موجودة
+        if (settingsObj.system_commission_percentage === undefined || settingsObj.system_commission_percentage === null || settingsObj.system_commission_percentage === "") {
+            await prisma.setting.upsert({
+                where: { key: "system_commission_percentage" },
+                create: { key: "system_commission_percentage", value: "15" },
+                update: { value: "15" },
+            });
+            settingsObj.system_commission_percentage = "15";
+        }
 
         res.json({
             success: true,
@@ -32,7 +42,13 @@ export const getSetting = async (req, res) => {
 // @access  Private
 export const saveSetting = async (req, res) => {
     try {
-        const settings = req.body;
+        const settings = { ...req.body };
+        if (settings.system_commission_percentage === undefined || settings.system_commission_percentage === null || String(settings.system_commission_percentage).trim() === "") {
+            const row = await prisma.setting.findUnique({ where: { key: "system_commission_percentage" } });
+            settings.system_commission_percentage = row?.value ?? "15";
+        }
+        const oldRow = await prisma.setting.findUnique({ where: { key: "system_commission_percentage" } });
+        const oldCommissionPct = oldRow?.value != null ? parseFloat(oldRow.value) : null;
 
         for (const [key, value] of Object.entries(settings)) {
             await prisma.setting.upsert({
@@ -40,6 +56,21 @@ export const saveSetting = async (req, res) => {
                 update: { value: String(value) },
                 create: { key, value: String(value) },
             });
+        }
+
+        const newCommissionPct = settings.system_commission_percentage != null ? parseFloat(settings.system_commission_percentage) : null;
+        const commissionChanged = newCommissionPct != null && !Number.isNaN(newCommissionPct) && oldCommissionPct !== newCommissionPct;
+        if (commissionChanged) {
+            try {
+                const result = await recalculateWalletsForNewCommissionPercentage(newCommissionPct);
+                return res.json({
+                    success: true,
+                    message: "Settings saved successfully. Wallets recalculated for new commission %.",
+                    data: { commissionRecalc: result },
+                });
+            } catch (recalcErr) {
+                console.error("Recalculate wallets on commission change error:", recalcErr);
+            }
         }
 
         res.json({

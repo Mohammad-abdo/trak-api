@@ -3,6 +3,16 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+// نسبة السستم الافتراضية (تُستخدم في seed للمحافظ والأرباح)
+const SYSTEM_COMMISSION_PCT = 15
+function getDriverAndSystemShare(rideTotal) {
+  const total = parseFloat(rideTotal) || 0
+  if (total <= 0) return { driverShare: 0, systemShare: 0 }
+  const systemShare = Math.round((total * SYSTEM_COMMISSION_PCT) / 100 * 100) / 100
+  const driverShare = Math.round((total - systemShare) * 100) / 100
+  return { driverShare, systemShare }
+}
+
 async function main() {
   console.log('🌱 Starting database seed...')
 
@@ -55,6 +65,7 @@ async function main() {
   await prisma.setting.upsert({ where: { key: 'system_commission_percentage' }, update: { value: '15' }, create: { key: 'system_commission_percentage', value: '15' } })
 
   // Payment methods (طرق الدفع)
+  console.log('Creating payment methods...')
   try {
     await prisma.paymentMethod.deleteMany()
   } catch (_) {}
@@ -64,6 +75,19 @@ async function main() {
       { name: 'E-Wallet', nameAr: 'محفظة إلكترونية', code: 'wallet', status: 1, sortOrder: 2 },
       { name: 'Fawry', nameAr: 'فوري', code: 'fawry', status: 1, sortOrder: 3 },
       { name: 'Cash', nameAr: 'كاش', code: 'cash', status: 1, sortOrder: 4 }
+    ]
+  })
+
+  // Payment gateways (بوابات الدفع)
+  console.log('Creating payment gateways...')
+  try {
+    await prisma.paymentGateway.deleteMany()
+  } catch (_) {}
+  await prisma.paymentGateway.createMany({
+    data: [
+      { title: 'Stripe', type: 'stripe', status: 1, isTest: true, testValue: { publishableKey: 'pk_test_xxx', secretKey: 'sk_test_xxx' }, liveValue: null },
+      { title: 'Fawry', type: 'fawry', status: 1, isTest: true, testValue: { merchantCode: 'test', secureKey: 'test' }, liveValue: null },
+      { title: 'PayMob', type: 'paymob', status: 1, isTest: true, testValue: { apiKey: 'test', integrationId: 0 }, liveValue: null }
     ]
   })
 
@@ -1252,7 +1276,7 @@ async function main() {
       distance: 8.0,
       duration: 15,
       seatCount: 2,
-      status: 'in_progress',
+      status: 'completed',
       rideHasBid: false,
       baseFare: 20.0,
       minimumFare: 30.0,
@@ -1263,6 +1287,41 @@ async function main() {
       paymentType: 'card',
       isRiderRated: false,
       isDriverRated: false
+    }
+  })
+
+  // رحلة كاش لسائق 4 (محمد علي) — لضمان ظهور نسبة السستم المخصومة في محفظته
+  const ride4 = await prisma.rideRequest.create({
+    data: {
+      riderId: rider3.id,
+      serviceId: service1.id,
+      datetime: new Date(),
+      isSchedule: false,
+      rideAttempt: 1,
+      distanceUnit: 'km',
+      totalAmount: 100.0,
+      surgeAmount: 0,
+      subtotal: 100.0,
+      extraChargesAmount: 0,
+      driverId: driver4.id,
+      startLatitude: '30.0731',
+      startLongitude: '31.3456',
+      startAddress: 'مدينة نصر',
+      endLatitude: '30.0444',
+      endLongitude: '31.2357',
+      endAddress: 'وسط البلد القاهرة',
+      distance: 10.0,
+      duration: 20,
+      seatCount: 1,
+      status: 'completed',
+      rideHasBid: false,
+      baseFare: 10.0,
+      minimumFare: 15.0,
+      perDistance: 2.5,
+      perMinuteDrive: 0.5,
+      paymentType: 'cash',
+      isRiderRated: true,
+      isDriverRated: true
     }
   })
 
@@ -1589,66 +1648,140 @@ async function main() {
     })
   }
 
-  // Create Payments
-  console.log('Creating payments...')
+  // ——— محافظ ومعاملات ونسبة السستم (seed نظيف) ———
+  console.log('Creating payments and wallet transactions (with system commission)...')
+
+  const ride1Total = 25.50
+  const ride2Total = 45.0
+  const ride4Total = 100.0
+  const { systemShare: ride1SystemShare } = getDriverAndSystemShare(ride1Total)
+  const { driverShare: ride2DriverShare, systemShare: ride2SystemShare } = getDriverAndSystemShare(ride2Total)
+  const { systemShare: ride4SystemShare } = getDriverAndSystemShare(ride4Total)
+
+  // Payments (مدفوعات الرحلات)
   await prisma.payment.create({
     data: {
       rideRequestId: ride1.id,
       userId: rider1.id,
       driverId: driver1.id,
-      amount: 25.50,
+      amount: ride1Total,
+      paymentType: 'cash',
+      paymentStatus: 'paid',
+      paymentDate: new Date()
+    }
+  })
+  await prisma.payment.create({
+    data: {
+      rideRequestId: ride2.id,
+      userId: rider2.id,
+      driverId: driver2.id,
+      amount: ride2Total,
+      paymentType: 'card',
+      paymentStatus: 'paid',
+      paymentDate: new Date()
+    }
+  })
+  await prisma.payment.create({
+    data: {
+      rideRequestId: ride4.id,
+      userId: rider3.id,
+      driverId: driver4.id,
+      amount: ride4Total,
       paymentType: 'cash',
       paymentStatus: 'paid',
       paymentDate: new Date()
     }
   })
 
-  // Driver wallet history (معاملات أرباح الرحلات)
+  // رحلة 1 كاش: خصم نسبة السستم من محفظة السائق (لا إيداع أرباح — استلم الكاش)
   const walletD1 = await prisma.wallet.findFirst({ where: { userId: driver1.id } })
   if (walletD1) {
-    const newBal1 = walletD1.balance + 25.50
+    const bal = parseFloat(walletD1.balance) || 0
+    const newBal1 = Math.round((bal - ride1SystemShare) * 100) / 100
     await prisma.wallet.update({ where: { id: walletD1.id }, data: { balance: newBal1 } })
     await prisma.walletHistory.create({
       data: {
         walletId: walletD1.id,
         userId: driver1.id,
-        type: 'credit',
-        amount: 25.50,
+        type: 'debit',
+        amount: ride1SystemShare,
         balance: newBal1,
-        description: 'Ride earnings',
-        transactionType: 'ride_earnings',
+        description: 'System commission (cash ride)',
+        transactionType: 'system_commission_cash',
         rideRequestId: ride1.id
       }
     })
   }
+
+  // رحلة 2 كارد: إيداع صافي أرباح السائق فقط (بعد خصم نسبة السستم)
   const walletD2 = await prisma.wallet.findFirst({ where: { userId: driver2.id } })
   if (walletD2) {
-    const newBal2 = walletD2.balance + 45
+    const bal = parseFloat(walletD2.balance) || 0
+    const newBal2 = Math.round((bal + ride2DriverShare) * 100) / 100
     await prisma.wallet.update({ where: { id: walletD2.id }, data: { balance: newBal2 } })
     await prisma.walletHistory.create({
       data: {
         walletId: walletD2.id,
         userId: driver2.id,
         type: 'credit',
-        amount: 45,
+        amount: ride2DriverShare,
         balance: newBal2,
-        description: 'Ride earnings',
+        description: `Ride earnings | total: ${ride2Total} | system: ${ride2SystemShare} | net: ${ride2DriverShare}`,
         transactionType: 'ride_earnings',
         rideRequestId: ride2.id
       }
     })
   }
 
-  // طلبات سحب للسائقين
-  await prisma.withdrawRequest.create({
+  // رحلة 4 كاش (سائق 4): خصم نسبة السستم من محفظة السائق
+  const walletD4ForRide = await prisma.wallet.findFirst({ where: { userId: driver4.id } })
+  if (walletD4ForRide) {
+    const bal4Ride = parseFloat(walletD4ForRide.balance) || 0
+    const newBal4AfterCommission = Math.round((bal4Ride - ride4SystemShare) * 100) / 100
+    await prisma.wallet.update({ where: { id: walletD4ForRide.id }, data: { balance: newBal4AfterCommission } })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletD4ForRide.id,
+        userId: driver4.id,
+        type: 'debit',
+        amount: ride4SystemShare,
+        balance: newBal4AfterCommission,
+        description: 'System commission (cash ride)',
+        transactionType: 'system_commission_cash',
+        rideRequestId: ride4.id
+      }
+    })
+  }
+
+  // طلبات سحب (مع خصم المحفظة عند الموافقة)
+  const wdr1 = await prisma.withdrawRequest.create({
     data: { userId: driver1.id, amount: 500, currency: defaultCurrency, status: 0 }
   })
-  await prisma.withdrawRequest.create({
+  const wdr2 = await prisma.withdrawRequest.create({
     data: { userId: driver2.id, amount: 300, currency: defaultCurrency, status: 0 }
   })
-  await prisma.withdrawRequest.create({
+  const wdr4 = await prisma.withdrawRequest.create({
     data: { userId: driver4.id, amount: 200, currency: defaultCurrency, status: 1 }
   })
+
+  // سحب مُوافق عليه لـ driver4: خصم من المحفظة + سجل معاملة
+  const walletD4 = await prisma.wallet.findFirst({ where: { userId: driver4.id } })
+  if (walletD4) {
+    const bal4 = parseFloat(walletD4.balance) || 0
+    const newBal4 = Math.round((bal4 - 200) * 100) / 100
+    await prisma.wallet.update({ where: { id: walletD4.id }, data: { balance: newBal4 } })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletD4.id,
+        userId: driver4.id,
+        type: 'debit',
+        amount: 200,
+        balance: newBal4,
+        description: 'Withdrawal (approved)',
+        transactionType: 'withdrawal'
+      }
+    })
+  }
 
   // Create Ratings
   console.log('Creating ratings...')

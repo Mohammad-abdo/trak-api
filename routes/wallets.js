@@ -5,6 +5,7 @@ import {
     getWalletHistoryForAdmin,
     addWalletTransaction,
     backfillDriverEarnings,
+    fixCommissionOnRideEarnings,
     getWalletDetail,
     saveWallet,
     getWalletList,
@@ -18,6 +19,7 @@ const router = express.Router();
 // Admin routes
 router.get("/", authenticate, authorize("admin"), getAllWallets);
 router.post("/backfill-driver-earnings", authenticate, authorize("admin"), backfillDriverEarnings);
+router.post("/fix-commission-on-earnings", authenticate, authorize("admin"), fixCommissionOnRideEarnings);
 router.get("/:id/history", authenticate, authorize("admin"), getWalletHistoryForAdmin);
 router.get("/:id", authenticate, authorize("admin"), getWalletByIdForAdmin);
 router.post(
