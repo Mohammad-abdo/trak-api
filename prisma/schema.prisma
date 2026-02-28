@@ -729,22 +729,25 @@ model AdditionalFees {
 }
 
 model SurgePrice {
-  id        Int       @id @default(autoincrement())
-  serviceId Int?      @map("service_id")
-  regionId  Int?      @map("region_id")
-  day       Json?
-  type      String?
-  value     Float?    @db.Double
-  fromTime  Json?     @map("from_time")
-  toTime    Json?     @map("to_time")
-  deletedAt DateTime? @map("deleted_at") @db.Timestamp
-  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(6)
-  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+  id                 Int       @id @default(autoincrement())
+  serviceId          Int?      @map("service_id")
+  vehicleCategoryId  Int?      @map("vehicle_category_id")
+  regionId           Int?      @map("region_id")
+  day                Json?
+  type               String?
+  value              Float?    @db.Double
+  fromTime           Json?     @map("from_time")
+  toTime             Json?     @map("to_time")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamp
+  createdAt          DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
-  service Service? @relation(fields: [serviceId], references: [id])
-  region  Region?  @relation(fields: [regionId], references: [id])
+  service         Service?        @relation(fields: [serviceId], references: [id])
+  vehicleCategory VehicleCategory? @relation(fields: [vehicleCategoryId], references: [id], onDelete: SetNull)
+  region          Region?         @relation(fields: [regionId], references: [id])
 
   @@index([regionId])
+  @@index([vehicleCategoryId])
   @@map("surge_prices")
 }
 
@@ -1146,6 +1149,7 @@ model VehicleCategory {
   zones               CategoryZone[]
   pricingRules        PricingRule[]
   services            Service[]
+  surgePrices         SurgePrice[]
   touristTrips        TouristTrip[]
   dedicatedBookings   DedicatedBooking[]
   promotionCategories PromotionCategory[]

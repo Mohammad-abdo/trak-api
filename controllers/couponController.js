@@ -68,44 +68,55 @@ export const createCoupon = async (req, res) => {
     try {
         const {
             code,
+            title,
+            title_ar,
+            description,
+            description_ar,
+            image_url,
             discount_type,
             discount,
-            expiry_date,
-            usage_limit,
+            start_date,
+            end_date,
             usage_limit_per_rider,
-            min_amount,
-            max_discount,
+            minimum_amount,
+            maximum_discount,
             coupon_type,
             service_ids,
             region_ids,
             status,
         } = req.body;
 
-        // Check if coupon code exists
-        const existingCoupon = await prisma.coupon.findFirst({
-            where: { code },
-        });
-
-        if (existingCoupon) {
-            return res.status(400).json({
-                success: false,
-                message: "Coupon code already exists",
+        // Check if coupon code exists (only when code provided)
+        if (code && typeof code === 'string' && code.trim()) {
+            const existingCoupon = await prisma.coupon.findFirst({
+                where: { code: code.trim() },
             });
+            if (existingCoupon) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Coupon code already exists",
+                });
+            }
         }
 
         const coupon = await prisma.coupon.create({
             data: {
-                code,
-                discountType: discount_type,
-                discount: discount ? parseFloat(discount) : 0,
-                expiryDate: expiry_date ? new Date(expiry_date) : null,
-                usageLimit: usage_limit ? parseInt(usage_limit) : null,
-                usageLimitPerRider: usage_limit_per_rider ? parseInt(usage_limit_per_rider) : null,
-                minAmount: min_amount ? parseFloat(min_amount) : null,
-                maxDiscount: max_discount ? parseFloat(max_discount) : null,
-                couponType: coupon_type,
-                serviceIds: service_ids ? JSON.stringify(service_ids) : null,
-                regionIds: region_ids ? JSON.stringify(region_ids) : null,
+                code: code || null,
+                title: title || null,
+                titleAr: title_ar || null,
+                description: description || null,
+                descriptionAr: description_ar || null,
+                imageUrl: image_url || null,
+                discountType: discount_type || null,
+                discount: discount !== undefined && discount !== '' ? parseFloat(discount) : null,
+                startDate: start_date ? new Date(start_date) : null,
+                endDate: end_date ? new Date(end_date) : null,
+                usageLimitPerRider: usage_limit_per_rider !== undefined && usage_limit_per_rider !== '' ? parseInt(usage_limit_per_rider) : null,
+                minimumAmount: minimum_amount !== undefined && minimum_amount !== '' ? parseFloat(minimum_amount) : null,
+                maximumDiscount: maximum_discount !== undefined && maximum_discount !== '' ? parseFloat(maximum_discount) : null,
+                couponType: coupon_type || null,
+                serviceIds: Array.isArray(service_ids) ? service_ids : (typeof service_ids === 'string' ? (service_ids.trim() ? JSON.parse(service_ids) : null) : null),
+                regionIds: Array.isArray(region_ids) ? JSON.stringify(region_ids) : (typeof region_ids === 'string' ? region_ids : (region_ids ? JSON.stringify(region_ids) : null)),
                 status: status !== undefined ? parseInt(status) : 1,
             },
         });
@@ -132,13 +143,18 @@ export const updateCoupon = async (req, res) => {
         const { id } = req.params;
         const {
             code,
+            title,
+            title_ar,
+            description,
+            description_ar,
+            image_url,
             discount_type,
             discount,
-            expiry_date,
-            usage_limit,
+            start_date,
+            end_date,
             usage_limit_per_rider,
-            min_amount,
-            max_discount,
+            minimum_amount,
+            maximum_discount,
             coupon_type,
             service_ids,
             region_ids,
@@ -146,17 +162,22 @@ export const updateCoupon = async (req, res) => {
         } = req.body;
 
         const updateData = {};
-        if (code) updateData.code = code;
-        if (discount_type) updateData.discountType = discount_type;
-        if (discount !== undefined) updateData.discount = parseFloat(discount);
-        if (expiry_date) updateData.expiryDate = new Date(expiry_date);
-        if (usage_limit !== undefined) updateData.usageLimit = usage_limit ? parseInt(usage_limit) : null;
-        if (usage_limit_per_rider !== undefined) updateData.usageLimitPerRider = usage_limit_per_rider ? parseInt(usage_limit_per_rider) : null;
-        if (min_amount !== undefined) updateData.minAmount = min_amount ? parseFloat(min_amount) : null;
-        if (max_discount !== undefined) updateData.maxDiscount = max_discount ? parseFloat(max_discount) : null;
-        if (coupon_type) updateData.couponType = coupon_type;
-        if (service_ids) updateData.serviceIds = JSON.stringify(service_ids);
-        if (region_ids) updateData.regionIds = JSON.stringify(region_ids);
+        if (code !== undefined) updateData.code = code;
+        if (title !== undefined) updateData.title = title;
+        if (title_ar !== undefined) updateData.titleAr = title_ar;
+        if (description !== undefined) updateData.description = description;
+        if (description_ar !== undefined) updateData.descriptionAr = description_ar;
+        if (image_url !== undefined) updateData.imageUrl = image_url;
+        if (discount_type !== undefined) updateData.discountType = discount_type;
+        if (discount !== undefined) updateData.discount = discount !== '' ? parseFloat(discount) : null;
+        if (start_date !== undefined) updateData.startDate = start_date ? new Date(start_date) : null;
+        if (end_date !== undefined) updateData.endDate = end_date ? new Date(end_date) : null;
+        if (usage_limit_per_rider !== undefined) updateData.usageLimitPerRider = usage_limit_per_rider !== '' ? parseInt(usage_limit_per_rider) : null;
+        if (minimum_amount !== undefined) updateData.minimumAmount = minimum_amount !== '' ? parseFloat(minimum_amount) : null;
+        if (maximum_discount !== undefined) updateData.maximumDiscount = maximum_discount !== '' ? parseFloat(maximum_discount) : null;
+        if (coupon_type !== undefined) updateData.couponType = coupon_type;
+        if (service_ids !== undefined) updateData.serviceIds = Array.isArray(service_ids) ? service_ids : (typeof service_ids === 'string' && service_ids.trim() ? JSON.parse(service_ids) : service_ids);
+        if (region_ids !== undefined) updateData.regionIds = Array.isArray(region_ids) ? JSON.stringify(region_ids) : region_ids;
         if (status !== undefined) updateData.status = parseInt(status);
 
         const coupon = await prisma.coupon.update({

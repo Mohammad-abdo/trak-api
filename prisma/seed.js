@@ -43,6 +43,8 @@ async function main() {
   await prisma.notification.deleteMany()
   await prisma.userAddress.deleteMany()
   await prisma.userBankCard.deleteMany()
+  await prisma.permission.deleteMany()
+  await prisma.role.deleteMany()
 
   // Create Regions
   console.log('Creating regions...')
@@ -728,6 +730,82 @@ async function main() {
         imageUrl: 'https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=800',
         serviceIds: [service2.id, service3.id],
         regionIds: JSON.stringify([region1.id, region2.id])
+      },
+      {
+        code: 'SUMMER25',
+        title: 'Summer Ride',
+        titleAr: 'عرض الصيف',
+        couponType: 'all',
+        usageLimitPerRider: 2,
+        discountType: 'percentage',
+        discount: 25.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 40.0,
+        maximumDiscount: 75.0,
+        status: 1,
+        description: '25% off summer rides',
+        descriptionAr: 'خصم 25% على رحلات الصيف',
+        imageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=800',
+        serviceIds: [service1.id, service2.id, service3.id],
+        regionIds: JSON.stringify([region1.id, region2.id])
+      },
+      {
+        code: 'FIXED30',
+        title: '30 SAR Off',
+        titleAr: 'خصم 30 ريال',
+        couponType: 'all',
+        usageLimitPerRider: 1,
+        discountType: 'fixed',
+        discount: 30.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 80.0,
+        maximumDiscount: 30.0,
+        status: 1,
+        description: 'Save 30 SAR on rides above 80 SAR',
+        descriptionAr: 'وفر 30 ريال على الرحلات فوق 80 ريال',
+        imageUrl: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800',
+        serviceIds: [service2.id, service3.id],
+        regionIds: JSON.stringify([region1.id, region2.id])
+      },
+      {
+        code: 'FIRST50',
+        title: 'First Ride 50%',
+        titleAr: 'أول رحلة 50%',
+        couponType: 'first_ride',
+        usageLimitPerRider: 1,
+        discountType: 'percentage',
+        discount: 50.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 15.0,
+        maximumDiscount: 40.0,
+        status: 1,
+        description: '50% off your first ride',
+        descriptionAr: 'خصم 50% على أول رحلة لك',
+        imageUrl: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800',
+        serviceIds: [service1.id],
+        regionIds: JSON.stringify([region1.id])
+      },
+      {
+        code: 'NIGHT10',
+        title: 'Night Discount',
+        titleAr: 'خصم الليل',
+        couponType: 'all',
+        usageLimitPerRider: 10,
+        discountType: 'percentage',
+        discount: 10.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 25.0,
+        maximumDiscount: 25.0,
+        status: 1,
+        description: '10% off night rides',
+        descriptionAr: 'خصم 10% على رحلات الليل',
+        imageUrl: 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=800',
+        serviceIds: [service1.id, service2.id, service3.id],
+        regionIds: JSON.stringify([region1.id, region2.id])
       }
     ]
   })
@@ -1395,12 +1473,61 @@ async function main() {
   console.log(`   - Services: 3`)
   console.log(`   - Users: 8 (1 admin, 1 fleet, 4 riders incl. mobile test user, 3 drivers)`)
   console.log(`   - Documents: 4`)
-  console.log(`   - Coupons: 3`)
+  console.log(`   - Coupons: 8 (slider offers)`)
+  console.log(`   - Roles: 4 | Permissions: 15+`)
   console.log(`   - FAQs: 4`)
   console.log(`   - Ride Requests: 3`)
   console.log(`   - Payments: 1`)
   console.log(`   - Ratings: 2`)
   console.log(`   - Complaints: 1`)
+
+  // Create Roles (for dashboard)
+  console.log('Creating roles...')
+  await prisma.role.createMany({
+    data: [
+      { name: 'admin', guardName: 'web' },
+      { name: 'fleet', guardName: 'web' },
+      { name: 'manager', guardName: 'web' },
+      { name: 'support', guardName: 'web' }
+    ]
+  })
+
+  // Create Permissions (for dashboard)
+  console.log('Creating permissions...')
+  const permUsers = await prisma.permission.create({
+    data: { name: 'users', guardName: 'web' }
+  })
+  await prisma.permission.createMany({
+    data: [
+      { name: 'users.view', guardName: 'web', parentId: permUsers.id },
+      { name: 'users.create', guardName: 'web', parentId: permUsers.id },
+      { name: 'users.update', guardName: 'web', parentId: permUsers.id },
+      { name: 'users.delete', guardName: 'web', parentId: permUsers.id }
+    ]
+  })
+  const permRoles = await prisma.permission.create({
+    data: { name: 'roles', guardName: 'web' }
+  })
+  await prisma.permission.createMany({
+    data: [
+      { name: 'roles.view', guardName: 'web', parentId: permRoles.id },
+      { name: 'roles.create', guardName: 'web', parentId: permRoles.id },
+      { name: 'roles.update', guardName: 'web', parentId: permRoles.id },
+      { name: 'roles.delete', guardName: 'web', parentId: permRoles.id }
+    ]
+  })
+  const permRides = await prisma.permission.create({
+    data: { name: 'rides', guardName: 'web' }
+  })
+  await prisma.permission.createMany({
+    data: [
+      { name: 'rides.view', guardName: 'web', parentId: permRides.id },
+      { name: 'rides.manage', guardName: 'web', parentId: permRides.id }
+    ]
+  })
+  await prisma.permission.create({
+    data: { name: 'settings', guardName: 'web' }
+  })
 
   // ===================================
   // Multi-Service Platform Data

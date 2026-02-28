@@ -91,7 +91,7 @@ export const getServiceCategoryById = async (req, res) => {
 // @access  Private (Admin)
 export const createServiceCategory = async (req, res) => {
     try {
-        const { name, name_ar, slug, description, description_ar, icon, status } = req.body;
+        const { name, name_ar, slug, description, description_ar, icon, image_url, status } = req.body;
 
         const category = await prisma.serviceCategory.create({
             data: {
@@ -101,6 +101,7 @@ export const createServiceCategory = async (req, res) => {
                 description,
                 descriptionAr: description_ar,
                 icon,
+                imageUrl: image_url || null,
                 status: status !== undefined ? parseInt(status) : 1,
             },
         });
@@ -125,7 +126,7 @@ export const createServiceCategory = async (req, res) => {
 export const updateServiceCategory = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, name_ar, slug, description, description_ar, icon, status } = req.body;
+        const { name, name_ar, slug, description, description_ar, icon, image_url, status } = req.body;
 
         const updateData = {};
         if (name) updateData.name = name;
@@ -134,6 +135,7 @@ export const updateServiceCategory = async (req, res) => {
         if (description !== undefined) updateData.description = description;
         if (description_ar !== undefined) updateData.descriptionAr = description_ar;
         if (icon !== undefined) updateData.icon = icon;
+        if (image_url !== undefined) updateData.imageUrl = image_url;
         if (status !== undefined) updateData.status = parseInt(status);
 
         const category = await prisma.serviceCategory.update({
