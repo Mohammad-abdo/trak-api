@@ -1597,9 +1597,56 @@ async function main() {
       driverId: driver1.id,
       amount: 25.50,
       paymentType: 'cash',
-      paymentStatus: 'completed',
+      paymentStatus: 'paid',
       paymentDate: new Date()
     }
+  })
+
+  // Driver wallet history (معاملات أرباح الرحلات)
+  const walletD1 = await prisma.wallet.findFirst({ where: { userId: driver1.id } })
+  if (walletD1) {
+    const newBal1 = walletD1.balance + 25.50
+    await prisma.wallet.update({ where: { id: walletD1.id }, data: { balance: newBal1 } })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletD1.id,
+        userId: driver1.id,
+        type: 'credit',
+        amount: 25.50,
+        balance: newBal1,
+        description: 'Ride earnings',
+        transactionType: 'ride_earnings',
+        rideRequestId: ride1.id
+      }
+    })
+  }
+  const walletD2 = await prisma.wallet.findFirst({ where: { userId: driver2.id } })
+  if (walletD2) {
+    const newBal2 = walletD2.balance + 45
+    await prisma.wallet.update({ where: { id: walletD2.id }, data: { balance: newBal2 } })
+    await prisma.walletHistory.create({
+      data: {
+        walletId: walletD2.id,
+        userId: driver2.id,
+        type: 'credit',
+        amount: 45,
+        balance: newBal2,
+        description: 'Ride earnings',
+        transactionType: 'ride_earnings',
+        rideRequestId: ride2.id
+      }
+    })
+  }
+
+  // طلبات سحب للسائقين
+  await prisma.withdrawRequest.create({
+    data: { userId: driver1.id, amount: 500, currency: defaultCurrency, status: 0 }
+  })
+  await prisma.withdrawRequest.create({
+    data: { userId: driver2.id, amount: 300, currency: defaultCurrency, status: 0 }
+  })
+  await prisma.withdrawRequest.create({
+    data: { userId: driver4.id, amount: 200, currency: defaultCurrency, status: 1 }
   })
 
   // Create Ratings

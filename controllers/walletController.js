@@ -416,6 +416,67 @@ export const addFundsToUserWallet = async (req, res) => {
     }
 };
 
+// @desc    Backfill driver wallet history from existing paid payments (مرة واحدة لتعويض أرباح سابقة)
+// @route   POST /api/wallets/backfill-driver-earnings
+// @access  Private (Admin)
+export const backfillDriverEarnings = async (req, res) => {
+    try {
+        const paidPayments = await prisma.payment.findMany({
+            where: { paymentStatus: "paid" },
+            include: { rideRequest: { select: { id: true, totalAmount: true } } },
+        });
+        let created = 0;
+        for (const p of paidPayments) {
+            const driverId = p.driverId;
+            const amount = p.amount || p.rideRequest?.totalAmount;
+            if (!driverId || !amount || amount <= 0) continue;
+            const existing = await prisma.walletHistory.findFirst({
+                where: {
+                    rideRequestId: p.rideRequestId,
+                    userId: driverId,
+                    type: "credit",
+                    transactionType: "ride_earnings",
+                },
+            });
+            if (existing) continue;
+            let driverWallet = await prisma.wallet.findUnique({
+                where: { userId: driverId },
+            });
+            if (!driverWallet) {
+                driverWallet = await prisma.wallet.create({
+                    data: { userId: driverId, balance: 0 },
+                });
+            }
+            const newBalance = driverWallet.balance + amount;
+            await prisma.wallet.update({
+                where: { id: driverWallet.id },
+                data: { balance: newBalance },
+            });
+            await prisma.walletHistory.create({
+                data: {
+                    walletId: driverWallet.id,
+                    userId: driverId,
+                    type: "credit",
+                    amount,
+                    balance: newBalance,
+                    description: "Ride earnings (backfill)",
+                    transactionType: "ride_earnings",
+                    rideRequestId: p.rideRequestId,
+                },
+            });
+            created++;
+        }
+        res.json({
+            success: true,
+            message: `Backfill complete. Created ${created} driver earnings entries.`,
+            data: { created, totalPaidPayments: paidPayments.length },
+        });
+    } catch (error) {
+        console.error("Backfill driver earnings error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Get reward history
 // @route   GET /api/wallets/reward-list
 // @access  Private
