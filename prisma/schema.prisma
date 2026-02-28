@@ -650,6 +650,20 @@ model PaymentGateway {
   @@map("payment_gateways")
 }
 
+model PaymentMethod {
+  id        Int      @id @default(autoincrement())
+  name      String
+  nameAr    String?  @map("name_ar") @db.Text
+  code      String   @unique // card, wallet, fawry, cash
+  status    Int      @default(1) // 1 = active, 0 = inactive
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+
+  @@index([status])
+  @@map("payment_methods")
+}
+
 model Setting {
   id        Int      @id @default(autoincrement())
   key       String   @unique

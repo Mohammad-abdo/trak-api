@@ -1,13 +1,19 @@
 import prisma from "../utils/prisma.js";
 
-// @desc    Get withdraw request list
+// @desc    Get withdraw request list (admin: drivers only; user: own only)
 // @route   GET /api/withdraw-requests/withdrawrequest-list
 // @access  Private
 export const getWithdrawRequestList = async (req, res) => {
     try {
         const where = {};
 
-        if (req.user.userType !== "admin") {
+        if (req.user.userType === "admin") {
+            where.user = { userType: "driver" };
+            if (req.query.userId) {
+                const uid = parseInt(req.query.userId, 10);
+                if (!Number.isNaN(uid)) where.userId = uid;
+            }
+        } else {
             where.userId = req.user.id;
         }
 
@@ -20,6 +26,7 @@ export const getWithdrawRequestList = async (req, res) => {
                         firstName: true,
                         lastName: true,
                         email: true,
+                        userType: true,
                     },
                 },
             },

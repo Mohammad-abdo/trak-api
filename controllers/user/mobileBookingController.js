@@ -124,23 +124,25 @@ export const getShipmentWeights = async (req, res) => {
     }
 };
 
-// @desc    Get payment methods
+// @desc    Get payment methods (from payment_methods table)
 // @route   GET /apimobile/user/booking/payment-methods
 // @access  Private
 export const getPaymentMethods = async (req, res) => {
     try {
-        const gateways = await prisma.paymentGateway.findMany({
+        const methods = await prisma.paymentMethod.findMany({
             where: { status: 1 },
-            select: { id: true, title: true, type: true },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            select: { id: true, name: true, nameAr: true, code: true },
         });
 
-        // Always include cash
-        const methods = [
-            { payment_id: 0, name: 'Cash', type: 'cash' },
-            ...gateways.map(g => ({ payment_id: g.id, name: g.title, type: g.type })),
-        ];
+        const data = methods.map((m) => ({
+            payment_id: m.id,
+            name: m.name,
+            nameAr: m.nameAr,
+            type: m.code,
+        }));
 
-        return res.json({ success: true, message: 'Payment methods retrieved', data: methods });
+        return res.json({ success: true, message: 'Payment methods retrieved', data });
     } catch (error) {
         console.error('Payment methods error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to get payment methods' });

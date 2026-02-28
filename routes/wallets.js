@@ -1,6 +1,8 @@
 import express from "express";
 import {
     getAllWallets,
+    getWalletByIdForAdmin,
+    getWalletHistoryForAdmin,
     addWalletTransaction,
     getWalletDetail,
     saveWallet,
@@ -14,6 +16,8 @@ const router = express.Router();
 
 // Admin routes
 router.get("/", authenticate, authorize("admin"), getAllWallets);
+router.get("/:id/history", authenticate, authorize("admin"), getWalletHistoryForAdmin);
+router.get("/:id", authenticate, authorize("admin"), getWalletByIdForAdmin);
 router.post(
     "/:id/transaction",
     authenticate,

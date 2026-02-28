@@ -127,12 +127,45 @@ export const getWalletList = async (req, res) => {
     }
 };
 
-// @desc    Get all wallets (Admin)
+// @desc    Get all wallets (Admin) — drivers only, with filters
 // @route   GET /api/wallets
 // @access  Private (Admin)
 export const getAllWallets = async (req, res) => {
     try {
+        const { search, minBalance, maxBalance, balanceFilter, sortBy = "updatedAt", sortOrder = "desc" } = req.query;
+
+        const where = {
+            user: { userType: "driver" },
+        };
+
+        if (search && String(search).trim()) {
+            const term = String(search).trim();
+            where.user.OR = [
+                { firstName: { contains: term } },
+                { lastName: { contains: term } },
+                { email: { contains: term } },
+            ];
+        }
+
+        if (balanceFilter === "zero") {
+            where.balance = 0;
+        } else if (balanceFilter === "positive" || minBalance != null || maxBalance != null) {
+            const bal = {};
+            if (balanceFilter === "positive" || minBalance != null) {
+                bal.gte = minBalance != null && minBalance !== "" ? parseFloat(minBalance) : 0.01;
+            }
+            if (maxBalance != null && maxBalance !== "") {
+                const max = parseFloat(maxBalance);
+                if (!Number.isNaN(max)) bal.lte = max;
+            }
+            if (Object.keys(bal).length) where.balance = bal;
+        }
+
+        const orderField = sortBy === "balance" ? "balance" : "updatedAt";
+        const order = sortOrder === "asc" ? "asc" : "desc";
+
         const wallets = await prisma.wallet.findMany({
+            where,
             include: {
                 user: {
                     select: {
@@ -144,7 +177,7 @@ export const getAllWallets = async (req, res) => {
                     },
                 },
             },
-            orderBy: { updatedAt: "desc" },
+            orderBy: { [orderField]: order },
         });
 
         res.json({
@@ -157,6 +190,79 @@ export const getAllWallets = async (req, res) => {
             success: false,
             message: error.message,
         });
+    }
+};
+
+// @desc    Get single wallet by ID (Admin) — drivers only
+// @route   GET /api/wallets/:id
+// @access  Private (Admin)
+export const getWalletByIdForAdmin = async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+            return res.status(400).json({ success: false, message: "Invalid wallet id" });
+        }
+        const wallet = await prisma.wallet.findFirst({
+            where: {
+                id,
+                user: { userType: "driver" },
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                        userType: true,
+                        phone: true,
+                    },
+                },
+            },
+        });
+        if (!wallet) {
+            return res.status(404).json({ success: false, message: "Wallet not found" });
+        }
+        res.json({ success: true, data: wallet });
+    } catch (error) {
+        console.error("Get wallet by id error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get wallet history for admin (driver wallet)
+// @route   GET /api/wallets/:id/history
+// @access  Private (Admin)
+export const getWalletHistoryForAdmin = async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+        const offset = parseInt(req.query.offset, 10) || 0;
+        if (Number.isNaN(id)) {
+            return res.status(400).json({ success: false, message: "Invalid wallet id" });
+        }
+        const wallet = await prisma.wallet.findFirst({
+            where: {
+                id,
+                user: { userType: "driver" },
+            },
+        });
+        if (!wallet) {
+            return res.status(404).json({ success: false, message: "Wallet not found" });
+        }
+        const [history, total] = await Promise.all([
+            prisma.walletHistory.findMany({
+                where: { walletId: id },
+                orderBy: { createdAt: "desc" },
+                take: limit,
+                skip: offset,
+            }),
+            prisma.walletHistory.count({ where: { walletId: id } }),
+        ]);
+        res.json({ success: true, data: history, total });
+    } catch (error) {
+        console.error("Get wallet history error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
