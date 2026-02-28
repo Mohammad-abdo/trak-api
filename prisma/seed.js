@@ -284,6 +284,7 @@ async function main() {
       address: 'Driver Residence 1',
       latitude: '24.72',
       longitude: '46.67',
+      avatar: 'https://i.pravatar.cc/300?img=12',
       serviceId: service1.id,
       fleetId: fleet.id,
       isOnline: true,
@@ -308,6 +309,7 @@ async function main() {
       address: 'Driver Residence 2',
       latitude: '24.78',
       longitude: '46.72',
+      avatar: 'https://i.pravatar.cc/300?img=5',
       serviceId: service2.id,
       fleetId: fleet.id,
       isOnline: true,
@@ -330,6 +332,7 @@ async function main() {
       status: 'pending',
       displayName: 'Omar Youssef',
       address: 'Driver Residence 3',
+      avatar: 'https://i.pravatar.cc/300?img=33',
       latitude: '24.76',
       longitude: '46.69',
       serviceId: service3.id,
@@ -665,69 +668,65 @@ async function main() {
     }
   })
 
-  // Create Coupons
-  console.log('Creating coupons...')
-  await prisma.coupon.create({
-    data: {
-      code: 'WELCOME10',
-      title: 'Welcome Discount',
-      titleAr: 'خصم الترحيب',
-      couponType: 'first_ride',
-      usageLimitPerRider: 1,
-      discountType: 'percentage',
-      discount: 10.0,
-      startDate: new Date('2024-01-01'),
-      endDate: new Date('2025-12-31'),
-      minimumAmount: 20.0,
-      maximumDiscount: 50.0,
-      status: 1,
-      description: '10% off on your first ride',
-      descriptionAr: 'خصم 10% على أول رحلة لك',
-      serviceIds: JSON.stringify([service1.id, service2.id]),
-      regionIds: JSON.stringify([region1.id])
-    }
-  })
-
-  await prisma.coupon.create({
-    data: {
-      code: 'SAVE20',
-      title: 'Save 20 SAR',
-      titleAr: 'وفر 20 ريال',
-      couponType: 'all',
-      usageLimitPerRider: 5,
-      discountType: 'fixed',
-      discount: 20.0,
-      startDate: new Date('2024-01-01'),
-      endDate: new Date('2025-12-31'),
-      minimumAmount: 50.0,
-      maximumDiscount: 20.0,
-      status: 1,
-      description: 'Save 20 SAR on rides above 50 SAR',
-      descriptionAr: 'وفر 20 ريال على الرحلات فوق 50 ريال',
-      serviceIds: JSON.stringify([service1.id, service2.id, service3.id]),
-      regionIds: JSON.stringify([region1.id, region2.id])
-    }
-  })
-
-  await prisma.coupon.create({
-    data: {
-      code: 'WEEKEND15',
-      title: 'Weekend Special',
-      titleAr: 'عرض نهاية الأسبوع',
-      couponType: 'all',
-      usageLimitPerRider: 3,
-      discountType: 'percentage',
-      discount: 15.0,
-      startDate: new Date('2024-01-01'),
-      endDate: new Date('2025-12-31'),
-      minimumAmount: 30.0,
-      maximumDiscount: 100.0,
-      status: 1,
-      description: '15% off on weekends',
-      descriptionAr: 'خصم 15% في عطلة نهاية الأسبوع',
-      serviceIds: JSON.stringify([service2.id, service3.id]),
-      regionIds: JSON.stringify([region1.id, region2.id])
-    }
+  // Create Coupons = Slider offers (GET /apimobile/user/home/slider-offers). No dates = always valid.
+  console.log('Creating coupons (slider offers)...')
+  await prisma.coupon.createMany({
+    data: [
+      {
+        code: 'WELCOME10',
+        title: 'Welcome Discount',
+        titleAr: 'خصم الترحيب',
+        couponType: 'first_ride',
+        usageLimitPerRider: 1,
+        discountType: 'percentage',
+        discount: 10.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 20.0,
+        maximumDiscount: 50.0,
+        status: 1,
+        description: '10% off on your first ride',
+        descriptionAr: 'خصم 10% على أول رحلة لك',
+        serviceIds: [service1.id, service2.id],
+        regionIds: JSON.stringify([region1.id])
+      },
+      {
+        code: 'SAVE20',
+        title: 'Save 20 SAR',
+        titleAr: 'وفر 20 ريال',
+        couponType: 'all',
+        usageLimitPerRider: 5,
+        discountType: 'fixed',
+        discount: 20.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 50.0,
+        maximumDiscount: 20.0,
+        status: 1,
+        description: 'Save 20 SAR on rides above 50 SAR',
+        descriptionAr: 'وفر 20 ريال على الرحلات فوق 50 ريال',
+        serviceIds: [service1.id, service2.id, service3.id],
+        regionIds: JSON.stringify([region1.id, region2.id])
+      },
+      {
+        code: 'WEEKEND15',
+        title: 'Weekend Special',
+        titleAr: 'عرض نهاية الأسبوع',
+        couponType: 'all',
+        usageLimitPerRider: 3,
+        discountType: 'percentage',
+        discount: 15.0,
+        startDate: null,
+        endDate: null,
+        minimumAmount: 30.0,
+        maximumDiscount: 100.0,
+        status: 1,
+        description: '15% off on weekends',
+        descriptionAr: 'خصم 15% في عطلة نهاية الأسبوع',
+        serviceIds: [service2.id, service3.id],
+        regionIds: JSON.stringify([region1.id, region2.id])
+      }
+    ]
   })
 
   // Create FAQs
@@ -1078,6 +1077,7 @@ async function main() {
       surgeAmount: 0,
       subtotal: 28.0,
       extraChargesAmount: 0,
+      driverId: driver1.id,
       startLatitude: '30.0444',
       startLongitude: '31.2357',
       startAddress: 'Cairo, Downtown',
@@ -1087,7 +1087,7 @@ async function main() {
       distance: 8.0,
       duration: 15,
       seatCount: 1,
-      status: 'pending',
+      status: 'accepted',
       rideHasBid: false,
       baseFare: 10.0,
       minimumFare: 15.0,
@@ -1099,6 +1099,50 @@ async function main() {
       isDriverRated: false
     }
   })
+
+  // 4 more active bookings for mobile user (5 total active → last-bookings array of 5)
+  const mobileActiveTrips = [
+    { from: 'Maadi', to: 'Zamalek', lat: '30.05', lng: '31.22', amount: 35, otp: '2345', status: 'accepted' },
+    { from: 'Heliopolis', to: 'Nasr City', lat: '30.07', lng: '31.35', amount: 42, otp: '3456', status: 'started' },
+    { from: 'Dokki', to: 'Giza', lat: '30.01', lng: '31.02', amount: 65, otp: '4567', status: 'accepted' },
+    { from: 'New Cairo', to: 'Airport', lat: '30.08', lng: '31.40', amount: 95, otp: '5678', status: 'arrived' }
+  ]
+  for (const t of mobileActiveTrips) {
+    await prisma.rideRequest.create({
+      data: {
+        riderId: mobileTestUser.id,
+        serviceId: service1.id,
+        datetime: new Date(),
+        isSchedule: false,
+        rideAttempt: 1,
+        distanceUnit: 'km',
+        totalAmount: t.amount,
+        surgeAmount: 0,
+        subtotal: t.amount,
+        extraChargesAmount: 0,
+        driverId: driver1.id,
+        startLatitude: '30.0444',
+        startLongitude: '31.2357',
+        startAddress: t.from,
+        endLatitude: t.lat,
+        endLongitude: t.lng,
+        endAddress: t.to,
+        distance: 8,
+        duration: 15,
+        seatCount: 1,
+        status: t.status,
+        rideHasBid: false,
+        baseFare: 10.0,
+        minimumFare: 15.0,
+        perDistance: 2.5,
+        perMinuteDrive: 0.5,
+        paymentType: 'card',
+        otp: t.otp,
+        isRiderRated: false,
+        isDriverRated: false
+      }
+    })
+  }
 
   const rideMobileCompleted = await prisma.rideRequest.create({
     data: {
@@ -1135,6 +1179,66 @@ async function main() {
       isDriverRated: true
     }
   })
+
+  // Many more bookings for mobile test user (Phone: 01234567890 / Password: Test1234)
+  const mobileUserExtraTrips = [
+    { from: 'Cairo Airport', to: 'Heliopolis', lat: '30.08', lng: '31.32', amount: 85 },
+    { from: 'Maadi', to: 'Zamalek', lat: '30.05', lng: '31.22', amount: 35 },
+    { from: '6th October', to: 'Downtown Cairo', lat: '30.02', lng: '30.98', amount: 120 },
+    { from: 'New Cairo', to: 'Nasr City', lat: '30.07', lng: '31.35', amount: 42 },
+    { from: 'Dokki', to: 'Giza Pyramids', lat: '30.01', lng: '31.02', amount: 65 },
+    { from: 'Mohandessin', to: 'Agouza', lat: '30.06', lng: '31.20', amount: 28 },
+    { from: 'Helwan', to: 'Maadi', lat: '29.87', lng: '31.33', amount: 55 },
+    { from: 'Shoubra', to: 'Abbasya', lat: '30.08', lng: '31.24', amount: 38 },
+    { from: 'Hadayek El Kobba', to: 'Roxy', lat: '30.09', lng: '31.32', amount: 32 },
+    { from: 'Mokattam', to: 'Cairo Festival', lat: '30.01', lng: '31.36', amount: 48 },
+    { from: 'Rehab City', to: 'Sheraton', lat: '30.09', lng: '31.42', amount: 52 },
+    { from: '5th Settlement', to: 'Airport', lat: '30.10', lng: '31.40', amount: 95 },
+    { from: 'Faisal', to: 'Haram', lat: '29.98', lng: '31.12', amount: 58 },
+    { from: 'Imbaba', to: 'Orman', lat: '30.10', lng: '31.21', amount: 40 },
+    { from: 'Tagamoaa', to: 'Nasr City', lat: '30.11', lng: '31.38', amount: 45 }
+  ]
+  const servicesForMobile = [service1, service2]
+  for (let i = 0; i < mobileUserExtraTrips.length; i++) {
+    const trip = mobileUserExtraTrips[i]
+    const svc = servicesForMobile[i % servicesForMobile.length]
+    const isCompleted = i % 3 !== 0
+    await prisma.rideRequest.create({
+      data: {
+        riderId: mobileTestUser.id,
+        serviceId: svc.id,
+        datetime: new Date(Date.now() - (i + 1) * 86400000),
+        isSchedule: false,
+        rideAttempt: 1,
+        distanceUnit: 'km',
+        totalAmount: trip.amount,
+        surgeAmount: 0,
+        subtotal: trip.amount,
+        extraChargesAmount: 0,
+        driverId: isCompleted ? driver1.id : (i % 2 === 0 ? driver2.id : null),
+        startLatitude: '30.0444',
+        startLongitude: '31.2357',
+        startAddress: trip.from,
+        endLatitude: trip.lat,
+        endLongitude: trip.lng,
+        endAddress: trip.to,
+        distance: 8 + (i % 5),
+        duration: 15 + (i % 10),
+        seatCount: 1,
+        status: isCompleted ? 'completed' : 'cancelled',
+        rideHasBid: false,
+        baseFare: 10.0,
+        minimumFare: 15.0,
+        perDistance: 2.5,
+        perDistanceCharge: trip.amount * 0.6,
+        perMinuteDrive: 0.5,
+        perMinuteDriveCharge: trip.amount * 0.2,
+        paymentType: i % 2 === 0 ? 'card' : 'cash',
+        isRiderRated: isCompleted,
+        isDriverRated: isCompleted
+      }
+    })
+  }
 
   // Wallet operations for rider1 (so GET /apimobile/user/wallet/operations returns data)
   const walletR1 = await prisma.wallet.findFirst({ where: { userId: rider1.id } })

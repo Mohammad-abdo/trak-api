@@ -5,14 +5,8 @@ import prisma from '../../utils/prisma.js';
 // @access  Private
 export const sliderOffers = async (req, res) => {
     try {
-        const now = new Date();
-
         const coupons = await prisma.coupon.findMany({
-            where: {
-                status: 1,
-                OR: [{ startDate: null }, { startDate: { lte: now } }],
-                AND: [{ OR: [{ endDate: null }, { endDate: { gte: now } }] }],
-            },
+            where: { status: 1 },
             select: {
                 id: true,
                 title: true,
@@ -89,19 +83,18 @@ export const getAllServices = async (req, res) => {
     }
 };
 
-// @desc    Get last current user booking
+// @desc    Get last N current user bookings (array, newest first). Default 5, any status.
 // @route   GET /apimobile/user/home/last-booking
 // @access  Private
 export const getLastCurrentUserBooking = async (req, res) => {
     try {
         const userId = req.user.id;
+        const limit = Math.min(parseInt(req.query.limit, 10) || 5, 50);
 
-        const booking = await prisma.rideRequest.findFirst({
-            where: {
-                riderId: userId,
-                status: { in: ['pending', 'accepted', 'started', 'arrived'] },
-            },
+        const bookings = await prisma.rideRequest.findMany({
+            where: { riderId: userId },
             orderBy: { createdAt: 'desc' },
+            take: limit,
             select: {
                 id: true,
                 status: true,
@@ -133,34 +126,32 @@ export const getLastCurrentUserBooking = async (req, res) => {
             },
         });
 
-        if (!booking) {
-            return res.json({ success: true, message: 'No active booking', data: null });
-        }
+        const data = bookings.map(booking => ({
+            book_id: booking.id,
+            status: booking.status,
+            from: { lat: booking.startLatitude, lng: booking.startLongitude, address: booking.startAddress },
+            to: { lat: booking.endLatitude, lng: booking.endLongitude, address: booking.endAddress },
+            totalAmount: booking.totalAmount,
+            paymentType: booking.paymentType,
+            tripOtp: booking.otp,
+            createdAt: booking.createdAt,
+            driver: booking.driver ? {
+                id: booking.driver.id,
+                name: `${booking.driver.firstName || ''} ${booking.driver.lastName || ''}`.trim(),
+                avatar: booking.driver.avatar,
+                phone: booking.driver.contactNumber,
+                currentLocation: { lat: booking.driver.latitude, lng: booking.driver.longitude },
+                vehicleType: booking.driver.userDetail?.carModel,
+                vehicleColor: booking.driver.userDetail?.carColor,
+                vehiclePlate: booking.driver.userDetail?.carPlateNumber,
+            } : null,
+            service: booking.service,
+        }));
 
         return res.json({
             success: true,
-            message: 'Last booking retrieved',
-            data: {
-                book_id: booking.id,
-                status: booking.status,
-                from: { lat: booking.startLatitude, lng: booking.startLongitude, address: booking.startAddress },
-                to: { lat: booking.endLatitude, lng: booking.endLongitude, address: booking.endAddress },
-                totalAmount: booking.totalAmount,
-                paymentType: booking.paymentType,
-                tripOtp: booking.otp,
-                createdAt: booking.createdAt,
-                driver: booking.driver ? {
-                    id: booking.driver.id,
-                    name: `${booking.driver.firstName || ''} ${booking.driver.lastName || ''}`.trim(),
-                    avatar: booking.driver.avatar,
-                    phone: booking.driver.contactNumber,
-                    currentLocation: { lat: booking.driver.latitude, lng: booking.driver.longitude },
-                    vehicleType: booking.driver.userDetail?.carModel,
-                    vehicleColor: booking.driver.userDetail?.carColor,
-                    vehiclePlate: booking.driver.userDetail?.carPlateNumber,
-                } : null,
-                service: booking.service,
-            },
+            message: 'Last bookings retrieved',
+            data,
         });
     } catch (error) {
         console.error('Last booking error:', error);

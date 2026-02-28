@@ -422,12 +422,17 @@ router.get('/home/services', authenticate, homeGetAllServices);
  * /apimobile/user/home/last-booking:
  *   get:
  *     tags: [Home]
- *     summary: Get user's last active (pending/accepted/started) booking
+ *     summary: Get user's last active (pending/accepted/started/arrived) bookings
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *         description: Max number of bookings to return (max 50)
  *     responses:
  *       200:
- *         description: Last booking info with driver details and locations, or null if none
+ *         description: Array of last bookings with driver details and locations (empty array if none)
  */
 router.get('/home/last-booking', authenticate, getLastCurrentUserBooking);
 
