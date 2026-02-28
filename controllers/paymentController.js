@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { getDriverAndSystemShare } from "../utils/settingsHelper.js";
 
 // @desc    Get payment list
 // @route   GET /api/payments
@@ -139,10 +140,10 @@ export const savePayment = async (req, res) => {
             }
         }
 
-        // Credit driver wallet (أرباح الرحلة) — once per payment
-        const amount = rideRequest.totalAmount || payment.amount;
+        // Credit driver wallet (صافي أرباح الرحلة بعد نسبة السستم) — once per payment
+        const rideTotal = rideRequest.totalAmount || payment.amount;
         const driverId = rideRequest.driverId;
-        if (driverId && amount > 0) {
+        if (driverId && rideTotal > 0) {
             const alreadyCredited = await prisma.walletHistory.findFirst({
                 where: {
                     rideRequestId: rideRequest.id,
@@ -152,6 +153,7 @@ export const savePayment = async (req, res) => {
                 },
             });
             if (!alreadyCredited) {
+                const { driverShare } = await getDriverAndSystemShare(rideTotal);
                 let driverWallet = await prisma.wallet.findUnique({
                     where: { userId: driverId },
                 });
@@ -160,7 +162,7 @@ export const savePayment = async (req, res) => {
                         data: { userId: driverId, balance: 0 },
                     });
                 }
-                const newDriverBalance = driverWallet.balance + amount;
+                const newDriverBalance = driverWallet.balance + driverShare;
                 await prisma.wallet.update({
                     where: { id: driverWallet.id },
                     data: { balance: newDriverBalance },
@@ -170,9 +172,9 @@ export const savePayment = async (req, res) => {
                         walletId: driverWallet.id,
                         userId: driverId,
                         type: "credit",
-                        amount,
+                        amount: driverShare,
                         balance: newDriverBalance,
-                        description: "Ride earnings",
+                        description: "Ride earnings (after system share)",
                         transactionType: "ride_earnings",
                         rideRequestId: rideRequest.id,
                     },

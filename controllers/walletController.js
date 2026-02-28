@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { getDriverAndSystemShare } from "../utils/settingsHelper.js";
 
 // @desc    Get wallet detail
 // @route   GET /api/wallets/wallet-detail
@@ -256,6 +257,9 @@ export const getWalletHistoryForAdmin = async (req, res) => {
                 orderBy: { createdAt: "desc" },
                 take: limit,
                 skip: offset,
+                include: {
+                    rideRequest: { select: { totalAmount: true } },
+                },
             }),
             prisma.walletHistory.count({ where: { walletId: id } }),
         ]);
@@ -428,8 +432,8 @@ export const backfillDriverEarnings = async (req, res) => {
         let created = 0;
         for (const p of paidPayments) {
             const driverId = p.driverId;
-            const amount = p.amount || p.rideRequest?.totalAmount;
-            if (!driverId || !amount || amount <= 0) continue;
+            const rideTotal = p.amount || p.rideRequest?.totalAmount;
+            if (!driverId || !rideTotal || rideTotal <= 0) continue;
             const existing = await prisma.walletHistory.findFirst({
                 where: {
                     rideRequestId: p.rideRequestId,
@@ -439,6 +443,7 @@ export const backfillDriverEarnings = async (req, res) => {
                 },
             });
             if (existing) continue;
+            const { driverShare } = await getDriverAndSystemShare(rideTotal);
             let driverWallet = await prisma.wallet.findUnique({
                 where: { userId: driverId },
             });
@@ -447,7 +452,7 @@ export const backfillDriverEarnings = async (req, res) => {
                     data: { userId: driverId, balance: 0 },
                 });
             }
-            const newBalance = driverWallet.balance + amount;
+            const newBalance = driverWallet.balance + driverShare;
             await prisma.wallet.update({
                 where: { id: driverWallet.id },
                 data: { balance: newBalance },
@@ -457,9 +462,9 @@ export const backfillDriverEarnings = async (req, res) => {
                     walletId: driverWallet.id,
                     userId: driverId,
                     type: "credit",
-                    amount,
+                    amount: driverShare,
                     balance: newBalance,
-                    description: "Ride earnings (backfill)",
+                    description: "Ride earnings (backfill, after system share)",
                     transactionType: "ride_earnings",
                     rideRequestId: p.rideRequestId,
                 },

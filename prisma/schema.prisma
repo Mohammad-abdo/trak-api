@@ -269,9 +269,10 @@ model RideRequest {
   payments Payment[] @relation("RideRequestPayments")
 
   // Related data
-  ratings    RideRequestRating[]
-  bids       RideRequestBid[]
-  histories  RideRequestHistory[]
+  ratings        RideRequestRating[]
+  bids           RideRequestBid[]
+  histories      RideRequestHistory[]
+  walletHistories WalletHistory[]
   complaints Complaint[]
 
   @@index([riderId, status])
@@ -333,11 +334,13 @@ model WalletHistory {
   createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
-  wallet Wallet @relation(fields: [walletId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
+  wallet      Wallet       @relation(fields: [walletId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  rideRequest RideRequest? @relation(fields: [rideRequestId], references: [id])
 
   @@index([walletId])
   @@index([userId])
+  @@index([rideRequestId])
   @@map("wallet_histories")
 }
 

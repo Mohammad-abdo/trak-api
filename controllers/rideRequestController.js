@@ -1,6 +1,7 @@
 import prisma from "../utils/prisma.js";
 import { generateExcel, generatePDF, generateCSV, formatDate, formatCurrency } from "../utils/exportUtils.js";
 import { calculateTripPrice } from "../utils/pricingCalculator.js";
+import { getDriverAndSystemShare } from "../utils/settingsHelper.js";
 import * as promotionService from "../services/promotionService.js";
 
 // @desc    Create ride request
@@ -548,8 +549,9 @@ export const completeRideRequest = async (req, res) => {
             },
         });
 
-        // Credit driver wallet for cash (أرباح الرحلة)
+        // Credit driver wallet for cash (صافي أرباح الرحلة بعد نسبة السستم)
         if (rideRequest.paymentType === "cash" && rideRequest.driverId && totalAmount > 0) {
+            const { driverShare } = await getDriverAndSystemShare(totalAmount);
             let driverWallet = await prisma.wallet.findUnique({
                 where: { userId: rideRequest.driverId },
             });
@@ -558,7 +560,7 @@ export const completeRideRequest = async (req, res) => {
                     data: { userId: rideRequest.driverId, balance: 0 },
                 });
             }
-            const newDriverBalance = driverWallet.balance + totalAmount;
+            const newDriverBalance = driverWallet.balance + driverShare;
             await prisma.wallet.update({
                 where: { id: driverWallet.id },
                 data: { balance: newDriverBalance },
@@ -568,9 +570,9 @@ export const completeRideRequest = async (req, res) => {
                     walletId: driverWallet.id,
                     userId: rideRequest.driverId,
                     type: "credit",
-                    amount: totalAmount,
+                    amount: driverShare,
                     balance: newDriverBalance,
-                    description: "Ride earnings (cash)",
+                    description: "Ride earnings (cash, after system share)",
                     transactionType: "ride_earnings",
                     rideRequestId: rideRequest.id,
                 },

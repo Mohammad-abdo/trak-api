@@ -52,6 +52,7 @@ async function main() {
   await prisma.setting.upsert({ where: { key: 'appName' }, update: { value: 'على السريع' }, create: { key: 'appName', value: 'على السريع' } })
   await prisma.setting.upsert({ where: { key: 'currency' }, update: { value: 'EGP' }, create: { key: 'currency', value: 'EGP' } })
   await prisma.setting.upsert({ where: { key: 'distanceUnit' }, update: { value: 'km' }, create: { key: 'distanceUnit', value: 'km' } })
+  await prisma.setting.upsert({ where: { key: 'system_commission_percentage' }, update: { value: '15' }, create: { key: 'system_commission_percentage', value: '15' } })
 
   // Payment methods (طرق الدفع)
   try {
