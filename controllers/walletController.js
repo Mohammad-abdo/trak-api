@@ -215,7 +215,7 @@ export const getWalletByIdForAdmin = async (req, res) => {
                         lastName: true,
                         email: true,
                         userType: true,
-                        phone: true,
+                        contactNumber: true,
                     },
                 },
             },
