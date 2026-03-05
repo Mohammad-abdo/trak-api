@@ -576,6 +576,7 @@ model UserDetail {
   carColor          String?  @map("car_color")
   carPlateNumber    String?  @map("car_plate_number")
   carProductionYear Int?     @map("car_production_year")
+  carImage          String?  @map("car_image")
   workAddress       String?  @map("work_address")
   homeAddress       String?  @map("home_address")
   workLatitude      String?  @map("work_latitude")

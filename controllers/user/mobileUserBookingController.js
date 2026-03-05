@@ -36,18 +36,35 @@ export const getMyBookings = async (req, res) => {
                         firstName: true,
                         lastName: true,
                         avatar: true,
-                        userDetail: { select: { carModel: true, carColor: true, carPlateNumber: true } },
+                        contactNumber: true,
+                        latitude: true,
+                        longitude: true,
+                        userDetail: { select: { carModel: true, carColor: true, carPlateNumber: true, carImage: true } },
                     },
                 },
                 service: { select: { id: true, name: true } },
                 ratings: {
                     select: { rating: true, comment: true, ratingBy: true },
                     where: { ratingBy: 'rider' },
+                    take: 1,
                 },
             },
         });
 
         const total = await prisma.rideRequest.count({ where });
+
+        const driverIds = [...new Set(bookings.map(b => b.driver?.id).filter(Boolean))];
+        const driverAvgRatings = driverIds.length > 0
+            ? await prisma.rideRequestRating.groupBy({
+                by: ['driverId'],
+                where: { driverId: { in: driverIds }, ratingBy: 'rider' },
+                _avg: { rating: true },
+                _count: { rating: true },
+            })
+            : [];
+        const ratingMap = Object.fromEntries(
+            driverAvgRatings.map(r => [r.driverId, { avg: r._avg.rating, count: r._count.rating }])
+        );
 
         return res.json({
             success: true,
@@ -70,12 +87,18 @@ export const getMyBookings = async (req, res) => {
                         id: b.driver.id,
                         name: `${b.driver.firstName} ${b.driver.lastName}`.trim(),
                         avatar: b.driver.avatar,
+                        phone: b.driver.contactNumber,
+                        currentLocation: { lat: b.driver.latitude, lng: b.driver.longitude },
+                        rate: ratingMap[b.driver.id]?.avg ?? null,
+                        ratingCount: ratingMap[b.driver.id]?.count ?? 0,
                         vehicleType: b.driver.userDetail?.carModel,
                         vehicleColor: b.driver.userDetail?.carColor,
                         vehiclePlate: b.driver.userDetail?.carPlateNumber,
+                        vehicleImage: b.driver.userDetail?.carImage ?? null,
                     } : null,
                     service: b.service,
-                    myRating: b.ratings[0] ?? null,
+                    review: b.ratings[0]?.comment ?? null,
+                    reviewRating: b.ratings[0]?.rating ?? null,
                 })),
             },
         });

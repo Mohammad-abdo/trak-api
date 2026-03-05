@@ -131,13 +131,31 @@ export const getLastCurrentUserBooking = async (req, res) => {
                         latitude: true,
                         longitude: true,
                         userDetail: {
-                            select: { carModel: true, carColor: true, carPlateNumber: true },
+                            select: { carModel: true, carColor: true, carPlateNumber: true, carImage: true },
                         },
                     },
+                },
+                ratings: {
+                    where: { ratingBy: 'rider' },
+                    select: { rating: true, comment: true },
+                    take: 1,
                 },
                 service: { select: { id: true, name: true } },
             },
         });
+
+        const driverIds = [...new Set(bookings.map(b => b.driver?.id).filter(Boolean))];
+        const driverAvgRatings = driverIds.length > 0
+            ? await prisma.rideRequestRating.groupBy({
+                by: ['driverId'],
+                where: { driverId: { in: driverIds }, ratingBy: 'rider' },
+                _avg: { rating: true },
+                _count: { rating: true },
+            })
+            : [];
+        const ratingMap = Object.fromEntries(
+            driverAvgRatings.map(r => [r.driverId, { avg: r._avg.rating, count: r._count.rating }])
+        );
 
         const data = bookings.map(booking => ({
             book_id: booking.id,
@@ -154,10 +172,15 @@ export const getLastCurrentUserBooking = async (req, res) => {
                 avatar: booking.driver.avatar,
                 phone: booking.driver.contactNumber,
                 currentLocation: { lat: booking.driver.latitude, lng: booking.driver.longitude },
+                rate: ratingMap[booking.driver.id]?.avg ?? null,
+                ratingCount: ratingMap[booking.driver.id]?.count ?? 0,
                 vehicleType: booking.driver.userDetail?.carModel,
                 vehicleColor: booking.driver.userDetail?.carColor,
                 vehiclePlate: booking.driver.userDetail?.carPlateNumber,
+                vehicleImage: booking.driver.userDetail?.carImage ?? null,
             } : null,
+            review: booking.ratings[0]?.comment ?? null,
+            reviewRating: booking.ratings[0]?.rating ?? null,
             service: booking.service,
         }));
 

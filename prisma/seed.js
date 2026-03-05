@@ -495,6 +495,7 @@ async function main() {
       carColor: 'White',
       carPlateNumber: 'ABC-1234',
       carProductionYear: 2022,
+      carImage: 'https://cdn.pixabay.com/photo/2016/02/13/13/11/toyota-1197712_1280.jpg',
       workAddress: 'Downtown Area',
       homeAddress: 'Driver Residence 1',
       workLatitude: '24.7136',
@@ -511,6 +512,7 @@ async function main() {
       carColor: 'Black',
       carPlateNumber: 'XYZ-5678',
       carProductionYear: 2023,
+      carImage: 'https://cdn.pixabay.com/photo/2018/02/21/03/15/honda-3169620_1280.jpg',
       workAddress: 'North District',
       homeAddress: 'Driver Residence 2',
       workLatitude: '24.8',
@@ -527,6 +529,7 @@ async function main() {
       carColor: 'Silver',
       carPlateNumber: 'ط ص ع 1234',
       carProductionYear: 2022,
+      carImage: 'https://cdn.pixabay.com/photo/2017/03/04/16/38/car-2116549_1280.jpg',
       workAddress: 'مدينة نصر',
       homeAddress: 'مدينة نصر، القاهرة',
       workLatitude: '30.0731',
@@ -542,6 +545,7 @@ async function main() {
       carColor: 'White',
       carPlateNumber: 'ط ص ع 5678',
       carProductionYear: 2023,
+      carImage: 'https://cdn.pixabay.com/photo/2012/11/02/13/02/car-63930_1280.jpg',
       workAddress: 'المعادي',
       homeAddress: 'المعادي، القاهرة',
       workLatitude: '29.9602',
@@ -557,6 +561,7 @@ async function main() {
       carColor: 'Black',
       carPlateNumber: 'ط ص ع 9012',
       carProductionYear: 2021,
+      carImage: 'https://cdn.pixabay.com/photo/2016/12/03/18/57/car-1880381_1280.jpg',
       workAddress: '6 أكتوبر',
       homeAddress: '6 أكتوبر، الجيزة',
       workLatitude: '30.0442',
@@ -572,6 +577,7 @@ async function main() {
       carColor: 'Gray',
       carPlateNumber: 'ط ص ع 3456',
       carProductionYear: 2023,
+      carImage: 'https://cdn.pixabay.com/photo/2014/05/18/19/13/toyota-347288_1280.jpg',
       workAddress: 'الشيخ زايد',
       homeAddress: 'الشيخ زايد، الجيزة',
       workLatitude: '30.05',
@@ -1963,6 +1969,7 @@ async function main() {
       description: 'Standard economical passenger vehicles',
       descriptionAr: 'مركبات ركاب اقتصادية قياسية',
       icon: '🚗',
+      image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0afe?w=800',
       capacity: 4,
       status: 1
     }
@@ -1977,6 +1984,7 @@ async function main() {
       description: 'Mid-range comfort passenger vehicles',
       descriptionAr: 'مركبات ركاب متوسطة المدى',
       icon: '🚙',
+      image: 'https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=800',
       capacity: 4,
       status: 1
     }
@@ -1991,6 +1999,7 @@ async function main() {
       description: 'Luxury premium passenger vehicles',
       descriptionAr: 'مركبات ركاب فاخرة ومميزة',
       icon: '✨',
+      image: 'https://images.unsplash.com/photo-1563720223185-11003d516935?w=800',
       capacity: 4,
       status: 1
     }
@@ -2007,6 +2016,7 @@ async function main() {
       description: 'Small cargo transport vehicles',
       descriptionAr: 'مركبات نقل حمولات صغيرة',
       icon: '🚐',
+      image: 'https://images.unsplash.com/photo-1609520505218-7421df70c052?w=800',
       capacity: 2,
       maxLoad: 500,
       status: 1
@@ -2022,6 +2032,7 @@ async function main() {
       description: 'Medium cargo transport vehicles',
       descriptionAr: 'مركبات نقل حمولات متوسطة',
       icon: '🚚',
+      image: 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?w=800',
       capacity: 2,
       maxLoad: 1000,
       status: 1
@@ -2037,6 +2048,7 @@ async function main() {
       description: 'Large cargo transport vehicles (3 ton capacity)',
       descriptionAr: 'مركبات نقل حمولات كبيرة (3 أطنان)',
       icon: '🚛',
+      image: 'https://images.unsplash.com/photo-1592838064575-70ed626d3a0e?w=800',
       capacity: 2,
       maxLoad: 3000,
       status: 1
@@ -2052,6 +2064,7 @@ async function main() {
       description: 'Extra-large cargo transport vehicles',
       descriptionAr: 'مركبات نقل حمولات كبيرة جداً',
       icon: '🚛',
+      image: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=800',
       capacity: 2,
       maxLoad: 5000,
       status: 1
