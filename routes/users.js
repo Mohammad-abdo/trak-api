@@ -2,6 +2,8 @@ import express from "express";
 import {
     getUserList,
     getUserDetail,
+    getUserProfile,
+    getDriverRides,
     createUser,
     updateUser,
     deleteUser,
@@ -26,6 +28,10 @@ router.post("/update-profile", authenticate, updateProfile);
 router.post("/change-password", authenticate, changePassword);
 router.post("/update-user-status", authenticate, updateUserStatus);
 router.post("/delete-user-account", authenticate, deleteUserAccount);
+
+// Admin read routes
+router.get("/:id/profile", authenticate, authorize("admin"), getUserProfile);
+router.get("/:id/rides", authenticate, authorize("admin"), getDriverRides);
 
 // Admin CRUD routes
 router.post("/", authenticate, authorize("admin"), createUser);

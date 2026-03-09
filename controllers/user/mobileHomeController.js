@@ -1,4 +1,5 @@
 import prisma from '../../utils/prisma.js';
+import { fullImageUrl } from '../../utils/imageUrl.js';
 
 // @desc    Get slider offers (coupons) – data from database only (same as admin dashboard)
 // @route   GET /apimobile/user/home/slider-offers
@@ -34,7 +35,7 @@ export const sliderOffers = async (req, res) => {
                 id: c.id,
                 title: c.title,
                 titleAr: c.titleAr,
-                image: c.imageUrl ?? null,
+                image: fullImageUrl(req, c.imageUrl),
                 discountType: c.discountType,
                 discountValue: c.discount,
                 description: c.description,
@@ -83,6 +84,10 @@ export const getAllServices = async (req, res) => {
         const data = categories.map(cat => ({
             ...cat,
             image: SERVICE_CATEGORY_IMAGES[cat.slug] ?? null,
+            vehicleCategories: cat.vehicleCategories.map(vc => ({
+                ...vc,
+                image: fullImageUrl(req, vc.image),
+            })),
         }));
 
         return res.json({
@@ -96,53 +101,62 @@ export const getAllServices = async (req, res) => {
     }
 };
 
-// @desc    Get last N current user bookings (array, newest first). Default 5, any status.
+// @desc    Get user bookings (paginated, newest first, any status).
 // @route   GET /apimobile/user/home/last-booking
 // @access  Private
 export const getLastCurrentUserBooking = async (req, res) => {
     try {
         const userId = req.user.id;
-        const limit = Math.min(parseInt(req.query.limit, 10) || 5, 50);
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+        const skip = (page - 1) * limit;
 
-        const bookings = await prisma.rideRequest.findMany({
-            where: { riderId: userId },
-            orderBy: { createdAt: 'desc' },
-            take: limit,
-            select: {
-                id: true,
-                status: true,
-                startLatitude: true,
-                startLongitude: true,
-                startAddress: true,
-                endLatitude: true,
-                endLongitude: true,
-                endAddress: true,
-                totalAmount: true,
-                paymentType: true,
-                otp: true,
-                createdAt: true,
-                driver: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        avatar: true,
-                        contactNumber: true,
-                        latitude: true,
-                        longitude: true,
-                        userDetail: {
-                            select: { carModel: true, carColor: true, carPlateNumber: true, carImage: true },
+        const where = { riderId: userId };
+
+        const [bookings, total] = await Promise.all([
+            prisma.rideRequest.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+                select: {
+                    id: true,
+                    status: true,
+                    startLatitude: true,
+                    startLongitude: true,
+                    startAddress: true,
+                    endLatitude: true,
+                    endLongitude: true,
+                    endAddress: true,
+                    totalAmount: true,
+                    paymentType: true,
+                    otp: true,
+                    isDriverRated: true,
+                    createdAt: true,
+                    driver: {
+                        select: {
+                            id: true,
+                            firstName: true,
+                            lastName: true,
+                            avatar: true,
+                            contactNumber: true,
+                            latitude: true,
+                            longitude: true,
+                            userDetail: {
+                                select: { carModel: true, carColor: true, carPlateNumber: true, carImage: true },
+                            },
                         },
                     },
+                    ratings: {
+                        where: { ratingBy: 'rider' },
+                        select: { rating: true, comment: true },
+                        take: 1,
+                    },
+                    service: { select: { id: true, name: true, nameAr: true } },
                 },
-                ratings: {
-                    where: { ratingBy: 'rider' },
-                    select: { rating: true, comment: true },
-                    take: 1,
-                },
-                service: { select: { id: true, name: true } },
-            },
-        });
+            }),
+            prisma.rideRequest.count({ where }),
+        ]);
 
         const driverIds = [...new Set(bookings.map(b => b.driver?.id).filter(Boolean))];
         const driverAvgRatings = driverIds.length > 0
@@ -165,11 +179,12 @@ export const getLastCurrentUserBooking = async (req, res) => {
             totalAmount: booking.totalAmount,
             paymentType: booking.paymentType,
             tripOtp: booking.otp,
+            isDriverRated: booking.isDriverRated,
             createdAt: booking.createdAt,
             driver: booking.driver ? {
                 id: booking.driver.id,
                 name: `${booking.driver.firstName || ''} ${booking.driver.lastName || ''}`.trim(),
-                avatar: booking.driver.avatar,
+                avatar: fullImageUrl(req, booking.driver.avatar),
                 phone: booking.driver.contactNumber,
                 currentLocation: { lat: booking.driver.latitude, lng: booking.driver.longitude },
                 rate: ratingMap[booking.driver.id]?.avg ?? null,
@@ -177,7 +192,7 @@ export const getLastCurrentUserBooking = async (req, res) => {
                 vehicleType: booking.driver.userDetail?.carModel,
                 vehicleColor: booking.driver.userDetail?.carColor,
                 vehiclePlate: booking.driver.userDetail?.carPlateNumber,
-                vehicleImage: booking.driver.userDetail?.carImage ?? null,
+                vehicleImage: fullImageUrl(req, booking.driver.userDetail?.carImage),
             } : null,
             review: booking.ratings[0]?.comment ?? null,
             reviewRating: booking.ratings[0]?.rating ?? null,
@@ -187,7 +202,13 @@ export const getLastCurrentUserBooking = async (req, res) => {
         return res.json({
             success: true,
             message: 'Last bookings retrieved',
-            data,
+            data: {
+                total,
+                page,
+                limit,
+                total_pages: Math.ceil(total / limit),
+                bookings: data,
+            },
         });
     } catch (error) {
         console.error('Last booking error:', error);

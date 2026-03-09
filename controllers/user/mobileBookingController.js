@@ -1,4 +1,5 @@
 import prisma from '../../utils/prisma.js';
+import { fullImageUrl } from '../../utils/imageUrl.js';
 
 // @desc    Get vehicle types by service_id
 // @route   GET /apimobile/user/booking/vehicle-types/:serviceId
@@ -43,7 +44,7 @@ export const serviceVehicleTypes = async (req, res) => {
             type: v.name,
             name: v.name,
             nameAr: v.nameAr,
-            image: v.image,
+            image: fullImageUrl(req, v.image),
             icon: v.icon,
             capacity: v.capacity,
             maxLoad: v.maxLoad,

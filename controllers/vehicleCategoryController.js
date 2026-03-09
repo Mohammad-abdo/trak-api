@@ -233,11 +233,14 @@ export const createVehicleCategory = async (req, res) => {
             description,
             description_ar,
             icon,
-            image,
             capacity,
             max_load,
             status,
         } = req.body;
+
+        const image = req.file
+            ? `/uploads/vehicle-categories/${req.file.filename}`
+            : req.body.image || null;
 
         const category = await prisma.vehicleCategory.create({
             data: {
@@ -283,7 +286,6 @@ export const updateVehicleCategory = async (req, res) => {
             description,
             description_ar,
             icon,
-            image,
             capacity,
             max_load,
             status,
@@ -297,7 +299,11 @@ export const updateVehicleCategory = async (req, res) => {
         if (description !== undefined) updateData.description = description;
         if (description_ar !== undefined) updateData.descriptionAr = description_ar;
         if (icon !== undefined) updateData.icon = icon;
-        if (image !== undefined) updateData.image = image;
+        if (req.file) {
+            updateData.image = `/uploads/vehicle-categories/${req.file.filename}`;
+        } else if (req.body.image !== undefined) {
+            updateData.image = req.body.image;
+        }
         if (capacity !== undefined) updateData.capacity = capacity ? parseInt(capacity) : null;
         if (max_load !== undefined) updateData.maxLoad = max_load ? parseFloat(max_load) : null;
         if (status !== undefined) updateData.status = parseInt(status);

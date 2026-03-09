@@ -1,38 +1,11 @@
 import prisma from '../../utils/prisma.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fullUserWithDetailsSelect as fullUserSelect } from '../../utils/prismaSelects.js';
+import { fullImageUrl } from '../../utils/imageUrl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const fullUserSelect = {
-    id: true,
-    firstName: true,
-    lastName: true,
-    email: true,
-    contactNumber: true,
-    countryCode: true,
-    userType: true,
-    status: true,
-    avatar: true,
-    gender: true,
-    address: true,
-    latitude: true,
-    longitude: true,
-    isOnline: true,
-    referralCode: true,
-    createdAt: true,
-    userDetail: {
-        select: {
-            carModel: true,
-            carColor: true,
-            carPlateNumber: true,
-            homeAddress: true,
-            workAddress: true,
-        },
-    },
-    wallet: { select: { balance: true, currency: true } },
-};
 
 // @desc    Get current user's full profile
 // @route   GET /apimobile/user/profile
@@ -50,7 +23,7 @@ export const myProfile = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        return res.json({ success: true, message: 'Profile retrieved', data: user });
+        return res.json({ success: true, message: 'Profile retrieved', data: { ...user, avatar: fullImageUrl(req, user.avatar) } });
     } catch (error) {
         console.error('My profile error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to get profile' });
@@ -83,7 +56,7 @@ export const updateProfile = async (req, res) => {
             select: fullUserSelect,
         });
 
-        return res.json({ success: true, message: 'Profile updated successfully', data: user });
+        return res.json({ success: true, message: 'Profile updated successfully', data: { ...user, avatar: fullImageUrl(req, user.avatar) } });
     } catch (error) {
         console.error('Update profile error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to update profile' });

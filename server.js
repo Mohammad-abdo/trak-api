@@ -28,7 +28,6 @@ import sosRoutes from './routes/sos.js';
 import withdrawRequestRoutes from './routes/withdrawRequests.js';
 import additionalFeesRoutes from './routes/additionalFees.js';
 import paymentGatewayRoutes from './routes/paymentGateways.js';
-import paymentMethodRoutes from './routes/paymentMethods.js';
 import settingRoutes from './routes/settings.js';
 import airportRoutes from './routes/airports.js';
 import faqRoutes from './routes/faqs.js';
@@ -72,7 +71,9 @@ import touristTripRoutes from './routes/touristTripRoutes.js';
 import categoryFeatureRoutes from './routes/categoryFeatureRoutes.js';
 import categoryZoneRoutes from './routes/categoryZoneRoutes.js';
 import dedicatedBookingRoutes from './routes/dedicatedBookings.js';
+import negotiationRoutes from './routes/negotiations.js';
 import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
+import mobileDriverRoutes from './routes/driver/mobileDriverRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 
@@ -127,7 +128,6 @@ app.use('/api/sos', sosRoutes);
 app.use('/api/withdraw-requests', withdrawRequestRoutes);
 app.use('/api/additional-fees', additionalFeesRoutes);
 app.use('/api/payment-gateways', paymentGatewayRoutes);
-app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/airports', airportRoutes);
 app.use('/api/faqs', faqRoutes);
@@ -173,6 +173,7 @@ app.use('/api/tourist-trips', touristTripRoutes);
 app.use('/api/category-features', categoryFeatureRoutes);
 app.use('/api/category-zones', categoryZoneRoutes);
 app.use('/api/dedicated-bookings', dedicatedBookingRoutes);
+app.use('/api/negotiations', negotiationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -182,12 +183,15 @@ app.get('/api/health', (req, res) => {
 // Mobile User API Routes
 app.use('/apimobile/user', mobileUserRoutes);
 
+// Mobile Driver API Routes
+app.use('/apimobile/driver', mobileDriverRoutes);
+
 // Swagger UI (optional – only if packages installed)
 try {
   const swaggerUiModule = await import('swagger-ui-express');
   const swaggerJsdocModule = await import('swagger-jsdoc');
   const swaggerUi = swaggerUiModule.default;
-  const swaggerJsdoc = swaggerJsdocModule.default;
+  const swaggerJsdoc = swaggerJsdocModule.default;  
 
   const swaggerOptions = {
     definition: {
@@ -245,6 +249,7 @@ try {
         { name: 'Profile', description: 'Profile & addresses' },
         { name: 'Cards', description: 'Saved payment cards (add, list, delete)' },
         { name: 'Static', description: 'Static pages & notifications' },
+        { name: 'Negotiation', description: 'Ride fare negotiation between rider & driver (up to ±20%). Feature must be enabled in Settings.' },
       ],
     },
     apis: ['./routes/user/mobileUserRoutes.js'],
@@ -263,11 +268,67 @@ try {
     res.json(dynamicSpec);
   });
 
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  app.use('/api-docs', swaggerUi.serveFiles(swaggerSpec, {}), swaggerUi.setup(swaggerSpec, {
     explorer: true,
     swaggerOptions: { url: '/api-docs/swagger.json' },
   }));
-  console.log(`📚 Swagger UI available at /api-docs`);
+  console.log(`📚 Swagger UI (User) available at /api-docs`);
+
+  // ── Driver Swagger ──
+  const driverSwaggerOptions = {
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'OFFER_GO Mobile Driver API',
+        version: '1.0.0',
+        description: `Mobile API for the OFFER_GO app – **Driver side**.
+
+**Registration flow:**
+1. **GET** \`/apimobile/driver/documents/required\` — get list of document types to show in the registration form.
+2. **POST** \`/apimobile/driver/auth/register\` — send all driver data + vehicle + documents as multipart/form-data.
+3. **POST** \`/apimobile/driver/auth/submit-otp\` — verify phone with OTP (use token from register).
+4. **Wait for admin approval** — driver status starts as \`pending\`. Use \`GET /apimobile/driver/profile/status\` to check.
+5. Once admin sets status = \`active\`, driver can **login** and start driving.`,
+      },
+      servers: [{ url: '/' }],
+      components: {
+        securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+      },
+      security: [{ bearerAuth: [] }],
+      tags: [
+        { name: 'Driver Auth', description: 'Registration (full details + vehicle + docs), login, OTP, logout' },
+        { name: 'Driver Profile', description: 'Get/update profile, registration status, bank account' },
+        { name: 'Driver Vehicle', description: 'Update vehicle information and image' },
+        { name: 'Driver Documents', description: 'Upload and manage driver documents/licenses' },
+        { name: 'Driver Status', description: 'Online/offline, availability, GPS location updates' },
+        { name: 'Driver Rides', description: 'Core ride operations: accept/reject, arrive, start, complete, cancel, rate, bid' },
+        { name: 'Driver Ratings', description: 'View ratings received from riders' },
+        { name: 'Driver Wallet', description: 'Wallet balance, transaction history, earnings summary, withdrawals' },
+        { name: 'Driver Complaints', description: 'File and view complaints' },
+        { name: 'Driver Negotiation', description: 'Fare negotiation: counter-offer, accept, reject, history' },
+        { name: 'Driver Notifications', description: 'Push notifications: list, mark read' },
+        { name: 'Driver Static', description: 'Privacy policy, terms, help center' },
+      ],
+    },
+    apis: ['./routes/driver/mobileDriverRoutes.js'],
+  };
+
+  const driverSwaggerSpec = swaggerJsdoc(driverSwaggerOptions);
+
+  app.get('/api-docs-driver/swagger.json', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    res.json({
+      ...driverSwaggerSpec,
+      servers: [{ url: `${proto}://${host}`, description: 'Current server' }],
+    });
+  });
+
+  app.use('/api-docs-driver', swaggerUi.serveFiles(driverSwaggerSpec, {}), swaggerUi.setup(driverSwaggerSpec, {
+    explorer: true,
+    swaggerOptions: { url: '/api-docs-driver/swagger.json' },
+  }));
+  console.log(`📚 Swagger UI (Driver) available at /api-docs-driver`);
 } catch (e) {
   console.warn('⚠️  Swagger UI not available. Run: npm install swagger-jsdoc swagger-ui-express');
 }

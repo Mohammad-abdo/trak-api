@@ -117,3 +117,49 @@ export const authorize = (...roles) => {
   };
 };
 
+/**
+ * Middleware that checks if the authenticated user's role has a specific permission.
+ * Admin users bypass the check. Staff users (sub_admin, manager, support, etc.)
+ * are verified against their assigned role's permissions.
+ */
+export const authorizePermission = (permissionName) => {
+    return async (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (req.user.userType === "admin") return next();
+
+        try {
+            const userRoles = await prisma.userRole.findMany({
+                where: { userId: req.user.id },
+                include: {
+                    role: {
+                        include: {
+                            rolePermissions: {
+                                include: { permission: true },
+                            },
+                        },
+                    },
+                },
+            });
+
+            const allPermissions = userRoles.flatMap((ur) =>
+                ur.role.rolePermissions.map((rp) => rp.permission.name)
+            );
+
+            if (!allPermissions.includes(permissionName)) {
+                return res.status(403).json({
+                    success: false,
+                    message: `Access denied. Missing permission: ${permissionName}`,
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error("Permission check error:", error);
+            res.status(500).json({ success: false, message: "Permission check failed" });
+        }
+    };
+};
+

@@ -345,14 +345,23 @@ export const currentRideRequest = async (req, res) => {
 // @access  Public
 export const appsetting = async (req, res) => {
     try {
+        const rows = await prisma.setting.findMany();
+        const map = {};
+        rows.forEach((r) => (map[r.key] = r.value));
+
         res.json({
             success: true,
             data: {
-                appName: "Tovo",
+                appName: map.appName || "Tovo",
                 version: "1.0.0",
-                currency: "USD",
-                currencySymbol: "$",
-                distanceUnit: "km",
+                currency: map.currency || "USD",
+                currencySymbol: map.currencySymbol || "$",
+                distanceUnit: map.distanceUnit || "km",
+                system_commission_percentage: map.system_commission_percentage || "15",
+                ride_negotiation_enabled: map.ride_negotiation_enabled || "false",
+                ride_negotiation_max_percent: map.ride_negotiation_max_percent || "20",
+                ride_negotiation_max_rounds: map.ride_negotiation_max_rounds || "3",
+                ride_negotiation_timeout_seconds: map.ride_negotiation_timeout_seconds || "90",
             },
         });
     } catch (error) {

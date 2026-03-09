@@ -24,6 +24,8 @@ import { myProfile, updateProfile, deleteAccount, getUserAddresses, addAddress, 
 import { addBankCard, getBankCards, deleteBankCard } from '../../controllers/user/mobileCardController.js';
 // Static
 import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications } from '../../controllers/user/mobileStaticController.js';
+// Negotiation
+import { getSettings as getNegotiationSettings, startNegotiation, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from '../../controllers/negotiationController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -399,7 +401,28 @@ router.post('/logout', authenticate, logout);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Array of offers [id, title, image, discountType, discountValue, description, startDate, endDate, vehicleCategories]
+ *         description: Array of offers
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: integer }
+ *                       title: { type: string }
+ *                       titleAr: { type: string }
+ *                       image: { type: string, nullable: true, description: "Full URL to offer image" }
+ *                       discountType: { type: string }
+ *                       discountValue: { type: number }
+ *                       description: { type: string }
+ *                       code: { type: string }
+ *                       startDate: { type: string, format: date-time }
+ *                       endDate: { type: string, format: date-time }
  */
 router.get('/home/slider-offers', authenticate, sliderOffers);
 
@@ -413,7 +436,34 @@ router.get('/home/slider-offers', authenticate, sliderOffers);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Array of service categories with vehicle categories [id, name, image]
+ *         description: Array of service categories with vehicle categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: integer }
+ *                       name: { type: string }
+ *                       nameAr: { type: string }
+ *                       icon: { type: string }
+ *                       slug: { type: string }
+ *                       image: { type: string, nullable: true, description: "Service category image URL" }
+ *                       vehicleCategories:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id: { type: integer }
+ *                             name: { type: string }
+ *                             nameAr: { type: string }
+ *                             image: { type: string, nullable: true, description: "Full URL to vehicle category image" }
+ *                             icon: { type: string }
  */
 router.get('/home/services', authenticate, homeGetAllServices);
 
@@ -422,17 +472,21 @@ router.get('/home/services', authenticate, homeGetAllServices);
  * /apimobile/user/home/last-booking:
  *   get:
  *     tags: [Home]
- *     summary: Get user's last active (pending/accepted/started/arrived) bookings
+ *     summary: Get user's bookings (paginated, newest first)
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *         description: Page number (1-based)
+ *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 20 }
- *         description: Max number of bookings to return (max 50)
+ *         description: Items per page (max 50)
  *     responses:
  *       200:
- *         description: Array of last bookings with driver details and locations (empty array if none)
+ *         description: Paginated bookings with driver details, vehicle images, ratings, and locations
  */
 router.get('/home/last-booking', authenticate, getLastCurrentUserBooking);
 
@@ -450,7 +504,33 @@ router.get('/home/last-booking', authenticate, getLastCurrentUserBooking);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Array [id, name, image]
+ *         description: Array of services with vehicle categories
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: integer }
+ *                       name: { type: string }
+ *                       nameAr: { type: string }
+ *                       icon: { type: string }
+ *                       slug: { type: string }
+ *                       vehicleCategories:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id: { type: integer }
+ *                             name: { type: string }
+ *                             nameAr: { type: string }
+ *                             image: { type: string, nullable: true, description: "Full URL to vehicle category image" }
+ *                             icon: { type: string }
  */
 router.get('/services/all', authenticate, getAllServices);
 
@@ -497,7 +577,39 @@ router.get('/services/choose/:serviceId', authenticate, chooseService);
  *           type: integer
  *     responses:
  *       200:
- *         description: Array [vehicle_id, type, name, image, price]
+ *         description: Array of vehicle types with pricing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       vehicle_id: { type: integer }
+ *                       type: { type: string }
+ *                       name: { type: string }
+ *                       nameAr: { type: string }
+ *                       image: { type: string, nullable: true, description: "Full URL to vehicle category image" }
+ *                       icon: { type: string }
+ *                       capacity: { type: integer, nullable: true }
+ *                       maxLoad: { type: number, nullable: true }
+ *                       price: { type: number, description: "Base fare from pricing rule" }
+ *                       pricingRule:
+ *                         type: object
+ *                         nullable: true
+ *                         properties:
+ *                           id: { type: integer }
+ *                           baseFare: { type: number }
+ *                           minimumFare: { type: number }
+ *                           baseDistance: { type: number }
+ *                           perDistanceAfterBase: { type: number }
+ *                           perMinuteDrive: { type: number }
+ *                           perMinuteWait: { type: number }
+ *                           cancellationFee: { type: number }
  */
 router.get('/booking/vehicle-types/:serviceId', authenticate, serviceVehicleTypes);
 
@@ -622,7 +734,30 @@ router.post('/booking/create', authenticate, createBooking);
  *                   lng: { type: number }
  *     responses:
  *       200:
- *         description: Array of nearby drivers [id, name, rate, price, vehicleType, vehicleImage]
+ *         description: Array of nearby drivers
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: integer }
+ *                       name: { type: string }
+ *                       avatar: { type: string, nullable: true, description: "Full URL to driver avatar" }
+ *                       rate: { type: number }
+ *                       price: { type: number }
+ *                       vehicleType: { type: string }
+ *                       vehicleImage: { type: string, nullable: true }
+ *                       currentLocation:
+ *                         type: object
+ *                         properties:
+ *                           lat: { type: string }
+ *                           lng: { type: string }
  */
 router.post('/offers/near-drivers', authenticate, getNearDrivers);
 
@@ -850,7 +985,7 @@ router.get('/my-bookings', authenticate, getMyBookings);
  * /apimobile/user/my-bookings/filter:
  *   get:
  *     tags: [My Bookings]
- *     summary: Filter bookings by status
+ *     summary: Filter bookings by status (same response shape as my-bookings)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -860,9 +995,17 @@ router.get('/my-bookings', authenticate, getMyBookings);
  *         schema:
  *           type: string
  *           enum: [pending, accepted, started, arrived, completed, cancelled]
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *         description: Items per page
  *     responses:
  *       200:
- *         description: Filtered bookings array
+ *         description: Paginated filtered bookings with full driver/vehicle/rating details
  */
 router.get('/my-bookings/filter', authenticate, filterBookings);
 
@@ -1196,5 +1339,310 @@ router.get('/static/terms', authenticate, getTerms);
  *         description: Notifications array + active offers
  */
 router.get('/notifications', authenticate, getNotifications);
+
+// =============================================
+// NEGOTIATION (ride fare negotiation)
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/settings:
+ *   get:
+ *     tags: [Negotiation]
+ *     summary: Get negotiation feature settings
+ *     description: |
+ *       Returns whether negotiation is enabled, the max allowed percentage,
+ *       max rounds, and timeout in seconds. No auth required — mobile apps
+ *       call this to decide whether to show negotiation UI.
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Negotiation settings
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     enabled: { type: boolean, example: false }
+ *                     maxPercent: { type: number, example: 20 }
+ *                     maxRounds: { type: integer, example: 3 }
+ *                     timeoutSeconds: { type: integer, example: 90 }
+ */
+router.get('/negotiation/settings', getNegotiationSettings);
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/start:
+ *   post:
+ *     tags: [Negotiation]
+ *     summary: Start negotiation — rider proposes a new fare
+ *     description: |
+ *       Rider proposes a different fare (discount or boost within ±maxPercent of baseFare).
+ *       Creates first negotiation round. Returns expiration time.
+ *       **Requires negotiation to be enabled in settings.**
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId, proposedFare]
+ *             properties:
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 1
+ *                 description: ID of the ride request
+ *               proposedFare:
+ *                 type: number
+ *                 example: 85.0
+ *                 description: "Proposed fare (must be within ±maxPercent of baseFare)"
+ *     responses:
+ *       200:
+ *         description: Negotiation started
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     baseFare: { type: number }
+ *                     proposedFare: { type: number }
+ *                     percentChange: { type: number, example: -15 }
+ *                     negotiationStatus: { type: string, example: "pending" }
+ *                     expiresAt: { type: string, format: date-time }
+ *                     round: { type: integer, example: 1 }
+ *                     maxRounds: { type: integer, example: 3 }
+ *       400:
+ *         description: Invalid params, fare out of range, or ride not eligible
+ *       403:
+ *         description: Negotiation disabled or not the rider
+ *       404:
+ *         description: Ride request not found
+ */
+router.post('/negotiation/start', authenticate, startNegotiation);
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/counter:
+ *   post:
+ *     tags: [Negotiation]
+ *     summary: Counter-offer — rider or driver proposes a different fare
+ *     description: |
+ *       Either party can submit a counter-offer if it's their turn.
+ *       The fare must still be within ±maxPercent of the original baseFare.
+ *       Round count increases; if maxRounds is reached, no more counters are allowed.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId, proposedFare]
+ *             properties:
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 1
+ *               proposedFare:
+ *                 type: number
+ *                 example: 90.0
+ *     responses:
+ *       200:
+ *         description: Counter-offer submitted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     baseFare: { type: number }
+ *                     proposedFare: { type: number }
+ *                     percentChange: { type: number }
+ *                     negotiationStatus: { type: string, example: "counter_offered" }
+ *                     expiresAt: { type: string, format: date-time }
+ *                     round: { type: integer }
+ *                     maxRounds: { type: integer }
+ *       400:
+ *         description: Not your turn, max rounds reached, expired, or fare out of range
+ *       403:
+ *         description: Negotiation disabled or not authorized
+ *       404:
+ *         description: Ride request not found
+ */
+router.post('/negotiation/counter', authenticate, counterOffer);
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/accept:
+ *   post:
+ *     tags: [Negotiation]
+ *     summary: Accept the current negotiated fare
+ *     description: |
+ *       Either rider or driver can accept the last proposed fare.
+ *       Sets negotiationStatus = "accepted" and locks the negotiatedFare.
+ *       Commission will be calculated on this final fare at ride completion.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId]
+ *             properties:
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Negotiation accepted — fare locked
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     baseFare: { type: number }
+ *                     negotiatedFare: { type: number }
+ *                     percentChange: { type: number }
+ *                     negotiationStatus: { type: string, example: "accepted" }
+ *       400:
+ *         description: No active negotiation to accept or expired
+ *       403:
+ *         description: Not authorized for this ride
+ *       404:
+ *         description: Ride request not found
+ */
+router.post('/negotiation/accept', authenticate, acceptNegotiation);
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/reject:
+ *   post:
+ *     tags: [Negotiation]
+ *     summary: Reject negotiation — revert to base fare
+ *     description: |
+ *       Either party can reject the negotiation. The ride reverts to the
+ *       original totalAmount (baseFare). negotiatedFare is cleared.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId]
+ *             properties:
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Negotiation rejected — baseFare restored
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     baseFare: { type: number }
+ *                     negotiatedFare: { type: number, nullable: true, example: null }
+ *                     negotiationStatus: { type: string, example: "rejected" }
+ *       400:
+ *         description: No active negotiation to reject
+ *       403:
+ *         description: Not authorized for this ride
+ *       404:
+ *         description: Ride request not found
+ */
+router.post('/negotiation/reject', authenticate, rejectNegotiation);
+
+/**
+ * @swagger
+ * /apimobile/user/negotiation/history/{rideRequestId}:
+ *   get:
+ *     tags: [Negotiation]
+ *     summary: Get full negotiation history for a ride
+ *     description: |
+ *       Returns the ride's negotiation state (baseFare, negotiatedFare, status, rounds)
+ *       plus all negotiation history records (who proposed, what fare, when).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: rideRequestId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Negotiation history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     ride:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: integer }
+ *                         baseFare: { type: number }
+ *                         negotiatedFare: { type: number, nullable: true }
+ *                         negotiationStatus: { type: string }
+ *                         negotiationRounds: { type: integer }
+ *                         maxPercent: { type: number, nullable: true }
+ *                         expiresAt: { type: string, format: date-time, nullable: true }
+ *                     history:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: integer }
+ *                           proposedBy: { type: string, example: "rider" }
+ *                           proposedFare: { type: number }
+ *                           percentChange: { type: number }
+ *                           action: { type: string, example: "propose" }
+ *                           round: { type: integer }
+ *                           createdAt: { type: string, format: date-time }
+ *       403:
+ *         description: Not authorized to view this ride's negotiation
+ *       404:
+ *         description: Ride request not found
+ */
+router.get('/negotiation/history/:rideRequestId', authenticate, getNegotiationHistory);
 
 export default router;

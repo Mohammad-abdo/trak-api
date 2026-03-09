@@ -12,7 +12,8 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "node prisma/seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -50,6 +51,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
-    "prisma": "5.22.0"
+    "prisma": "5.22.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.0.18"
   }
 }

@@ -11,7 +11,7 @@ import {
     getWalletList,
     getRewardList,
     addFundsToUserWallet,
-} from "../controllers/walletController.js";
+} from "../controllers/wallet/index.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
 const router = express.Router();

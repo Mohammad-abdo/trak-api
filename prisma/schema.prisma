@@ -119,6 +119,9 @@ model User {
   // Saved payment cards (last 4 digits + brand for display; never store full number)
   bankCards UserBankCard[]
 
+  // Role assignment
+  userRoles UserRole[]
+
   @@index([userType, status])
   @@index([email])
   @@index([contactNumber])
@@ -259,6 +262,15 @@ model RideRequest {
   airportDropoff                     Boolean   @default(false) @map("airport_dropoff")
   zonePickup                         Boolean   @default(false) @map("zone_pickup")
   zoneDropoff                        Boolean   @default(false) @map("zone_dropoff")
+
+  // Negotiation fields
+  negotiatedFare                     Float?    @map("negotiated_fare") @db.Double
+  negotiationStatus                  String    @default("none") @map("negotiation_status") @db.VarChar(30)
+  negotiationMaxPercent              Float?    @map("negotiation_max_percent") @db.Double
+  lastNegotiationBy                  String?   @map("last_negotiation_by") @db.VarChar(10)
+  negotiationRounds                  Int       @default(0) @map("negotiation_rounds")
+  negotiationExpiresAt               DateTime? @map("negotiation_expires_at") @db.Timestamp
+
   createdAt                          DateTime  @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt                          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
@@ -269,11 +281,12 @@ model RideRequest {
   payments Payment[] @relation("RideRequestPayments")
 
   // Related data
-  ratings        RideRequestRating[]
-  bids           RideRequestBid[]
-  histories      RideRequestHistory[]
+  ratings         RideRequestRating[]
+  bids            RideRequestBid[]
+  histories       RideRequestHistory[]
   walletHistories WalletHistory[]
-  complaints Complaint[]
+  complaints      Complaint[]
+  negotiations    RideNegotiation[]
 
   @@index([riderId, status])
   @@index([driverId, status])
@@ -282,6 +295,7 @@ model RideRequest {
   @@index([isPrepaid, status])
   @@map("ride_requests")
 }
+
 
 model Payment {
   id             Int      @id @default(autoincrement())
@@ -452,13 +466,14 @@ model Document {
 }
 
 model DriverDocument {
-  id         Int       @id @default(autoincrement())
-  driverId   Int       @map("driver_id")
-  documentId Int       @map("document_id")
-  isVerified Boolean   @default(false) @map("is_verified")
-  expireDate DateTime? @map("expire_date") @db.Date
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(6)
-  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+  id            Int       @id @default(autoincrement())
+  driverId      Int       @map("driver_id")
+  documentId    Int       @map("document_id")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  documentImage String?   @map("document_image") @db.Text
+  expireDate    DateTime? @map("expire_date") @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   driver   User     @relation(fields: [driverId], references: [id])
   document Document @relation(fields: [documentId], references: [id])
@@ -551,6 +566,22 @@ model RideRequestHistory {
 
   @@index([rideRequestId])
   @@map("ride_request_histories")
+}
+
+model RideNegotiation {
+  id              Int      @id @default(autoincrement())
+  rideRequestId   Int      @map("ride_request_id")
+  proposedBy      String   @map("proposed_by") @db.VarChar(10)
+  proposedFare    Float    @map("proposed_fare") @db.Double
+  percentChange   Float    @map("percent_change") @db.Double
+  action          String   @db.VarChar(20)
+  round           Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id])
+
+  @@index([rideRequestId])
+  @@map("ride_negotiations")
 }
 
 model WithdrawRequest {
@@ -1102,8 +1133,9 @@ model Permission {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
-  parent         Permission?  @relation("PermissionParent", fields: [parentId], references: [id])
-  subpermissions Permission[] @relation("PermissionParent")
+  parent          Permission?      @relation("PermissionParent", fields: [parentId], references: [id])
+  subpermissions  Permission[]     @relation("PermissionParent")
+  rolePermissions RolePermission[]
 
   @@unique([name, guardName])
   @@index([guardName])
@@ -1118,9 +1150,42 @@ model Role {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
   @@unique([name, guardName])
   @@index([guardName])
   @@map("roles")
+}
+
+model RolePermission {
+  id           Int      @id @default(autoincrement())
+  roleId       Int      @map("role_id")
+  permissionId Int      @map("permission_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  roleId    Int      @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
 }
 
 // ===================================

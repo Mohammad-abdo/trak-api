@@ -1,5 +1,5 @@
 import prisma from "../utils/prisma.js";
-import { recalculateWalletsForNewCommissionPercentage } from "./walletController.js";
+import { recalculateWalletsForNewCommissionPercentage } from "./wallet/index.js";
 
 // @desc    Get settings
 // @route   GET /api/settings/get-setting

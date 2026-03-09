@@ -1,4 +1,5 @@
 import prisma from '../../utils/prisma.js';
+import { fullImageUrl } from '../../utils/imageUrl.js';
 
 // Helper: Calculate distance between two coordinates (Haversine formula)
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -82,7 +83,7 @@ export const getNearDrivers = async (req, res) => {
         const data = nearDrivers.map(d => ({
             id: d.id,
             name: `${d.firstName || ''} ${d.lastName || ''}`.trim(),
-            avatar: d.avatar,
+            avatar: fullImageUrl(req, d.avatar),
             rate: 4.5, // TODO: calculate from RideRequestRating
             price: booking.totalAmount,
             vehicleType: d.userDetail?.carModel ?? 'Vehicle',
@@ -176,7 +177,7 @@ export const acceptDriver = async (req, res) => {
                 driverInfo: updated.driver ? {
                     id: updated.driver.id,
                     name: `${updated.driver.firstName} ${updated.driver.lastName}`.trim(),
-                    avatar: updated.driver.avatar,
+                    avatar: fullImageUrl(req, updated.driver.avatar),
                     phone: updated.driver.contactNumber,
                     currentLocation: { lat: updated.driver.latitude, lng: updated.driver.longitude },
                     vehicle: updated.driver.userDetail,

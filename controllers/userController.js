@@ -385,15 +385,23 @@ export const deleteUserAccount = async (req, res) => {
 // @access  Public
 export const getAppSetting = async (req, res) => {
     try {
-        // TODO: Implement app settings from database
+        const rows = await prisma.setting.findMany();
+        const map = {};
+        rows.forEach((r) => (map[r.key] = r.value));
+
         res.json({
             success: true,
             data: {
-                appName: "Tovo",
+                appName: map.appName || "Tovo",
                 version: "1.0.0",
-                currency: "USD",
-                currencySymbol: "$",
-                distanceUnit: "km",
+                currency: map.currency || "USD",
+                currencySymbol: map.currencySymbol || "$",
+                distanceUnit: map.distanceUnit || "km",
+                system_commission_percentage: map.system_commission_percentage || "15",
+                ride_negotiation_enabled: map.ride_negotiation_enabled || "false",
+                ride_negotiation_max_percent: map.ride_negotiation_max_percent || "20",
+                ride_negotiation_max_rounds: map.ride_negotiation_max_rounds || "3",
+                ride_negotiation_timeout_seconds: map.ride_negotiation_timeout_seconds || "90",
             },
         });
     } catch (error) {
@@ -402,6 +410,129 @@ export const getAppSetting = async (req, res) => {
             success: false,
             message: error.message,
         });
+    }
+};
+
+// @desc    Get single user full profile (admin)
+// @route   GET /api/users/:id/profile
+// @access  Private (Admin)
+export const getUserProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await prisma.user.findUnique({
+            where: { id: parseInt(id) },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                username: true,
+                contactNumber: true,
+                countryCode: true,
+                gender: true,
+                address: true,
+                userType: true,
+                status: true,
+                isOnline: true,
+                isAvailable: true,
+                isVerifiedDriver: true,
+                latitude: true,
+                longitude: true,
+                avatar: true,
+                referralCode: true,
+                serviceId: true,
+                fleetId: true,
+                lastActivedAt: true,
+                appVersion: true,
+                createdAt: true,
+                updatedAt: true,
+                service: { select: { id: true, name: true, nameAr: true } },
+                fleet: { select: { id: true, firstName: true, lastName: true } },
+                userDetail: true,
+                bankAccount: true,
+                wallet: { select: { id: true, balance: true, currency: true, updatedAt: true } },
+                driverDocuments: {
+                    include: { document: { select: { id: true, name: true, nameAr: true, type: true, isRequired: true, hasExpiryDate: true } } },
+                    orderBy: { createdAt: "desc" },
+                },
+                driverServices: {
+                    include: { service: { select: { id: true, name: true, nameAr: true } } },
+                },
+                driverRideRequests: {
+                    select: { id: true, status: true, totalAmount: true },
+                },
+            },
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        const rideRequests = user.driverRideRequests || [];
+        const stats = {
+            totalRides: rideRequests.length,
+            completedRides: rideRequests.filter((r) => r.status === "completed").length,
+            cancelledRides: rideRequests.filter((r) => r.status === "cancelled").length,
+            totalEarnings: rideRequests
+                .filter((r) => r.status === "completed")
+                .reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0),
+        };
+
+        const { driverRideRequests, ...userData } = user;
+        res.json({ success: true, data: { ...userData, stats } });
+    } catch (error) {
+        console.error("Get user profile error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get paginated rides for a specific driver (admin)
+// @route   GET /api/users/:id/rides
+// @access  Private (Admin)
+export const getDriverRides = async (req, res) => {
+    try {
+        const driverId = parseInt(req.params.id);
+        const {
+            status,
+            page = 1,
+            per_page = 15,
+            sortBy = "createdAt",
+            sortOrder = "desc",
+        } = req.query;
+
+        const where = { driverId };
+        if (status && status !== "all") where.status = status;
+
+        const skip = (parseInt(page) - 1) * parseInt(per_page);
+        const orderBy = { [sortBy]: sortOrder === "asc" ? "asc" : "desc" };
+
+        const [rides, total] = await Promise.all([
+            prisma.rideRequest.findMany({
+                where,
+                include: {
+                    rider: { select: { id: true, firstName: true, lastName: true, contactNumber: true, avatar: true } },
+                    service: { select: { id: true, name: true, nameAr: true } },
+                },
+                skip,
+                take: parseInt(per_page),
+                orderBy,
+            }),
+            prisma.rideRequest.count({ where }),
+        ]);
+
+        res.json({
+            success: true,
+            data: rides,
+            pagination: {
+                total,
+                page: parseInt(page),
+                per_page: parseInt(per_page),
+                total_pages: Math.ceil(total / parseInt(per_page)),
+            },
+        });
+    } catch (error) {
+        console.error("Get driver rides error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 

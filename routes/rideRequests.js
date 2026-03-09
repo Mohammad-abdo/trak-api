@@ -14,7 +14,7 @@ import {
     rideRating,
     updateDropLocation,
     exportRideRequests,
-} from "../controllers/rideRequestController.js";
+} from "../controllers/rideRequest/index.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 
 const router = express.Router();

@@ -1,35 +1,9 @@
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma.js';
 import { generateOtp, getOtpExpiresAt, getTestOtpValue } from '../../utils/otpHelper.js';
 import { sendOtpSms } from '../../utils/smsService.js';
-
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET || 'your_jwt_secret_key_here', {
-        expiresIn: process.env.JWT_EXPIRE || '7d',
-    });
-};
-
-const fullUserSelect = {
-    id: true,
-    firstName: true,
-    lastName: true,
-    email: true,
-    contactNumber: true,
-    countryCode: true,
-    userType: true,
-    status: true,
-    avatar: true,
-    gender: true,
-    address: true,
-    latitude: true,
-    longitude: true,
-    isOnline: true,
-    isAvailable: true,
-    referralCode: true,
-    isVerified: true,
-    createdAt: true,
-};
+import { generateToken } from '../../utils/jwtHelper.js';
+import { fullUserSelect } from '../../utils/prismaSelects.js';
 
 // @desc    Login with phone + password
 // @route   POST /apimobile/user/auth/login
