@@ -764,7 +764,7 @@ export const createDriver = async (req, res) => {
         for (const svcId of svcArr) {
             const id = parseInt(svcId);
             if (!isNaN(id)) {
-                await prisma.driverService.create({ data: { userId: driver.id, serviceId: id } });
+                await prisma.driverService.create({ data: { driverId: driver.id, serviceId: id } });
             }
         }
 
@@ -880,12 +880,12 @@ export const updateDriver = async (req, res) => {
         }
 
         if (serviceIds !== undefined) {
-            await prisma.driverService.deleteMany({ where: { userId: driverId } });
+            await prisma.driverService.deleteMany({ where: { driverId } });
             const svcArr = Array.isArray(serviceIds) ? serviceIds : serviceIds ? [serviceIds] : [];
             for (const svcId of svcArr) {
                 const id = parseInt(svcId);
                 if (!isNaN(id)) {
-                    await prisma.driverService.create({ data: { userId: driverId, serviceId: id } });
+                    await prisma.driverService.create({ data: { driverId, serviceId: id } });
                 }
             }
         }
