@@ -301,8 +301,8 @@ export const updateVehicleCategory = async (req, res) => {
         if (icon !== undefined) updateData.icon = icon;
         if (req.file) {
             updateData.image = `/uploads/vehicle-categories/${req.file.filename}`;
-        } else if (req.body.image !== undefined) {
-            updateData.image = req.body.image;
+        } else if (req.body.image !== undefined && typeof req.body.image === 'string') {
+            updateData.image = req.body.image || null;
         }
         if (capacity !== undefined && capacity !== '') {
             const num = parseInt(capacity, 10);
