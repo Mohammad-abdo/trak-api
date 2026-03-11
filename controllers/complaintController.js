@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { saveAdminNotification } from "../utils/notificationService.js";
 
 // @desc    Save complaint
 // @route   POST /api/complaints/save-complaint
@@ -18,6 +19,14 @@ export const saveComplaint = async (req, res) => {
                 status: "pending",
             },
         });
+
+        saveAdminNotification("new_complaint", {
+            title: "New Complaint Filed",
+            titleAr: "شكوى جديدة",
+            message: `${subject || 'A complaint'} filed by ${complaintBy || req.user.userType}.`,
+            messageAr: `تم تقديم شكوى جديدة: ${subject || 'بدون عنوان'}.`,
+            link: `/complaints`,
+        }).catch(() => {});
 
         res.json({
             success: true,

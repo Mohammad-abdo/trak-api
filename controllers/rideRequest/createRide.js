@@ -1,6 +1,7 @@
 import prisma from "../../utils/prisma.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import * as promotionService from "../../services/promotionService.js";
+import { saveAdminNotification } from "../../utils/notificationService.js";
 
 // @desc    Create ride request
 // @route   POST /api/ride-requests/save-riderequest
@@ -127,6 +128,14 @@ export const createRideRequest = async (req, res) => {
         if (promotionResult.applied && promotionResult.promotion?.id) {
             await promotionService.recordPromotionUsage(promotionResult.promotion.id, req.user.id, String(rideRequest.id));
         }
+
+        saveAdminNotification("new_ride", {
+            title: "New Ride Request",
+            titleAr: "طلب رحلة جديد",
+            message: `Ride #${rideRequest.id} from ${rideRequest.startAddress || 'unknown'}.`,
+            messageAr: `رحلة #${rideRequest.id} من ${rideRequest.startAddress || 'غير محدد'}.`,
+            link: `/ride-requests/${rideRequest.id}`,
+        }).catch(() => {});
 
         res.status(201).json({ success: true, message: "Ride request created successfully", data: rideRequest });
     } catch (error) {

@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { saveAdminNotification } from "../utils/notificationService.js";
 
 // @desc    Get withdraw request list (admin: drivers only; user: own only)
 // @route   GET /api/withdraw-requests/withdrawrequest-list
@@ -78,6 +79,14 @@ export const saveWithdrawRequest = async (req, res) => {
                 status: 0, // Pending
             },
         });
+
+        saveAdminNotification("new_withdrawal", {
+            title: "New Withdrawal Request",
+            titleAr: "طلب سحب جديد",
+            message: `User #${req.user.id} requested withdrawal of ${amount} ${currency}.`,
+            messageAr: `المستخدم #${req.user.id} طلب سحب ${amount} ${currency}.`,
+            link: `/wallets`,
+        }).catch(() => {});
 
         res.json({
             success: true,

@@ -61,6 +61,7 @@ import invoiceRoutes from './routes/invoices.js';
 import bulkOperationsRoutes from './routes/bulkOperations.js';
 import placesRoutes from './routes/places.js';
 import userNotificationRoutes from './routes/userNotifications.js';
+import adminNotificationRoutes from './routes/adminNotifications.js';
 import mqttRoutes from './routes/mqtt.js';
 import scheduledRideRoutes from './routes/scheduledRides.js';
 import serviceCategoryRoutes from './routes/serviceCategoryRoutes.js';
@@ -161,6 +162,7 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/bulk-operations', bulkOperationsRoutes);
 app.use('/api/places', placesRoutes);
 app.use('/api/user-notifications', userNotificationRoutes);
+app.use('/api/admin-notifications', adminNotificationRoutes);
 app.use('/api/mqtt', mqttRoutes);
 app.use('/api/rides', scheduledRideRoutes);
 

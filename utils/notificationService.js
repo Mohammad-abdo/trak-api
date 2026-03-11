@@ -206,3 +206,10 @@ export const saveNotification = async (userId, type, data, notifiableType = "Use
     }
 };
 
+/**
+ * Save an admin-level notification (visible to all admins in the dashboard)
+ */
+export const saveAdminNotification = async (type, data) => {
+    return saveNotification(0, type, data, "Admin");
+};
+

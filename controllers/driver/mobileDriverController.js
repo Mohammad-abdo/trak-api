@@ -7,6 +7,7 @@ import { generateUniqueReferralCode } from "../auth/register.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { fullImageUrl } from "../../utils/imageUrl.js";
+import { saveAdminNotification } from "../../utils/notificationService.js";
 
 const driverProfileSelect = {
     id: true,
@@ -200,6 +201,14 @@ export const registerDriver = asyncHandler(async (req, res) => {
     }
 
     const token = generateToken(driver.id);
+
+    saveAdminNotification("new_driver", {
+        title: "New Driver Registration",
+        titleAr: "تسجيل سائق جديد",
+        message: `${driver.firstName} ${driver.lastName || ''} registered via mobile and is pending approval.`,
+        messageAr: `${driver.firstName} ${driver.lastName || ''} سجّل عبر التطبيق وينتظر الموافقة.`,
+        link: `/drivers/${driver.id}`,
+    }).catch(() => {});
 
     return successResponse(
         res,

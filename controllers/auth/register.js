@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { generateOtp, getOtpExpiresAt } from "../../utils/otpHelper.js";
 import { sendOtpSms } from "../../utils/smsService.js";
 import { generateToken } from "../../utils/jwtHelper.js";
+import { saveAdminNotification } from "../../utils/notificationService.js";
 
 // Generate unique referral code
 export const generateUniqueReferralCode = async () => {
@@ -197,6 +198,14 @@ export const driverRegister = async (req, res) => {
         });
 
         const token = generateToken(driver.id);
+
+        saveAdminNotification("new_driver", {
+            title: "New Driver Registration",
+            titleAr: "تسجيل سائق جديد",
+            message: `${driver.firstName} ${driver.lastName || ''} registered and is pending approval.`,
+            messageAr: `${driver.firstName} ${driver.lastName || ''} سجّل حساب جديد وينتظر الموافقة.`,
+            link: `/drivers/${driver.id}`,
+        }).catch(() => {});
 
         res.status(201).json({
             success: true,
