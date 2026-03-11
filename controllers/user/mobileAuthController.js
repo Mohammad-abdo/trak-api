@@ -274,6 +274,108 @@ export const resendOtp = async (req, res) => {
     }
 };
 
+// @desc    Forgot password – send OTP to phone
+// @route   POST /apimobile/user/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+    try {
+        const { phone } = req.body;
+
+        if (!phone) {
+            return res.status(400).json({ success: false, message: 'Phone is required' });
+        }
+
+        const user = await prisma.user.findFirst({
+            where: { contactNumber: phone.trim() },
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'No account found with this phone number' });
+        }
+
+        const otp = generateOtp();
+        const otpExpiresAt = getOtpExpiresAt();
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { otp, otpExpiresAt },
+        });
+
+        await sendOtpSms(user.contactNumber || phone, otp);
+
+        const token = generateToken(user.id);
+
+        return res.json({
+            success: true,
+            message: 'OTP sent to your phone. Use it to reset your password.',
+            data: { token },
+        });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to process forgot password' });
+    }
+};
+
+// @desc    Reset password using OTP
+// @route   POST /apimobile/user/auth/reset-password
+// @access  Private (requires token from forgot-password)
+export const resetPassword = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { otp, newPassword, confirmPassword } = req.body;
+
+        if (!otp || !newPassword) {
+            return res.status(400).json({ success: false, message: 'OTP and new password are required' });
+        }
+
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ success: false, message: 'Passwords do not match' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const submittedOtp = String(otp).trim();
+        const storedOtp = user.otp ? String(user.otp).trim() : '';
+        const testOtp = getTestOtpValue();
+        const otpValid = (testOtp && submittedOtp === testOtp) || (storedOtp && submittedOtp === storedOtp);
+
+        if (!otpValid) {
+            return res.status(400).json({ success: false, message: 'Invalid OTP' });
+        }
+
+        if (!testOtp && user.otpExpiresAt && new Date() > user.otpExpiresAt) {
+            return res.status(400).json({ success: false, message: 'OTP has expired' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                password: hashedPassword,
+                otp: null,
+                otpExpiresAt: null,
+            },
+        });
+
+        return res.json({
+            success: true,
+            message: 'Password reset successfully. You can now login with your new password.',
+        });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to reset password' });
+    }
+};
+
 // @desc    Logout (client should discard token)
 // @route   POST /apimobile/user/logout
 // @access  Private

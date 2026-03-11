@@ -74,6 +74,7 @@ export const getAllServices = async (req, res) => {
                 icon: true,
                 slug: true,
                 description: true,
+                imageUrl: true,
                 vehicleCategories: {
                     where: { status: 1 },
                     select: { id: true, name: true, nameAr: true, image: true, icon: true },
@@ -83,7 +84,8 @@ export const getAllServices = async (req, res) => {
 
         const data = categories.map(cat => ({
             ...cat,
-            image: SERVICE_CATEGORY_IMAGES[cat.slug] ?? null,
+            image: fullImageUrl(req, cat.imageUrl) || SERVICE_CATEGORY_IMAGES[cat.slug] || null,
+            imageUrl: undefined,
             vehicleCategories: cat.vehicleCategories.map(vc => ({
                 ...vc,
                 image: fullImageUrl(req, vc.image),

@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/auth.js";
 // ─── Auth ────────────────────────────────────────────────────────────────────
 import { login } from "../../controllers/driver/mobileAuthController.js";
 import { submitOtp, resendOtp } from "../../controllers/auth/otp.js";
-import { sendOtp } from "../../controllers/user/mobileAuthController.js";
+import { sendOtp, forgotPassword, resetPassword } from "../../controllers/user/mobileAuthController.js";
 import { logout } from "../../controllers/auth/login.js";
 
 // ─── Driver profile/vehicle/docs/bank/status ─────────────────────────────────
@@ -206,6 +206,92 @@ router.post("/auth/login", login);
  *       200: { description: OTP sent }
  */
 router.post("/auth/resend-otp", resendOtp);
+
+/** @swagger
+ * /apimobile/driver/auth/forgot-password:
+ *   post:
+ *     tags: [Driver Auth]
+ *     operationId: driverForgotPassword
+ *     summary: Forgot password – sends OTP to phone number
+ *     description: |
+ *       Send the driver's registered **phone** number. If found, an OTP is sent via SMS and a temporary JWT token is returned.
+ *
+ *       **Flow:**
+ *       1. Call this endpoint with `phone`.
+ *       2. Receive `token` in the response.
+ *       3. Call **POST /auth/reset-password** with the token (in Authorization header), the OTP, and the new password.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "+966501111111"
+ *                 description: Registered phone number
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully. Use returned token for reset-password.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, description: "Temporary JWT – use in Authorization header for reset-password" }
+ *       404:
+ *         description: No account found with this phone number
+ */
+router.post("/auth/forgot-password", forgotPassword);
+
+/** @swagger
+ * /apimobile/driver/auth/reset-password:
+ *   post:
+ *     tags: [Driver Auth]
+ *     operationId: driverResetPassword
+ *     summary: Reset password using OTP (requires token from forgot-password)
+ *     description: |
+ *       After calling **forgot-password**, use the returned token in the Authorization header and provide the OTP + new password.
+ *       On success the password is updated and the driver can login with the new password.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp, newPassword, confirmPassword]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: 6-digit OTP received via SMS
+ *               newPassword:
+ *                 type: string
+ *                 example: "NewPass123"
+ *                 description: New password (min 6 characters)
+ *               confirmPassword:
+ *                 type: string
+ *                 example: "NewPass123"
+ *                 description: Must match newPassword
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid/expired OTP or passwords don't match
+ *       404:
+ *         description: User not found
+ */
+router.post("/auth/reset-password", authenticate, resetPassword);
 
 /** @swagger
  * /apimobile/driver/auth/send-otp:

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { authenticate } from '../../middleware/auth.js';
 
 // Auth
-import { login, register, sendOtp, submitOtp, resendOtp, logout, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
+import { login, register, sendOtp, submitOtp, resendOtp, forgotPassword, resetPassword, logout, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
 // Home
 import { sliderOffers, getAllServices as homeGetAllServices, getLastCurrentUserBooking } from '../../controllers/user/mobileHomeController.js';
 // Services
@@ -262,6 +262,94 @@ router.post('/auth/register', register);
  *                 message: { type: string, example: "User not found" }
  */
 router.post('/auth/resend-otp', resendOtp);
+
+/**
+ * @swagger
+ * /apimobile/user/auth/forgot-password:
+ *   post:
+ *     tags: [Auth]
+ *     operationId: userForgotPassword
+ *     summary: Forgot password – sends OTP to phone number
+ *     description: |
+ *       Send the user's registered **phone** number. If found, an OTP is sent via SMS and a temporary JWT token is returned.
+ *
+ *       **Flow:**
+ *       1. Call this endpoint with `phone`.
+ *       2. Receive `token` in the response.
+ *       3. Call **POST /auth/reset-password** with the token (in Authorization header), the OTP, and the new password.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [phone]
+ *             properties:
+ *               phone:
+ *                 type: string
+ *                 example: "+966501111111"
+ *                 description: Registered phone number
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully. Use returned token for reset-password.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, description: "Temporary JWT – use in Authorization header for reset-password" }
+ *       404:
+ *         description: No account found with this phone number
+ */
+router.post('/auth/forgot-password', forgotPassword);
+
+/**
+ * @swagger
+ * /apimobile/user/auth/reset-password:
+ *   post:
+ *     tags: [Auth]
+ *     operationId: userResetPassword
+ *     summary: Reset password using OTP (requires token from forgot-password)
+ *     description: |
+ *       After calling **forgot-password**, use the returned token in the Authorization header and provide the OTP + new password.
+ *       On success the password is updated and the user can login with the new password.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [otp, newPassword, confirmPassword]
+ *             properties:
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *                 description: 6-digit OTP received via SMS
+ *               newPassword:
+ *                 type: string
+ *                 example: "NewPass123"
+ *                 description: New password (min 6 characters)
+ *               confirmPassword:
+ *                 type: string
+ *                 example: "NewPass123"
+ *                 description: Must match newPassword
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid/expired OTP or passwords don't match
+ *       404:
+ *         description: User not found
+ */
+router.post('/auth/reset-password', authenticate, resetPassword);
 
 // =============================================
 // AUTH ROUTES  (protected)
