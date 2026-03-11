@@ -95,6 +95,7 @@ export const getUserList = async (req, res) => {
                     lastName: true,
                     email: true,
                     contactNumber: true,
+                    avatar: true,
                     userType: true,
                     status: true,
                     isOnline: true,
@@ -112,9 +113,14 @@ export const getUserList = async (req, res) => {
             prisma.user.count({ where }),
         ]);
 
+        const usersWithAvatar = users.map(u => ({
+            ...u,
+            avatar: fullImageUrl(req, u.avatar) || null,
+        }));
+
         res.json({
             success: true,
-            data: users,
+            data: usersWithAvatar,
             pagination: {
                 total,
                 page: parseInt(page),
