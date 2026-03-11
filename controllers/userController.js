@@ -1,6 +1,7 @@
 import prisma from "../utils/prisma.js";
 import bcrypt from "bcryptjs";
 import { generateExcel, generatePDF, generateCSV, formatDate } from "../utils/exportUtils.js";
+import { saveAdminNotification } from "../utils/notificationService.js";
 
 // @desc    Get user list with advanced filtering
 // @route   GET /api/users/list
@@ -624,10 +625,23 @@ export const updateUser = async (req, res) => {
             updateData.password = await bcrypt.hash(password, 10);
         }
 
+        const oldUser = await prisma.user.findUnique({ where: { id: parseInt(id) }, select: { status: true, userType: true } });
+
         const user = await prisma.user.update({
             where: { id: parseInt(id) },
             data: updateData,
         });
+
+        if (oldUser?.status === 'pending' && oldUser?.userType === 'driver' && status && status !== 'pending') {
+            const isApproved = status === 'active';
+            saveAdminNotification(isApproved ? 'driver_approved' : 'new_complaint', {
+                title: isApproved ? 'Driver Approved' : 'Driver Rejected',
+                titleAr: isApproved ? 'تم قبول السائق' : 'تم رفض السائق',
+                message: `${firstName} ${lastName || ''} has been ${isApproved ? 'approved' : 'rejected'}.`,
+                messageAr: `${firstName} ${lastName || ''} تم ${isApproved ? 'قبوله' : 'رفضه'}.`,
+                link: `/drivers/${id}`,
+            }).catch(() => {});
+        }
 
         res.json({
             success: true,
