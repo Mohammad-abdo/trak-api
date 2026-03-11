@@ -304,9 +304,15 @@ export const updateVehicleCategory = async (req, res) => {
         } else if (req.body.image !== undefined) {
             updateData.image = req.body.image;
         }
-        if (capacity !== undefined) updateData.capacity = capacity ? parseInt(capacity) : null;
-        if (max_load !== undefined) updateData.maxLoad = max_load ? parseFloat(max_load) : null;
-        if (status !== undefined) updateData.status = parseInt(status);
+        if (capacity !== undefined && capacity !== '') {
+            const num = parseInt(capacity, 10);
+            updateData.capacity = Number.isNaN(num) ? null : num;
+        }
+        if (max_load !== undefined && max_load !== '') {
+            const num = parseFloat(max_load);
+            updateData.maxLoad = Number.isNaN(num) ? null : num;
+        }
+        if (status !== undefined && status !== '') updateData.status = parseInt(status, 10) || 1;
 
         const category = await prisma.vehicleCategory.update({
             where: { id: parseInt(id) },
