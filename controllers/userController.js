@@ -2,6 +2,7 @@ import prisma from "../utils/prisma.js";
 import bcrypt from "bcryptjs";
 import { generateExcel, generatePDF, generateCSV, formatDate } from "../utils/exportUtils.js";
 import { saveAdminNotification } from "../utils/notificationService.js";
+import { fullImageUrl } from "../utils/imageUrl.js";
 
 // @desc    Get user list with advanced filtering
 // @route   GET /api/users/list
