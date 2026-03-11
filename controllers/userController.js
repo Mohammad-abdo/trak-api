@@ -667,6 +667,241 @@ export const deleteUser = async (req, res) => {
     }
 };
 
+// @desc    Create driver with full data (admin)
+// @route   POST /api/users/drivers
+// @access  Private (Admin)
+export const createDriver = async (req, res) => {
+    try {
+        const {
+            firstName, lastName, email, password, contactNumber, countryCode,
+            gender, address, status,
+            carModel, carColor, carPlateNumber, carProductionYear,
+            bankName, accountHolderName, accountNumber, bankIban, bankSwift,
+            documentIds, documentExpireDates,
+            serviceIds,
+        } = req.body;
+
+        if (!firstName || !contactNumber || !password) {
+            return res.status(400).json({ success: false, message: "firstName, contactNumber and password are required" });
+        }
+
+        const existing = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    email ? { email: email.toLowerCase() } : undefined,
+                    { contactNumber },
+                ].filter(Boolean),
+            },
+        });
+        if (existing) {
+            return res.status(400).json({ success: false, message: "User with this email or phone already exists" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const avatarPath = req.files?.avatar?.[0] ? `/uploads/drivers/${req.files.avatar[0].filename}` : null;
+        const carImagePath = req.files?.carImage?.[0] ? `/uploads/drivers/${req.files.carImage[0].filename}` : null;
+
+        const driver = await prisma.user.create({
+            data: {
+                firstName,
+                lastName: lastName || firstName,
+                email: email ? email.toLowerCase() : null,
+                password: hashedPassword,
+                contactNumber,
+                countryCode: countryCode || null,
+                gender: gender || null,
+                address: address || null,
+                userType: "driver",
+                status: status || "active",
+                avatar: avatarPath,
+                displayName: `${firstName} ${lastName || ""}`.trim(),
+                referralCode: `DRV${Date.now()}`,
+                isVerified: true,
+            },
+        });
+
+        if (carModel || carColor || carPlateNumber || carProductionYear || carImagePath) {
+            await prisma.userDetail.create({
+                data: {
+                    userId: driver.id,
+                    carModel: carModel || null,
+                    carColor: carColor || null,
+                    carPlateNumber: carPlateNumber || null,
+                    carProductionYear: carProductionYear ? parseInt(carProductionYear) : null,
+                    carImage: carImagePath,
+                },
+            });
+        }
+
+        if (bankName || accountNumber || bankIban) {
+            await prisma.userBankAccount.create({
+                data: {
+                    userId: driver.id,
+                    bankName: bankName || null,
+                    accountHolderName: accountHolderName || null,
+                    accountNumber: accountNumber || null,
+                    bankIban: bankIban || null,
+                    bankSwift: bankSwift || null,
+                },
+            });
+        }
+
+        const docFiles = req.files?.documents || [];
+        const docIdArr = Array.isArray(documentIds) ? documentIds : documentIds ? [documentIds] : [];
+        const docExpArr = Array.isArray(documentExpireDates) ? documentExpireDates : documentExpireDates ? [documentExpireDates] : [];
+
+        for (let i = 0; i < docIdArr.length; i++) {
+            const docId = parseInt(docIdArr[i]);
+            if (isNaN(docId)) continue;
+            const filePath = docFiles[i] ? `/uploads/driver-documents/${docFiles[i].filename}` : null;
+            const expDate = docExpArr[i] ? new Date(docExpArr[i]) : null;
+            await prisma.driverDocument.create({
+                data: { driverId: driver.id, documentId: docId, isVerified: false, documentImage: filePath, expireDate: expDate },
+            });
+        }
+
+        const svcArr = Array.isArray(serviceIds) ? serviceIds : serviceIds ? [serviceIds] : [];
+        for (const svcId of svcArr) {
+            const id = parseInt(svcId);
+            if (!isNaN(id)) {
+                await prisma.driverService.create({ data: { userId: driver.id, serviceId: id } });
+            }
+        }
+
+        await prisma.wallet.create({ data: { userId: driver.id, balance: 0 } });
+
+        const full = await prisma.user.findUnique({
+            where: { id: driver.id },
+            include: { userDetail: true, bankAccount: true, driverDocuments: { include: { document: true } }, driverServices: true, wallet: true },
+        });
+
+        res.status(201).json({ success: true, data: full, message: "Driver created successfully" });
+    } catch (error) {
+        console.error("Create driver error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Update driver with full data (admin)
+// @route   PUT /api/users/drivers/:id
+// @access  Private (Admin)
+export const updateDriver = async (req, res) => {
+    try {
+        const driverId = parseInt(req.params.id);
+        const {
+            firstName, lastName, email, password, contactNumber, countryCode,
+            gender, address, status,
+            carModel, carColor, carPlateNumber, carProductionYear,
+            bankName, accountHolderName, accountNumber, bankIban, bankSwift,
+            documentIds, documentExpireDates,
+            serviceIds,
+        } = req.body;
+
+        const existing = await prisma.user.findUnique({ where: { id: driverId } });
+        if (!existing) {
+            return res.status(404).json({ success: false, message: "Driver not found" });
+        }
+
+        const avatarPath = req.files?.avatar?.[0] ? `/uploads/drivers/${req.files.avatar[0].filename}` : undefined;
+        const carImagePath = req.files?.carImage?.[0] ? `/uploads/drivers/${req.files.carImage[0].filename}` : undefined;
+
+        const userData = {
+            firstName: firstName || existing.firstName,
+            lastName: lastName || existing.lastName,
+            email: email ? email.toLowerCase() : existing.email,
+            contactNumber: contactNumber || existing.contactNumber,
+            countryCode: countryCode !== undefined ? countryCode : existing.countryCode,
+            gender: gender !== undefined ? gender : existing.gender,
+            address: address !== undefined ? address : existing.address,
+            status: status || existing.status,
+            displayName: `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim(),
+        };
+        if (avatarPath) userData.avatar = avatarPath;
+        if (password) userData.password = await bcrypt.hash(password, 10);
+
+        await prisma.user.update({ where: { id: driverId }, data: userData });
+
+        const carData = {};
+        if (carModel !== undefined) carData.carModel = carModel;
+        if (carColor !== undefined) carData.carColor = carColor;
+        if (carPlateNumber !== undefined) carData.carPlateNumber = carPlateNumber;
+        if (carProductionYear !== undefined) carData.carProductionYear = carProductionYear ? parseInt(carProductionYear) : null;
+        if (carImagePath) carData.carImage = carImagePath;
+
+        if (Object.keys(carData).length > 0) {
+            await prisma.userDetail.upsert({
+                where: { userId: driverId },
+                create: { userId: driverId, ...carData },
+                update: carData,
+            });
+        }
+
+        const bankData = {};
+        if (bankName !== undefined) bankData.bankName = bankName;
+        if (accountHolderName !== undefined) bankData.accountHolderName = accountHolderName;
+        if (accountNumber !== undefined) bankData.accountNumber = accountNumber;
+        if (bankIban !== undefined) bankData.bankIban = bankIban;
+        if (bankSwift !== undefined) bankData.bankSwift = bankSwift;
+
+        if (Object.keys(bankData).length > 0) {
+            const existingBank = await prisma.userBankAccount.findFirst({ where: { userId: driverId } });
+            if (existingBank) {
+                await prisma.userBankAccount.update({ where: { id: existingBank.id }, data: bankData });
+            } else {
+                await prisma.userBankAccount.create({ data: { userId: driverId, ...bankData } });
+            }
+        }
+
+        const docFiles = req.files?.documents || [];
+        const docIdArr = Array.isArray(documentIds) ? documentIds : documentIds ? [documentIds] : [];
+        const docExpArr = Array.isArray(documentExpireDates) ? documentExpireDates : documentExpireDates ? [documentExpireDates] : [];
+
+        for (let i = 0; i < docIdArr.length; i++) {
+            const docId = parseInt(docIdArr[i]);
+            if (isNaN(docId)) continue;
+            const filePath = docFiles[i] ? `/uploads/driver-documents/${docFiles[i].filename}` : null;
+            const expDate = docExpArr[i] ? new Date(docExpArr[i]) : null;
+
+            const existingDoc = await prisma.driverDocument.findFirst({
+                where: { driverId, documentId: docId },
+            });
+            if (existingDoc) {
+                const updateData = {};
+                if (filePath) updateData.documentImage = filePath;
+                if (expDate) updateData.expireDate = expDate;
+                if (Object.keys(updateData).length > 0) {
+                    await prisma.driverDocument.update({ where: { id: existingDoc.id }, data: updateData });
+                }
+            } else {
+                await prisma.driverDocument.create({
+                    data: { driverId, documentId: docId, isVerified: false, documentImage: filePath, expireDate: expDate },
+                });
+            }
+        }
+
+        if (serviceIds !== undefined) {
+            await prisma.driverService.deleteMany({ where: { userId: driverId } });
+            const svcArr = Array.isArray(serviceIds) ? serviceIds : serviceIds ? [serviceIds] : [];
+            for (const svcId of svcArr) {
+                const id = parseInt(svcId);
+                if (!isNaN(id)) {
+                    await prisma.driverService.create({ data: { userId: driverId, serviceId: id } });
+                }
+            }
+        }
+
+        const full = await prisma.user.findUnique({
+            where: { id: driverId },
+            include: { userDetail: true, bankAccount: true, driverDocuments: { include: { document: true } }, driverServices: true, wallet: true },
+        });
+
+        res.json({ success: true, data: full, message: "Driver updated successfully" });
+    } catch (error) {
+        console.error("Update driver error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Export users (riders/drivers)
 // @route   GET /api/users/export
 // @access  Private (Admin)
