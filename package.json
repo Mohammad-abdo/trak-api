@@ -12,6 +12,10 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:seed": "node prisma/seed.js",
+    "seed:staff": "node prisma/seed-staff.js",
+    "seed:motorcycles": "node prisma/seed-motorcycles.js",
+    "seed:notifications": "node prisma/seed-admin-notifications.js",
+    "seed:all": "node prisma/seed-all.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -5,6 +5,12 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🔔 Seeding sample admin notifications...\n')
 
+  const existing = await prisma.notification.count({ where: { notifiableType: 'Admin' } })
+  if (existing > 0) {
+    console.log(`⏭️  ${existing} admin notifications already exist — skipping seed.`)
+    return
+  }
+
   const samples = [
     {
       type: 'new_driver',
