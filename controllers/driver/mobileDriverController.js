@@ -375,6 +375,27 @@ export const getRequiredDocuments = asyncHandler(async (req, res) => {
     return successResponse(res, documents);
 });
 
+// Public list of services for driver registration screens
+export const getRegistrationServices = asyncHandler(async (req, res) => {
+    const services = await prisma.service.findMany({
+        where: { status: 1 },
+        select: {
+            id: true,
+            name: true,
+            nameAr: true,
+            description: true,
+            descriptionAr: true,
+            baseFare: true,
+            perDistance: true,
+            capacity: true,
+            status: true,
+        },
+        orderBy: [{ id: "asc" }],
+    });
+
+    return successResponse(res, services, "Services retrieved");
+});
+
 // ─── Update Bank Account ─────────────────────────────────────────────────────
 export const updateBankAccount = asyncHandler(async (req, res) => {
     const { bankName, accountHolderName, accountNumber, bankIban, bankSwift, bankCode, bankAddress, routingNumber } = req.body;
@@ -434,6 +455,42 @@ export const updateDriverStatus = asyncHandler(async (req, res) => {
     }
 
     return successResponse(res, driver, "Status updated");
+});
+
+// Update current driver location (usually called right after register/login)
+export const currentDriverLocation = asyncHandler(async (req, res) => {
+    const { latitude, longitude } = req.body;
+
+    if (latitude == null || longitude == null) {
+        return errorResponse(res, "latitude and longitude are required", 400);
+    }
+
+    const updated = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+            latitude: String(latitude),
+            longitude: String(longitude),
+            lastLocationUpdateAt: new Date(),
+        },
+        select: { id: true, latitude: true, longitude: true, lastLocationUpdateAt: true },
+    });
+
+    try {
+        const { emitDriverLocationUpdate } = await import("../../utils/socketService.js");
+        const io = req.app.get("io") || global.io;
+        if (io) emitDriverLocationUpdate(io, req.user.id, updated);
+    } catch (_) {}
+
+    return successResponse(
+        res,
+        {
+            user_id: updated.id,
+            latitude: updated.latitude,
+            longitude: updated.longitude,
+            lastUpdatedAt: updated.lastLocationUpdateAt,
+        },
+        "Location updated"
+    );
 });
 
 // ─── Registration Status Check ───────────────────────────────────────────────

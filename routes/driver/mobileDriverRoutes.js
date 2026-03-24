@@ -13,6 +13,8 @@ import { logout } from "../../controllers/auth/login.js";
 // ─── Driver profile/vehicle/docs/bank/status ─────────────────────────────────
 import {
     registerDriver,
+    getRegistrationServices,
+    currentDriverLocation,
     getMyProfile,
     updateMyProfile,
     updateVehicle,
@@ -163,6 +165,20 @@ const docUpload = upload.fields([{ name: "document", maxCount: 1 }]);
  *       400: { description: Validation error }
  */
 router.post("/auth/register", registerUpload, registerDriver);
+
+/** @swagger
+ * /apimobile/driver/services:
+ *   get:
+ *     tags: [Driver Auth]
+ *     summary: Public list of active services for driver registration
+ *     description: |
+ *       Returns all active services (for example Economy / Premium / XL)
+ *       so driver can choose `serviceId` during registration.
+ *     security: []
+ *     responses:
+ *       200: { description: Services list }
+ */
+router.get("/services", getRegistrationServices);
 
 /** @swagger
  * /apimobile/driver/auth/login:
@@ -323,6 +339,29 @@ router.post("/auth/send-otp", authenticate, sendOtp);
  *       200: { description: Verified }
  */
 router.post("/auth/submit-otp", authenticate, submitOtp);
+
+/** @swagger
+ * /apimobile/driver/auth/current-location:
+ *   post:
+ *     tags: [Driver Auth]
+ *     summary: Update current driver location (after register/login)
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [latitude, longitude]
+ *             properties:
+ *               latitude: { type: number, example: 24.7136 }
+ *               longitude: { type: number, example: 46.6753 }
+ *     responses:
+ *       200: { description: Location updated and returned }
+ *       400: { description: Missing latitude or longitude }
+ */
+router.post("/auth/current-location", authenticate, currentDriverLocation);
 
 /** @swagger
  * /apimobile/driver/auth/logout:
