@@ -18,12 +18,14 @@ import {
     getMyProfile,
     updateMyProfile,
     updateVehicle,
-    uploadDocument,
+    uploadDocuments,
     getMyDocuments,
     getRequiredDocuments,
     updateBankAccount,
     updateDriverStatus,
     getRegistrationStatus,
+    getMyStatus,
+    goOnlineOffline,
 } from "../../controllers/driver/mobileDriverController.js";
 
 // ─── Rides lifecycle ─────────────────────────────────────────────────────────
@@ -81,15 +83,13 @@ const upload = multer({
     storage: driverStorage,
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-        const allowed = /jpeg|jpg|png|gif|webp|pdf/;
-        const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
-        cb(ok ? null : new Error("Only images and PDF files are allowed"), ok);
+        cb(null, true);
     },
 });
 const registerUpload = upload.fields([{ name: "avatar", maxCount: 1 }, { name: "carImage", maxCount: 1 }, { name: "documents", maxCount: 10 }]);
 const profileUpload = upload.fields([{ name: "avatar", maxCount: 1 }]);
 const vehicleUpload = upload.fields([{ name: "carImage", maxCount: 1 }]);
-const docUpload = upload.fields([{ name: "document", maxCount: 1 }]);
+const docUpload = upload.fields([{ name: "files", maxCount: 20 }]);
 
 // =============================================================================
 //  SWAGGER SCHEMAS
@@ -127,7 +127,7 @@ const docUpload = upload.fields([{ name: "document", maxCount: 1 }]);
  *     summary: Register new driver with full details + vehicle + documents
  *     description: |
  *       Creates driver (status=pending). Accepts multipart/form-data.
- *       Send documentIds[] + documents[] files in same order.
+ *       Upload any kind of documents (images, PDFs, etc.) without documentIds.
  *     security: []
  *     requestBody:
  *       required: true
@@ -158,8 +158,12 @@ const docUpload = upload.fields([{ name: "document", maxCount: 1 }]);
  *               bankSwift: { type: string }
  *               avatar: { type: string, format: binary }
  *               carImage: { type: string, format: binary }
- *               documentIds: { type: array, items: { type: integer } }
- *               documents: { type: array, items: { type: string, format: binary } }
+ *               documents:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Any kind of document files (images, PDFs, etc.)
  *     responses:
  *       201: { description: Registered (pending admin approval) }
  *       400: { description: Validation error }
@@ -197,7 +201,26 @@ router.get("/services", getRegistrationServices);
  *               phone: { type: string, example: "0501234567" }
  *               password: { type: string, example: "pass1234" }
  *     responses:
- *       200: { description: Login successful }
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string }
+ *                     user: { type: object }
+ *                     stats:
+ *                       type: object
+ *                       properties:
+ *                         averageRating: { type: number }
+ *                         totalRatings: { type: integer }
+ *                         totalEarnings: { type: number }
+ *                 message: { type: string }
  *       401: { description: Invalid credentials }
  *       403: { description: Account pending/blocked }
  */
@@ -483,23 +506,40 @@ router.get("/documents", authenticate, getMyDocuments);
  * /apimobile/driver/documents/upload:
  *   post:
  *     tags: [Driver Documents]
- *     summary: Upload/re-upload a document
+ *     summary: Upload multiple documents (any file type)
  *     security: [{ bearerAuth: [] }]
+ *     consumes:
+ *       - multipart/form-data
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [documentId]
  *             properties:
- *               documentId: { type: integer }
- *               expireDate: { type: string, format: date }
- *               document: { type: string, format: binary }
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
  *     responses:
- *       200: { description: Uploaded }
+ *       200:
+ *         description: Documents uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 message:
+ *                   type: string
  */
-router.post("/documents/upload", authenticate, docUpload, uploadDocument);
+router.post("/documents/upload", authenticate, docUpload, uploadDocuments);
 
 // =============================================================================
 //  6 — BANK ACCOUNT (protected)
@@ -558,6 +598,48 @@ router.put("/bank-account/update", authenticate, updateBankAccount);
  *       200: { description: Status updated }
  */
 router.post("/status/update", authenticate, updateDriverStatus);
+/** @swagger
+ * /apimobile/driver/status:
+ *   get:
+ *     tags: [Driver Status]
+ *     summary: Get current online/offline and availability status
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Status object }
+ */
+router.get("/status", authenticate, getMyStatus);
+
+/** @swagger
+ * /apimobile/driver/status/go-online:
+ *   post:
+ *     tags: [Driver Status]
+ *     summary: Toggle driver online/offline status
+ *     description: |
+ *       Toggles driver status between online and offline.
+ *       - If currently offline → goes online (isOnline=true, isAvailable=true)
+ *       - If currently online → goes offline (isOnline=false, isAvailable=false)
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Status toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: integer }
+ *                     isOnline: { type: boolean }
+ *                     isAvailable: { type: boolean }
+ *                     status: { type: string }
+ *                 message:
+ *                   type: string
+ */
+router.post("/status/go-online", authenticate, goOnlineOffline);
 
 /** @swagger
  * /apimobile/driver/location/update:

@@ -44,5 +44,26 @@ export const login = asyncHandler(async (req, res) => {
         select: fullUserSelect,
     });
 
-    return successResponse(res, { token, user: fullUser }, "Login successful");
+    const ratingsAgg = await prisma.rating.aggregate({
+        where: { driverId: user.id },
+        _avg: { rating: true },
+        _count: { rating: true },
+    });
+
+    const totalEarnings = await prisma.walletTransaction.aggregate({
+        where: { userId: user.id, type: "credit" },
+        _sum: { amount: true },
+    });
+
+    const responseData = {
+        token,
+        user: fullUser,
+        stats: {
+            averageRating: ratingsAgg._avg.rating || 0,
+            totalRatings: ratingsAgg._count.rating || 0,
+            totalEarnings: totalEarnings._sum.amount || 0,
+        },
+    };
+
+    return successResponse(res, responseData, "Login successful");
 });

@@ -169,25 +169,18 @@ export const registerDriver = asyncHandler(async (req, res) => {
         });
     }
 
-    // Upload documents (multiple files under field "documents")
+    // Upload documents (any kind of files without documentIds)
     const docFiles = req.files?.documents || [];
-    const docIds = req.body.documentIds;
-    const documentIdArr = Array.isArray(docIds) ? docIds : docIds ? [docIds] : [];
+    const fileList = Array.isArray(docFiles) ? docFiles : [docFiles];
 
-    for (let i = 0; i < documentIdArr.length; i++) {
-        const docId = parseInt(documentIdArr[i]);
-        if (isNaN(docId)) continue;
-
-        const filePath = docFiles[i]
-            ? `/uploads/driver-documents/${docFiles[i].filename}`
-            : null;
+    for (const file of fileList) {
+        const filePath = `/uploads/driver-documents/${file.filename}`;
 
         await prisma.driverDocument.create({
             data: {
                 driverId: driver.id,
-                documentId: docId,
-                isVerified: false,
                 documentImage: filePath,
+                isVerified: false,
             },
         });
     }
@@ -306,50 +299,38 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     }, "Vehicle updated");
 });
 
-// ─── Upload / Manage Documents ───────────────────────────────────────────────
-export const uploadDocument = asyncHandler(async (req, res) => {
-    const { documentId, expireDate } = req.body;
-    if (!documentId) return errorResponse(res, "documentId is required", 400);
+// ─── Upload Multiple Documents ───────────────────────────────────────────────
+export const uploadDocuments = asyncHandler(async (req, res) => {
+    const files = req.files?.files;
+    if (!files || files.length === 0) {
+        return errorResponse(res, "No files provided", 400);
+    }
 
-    const docFile = req.files?.document?.[0];
-    const filePath = docFile
-        ? `/uploads/driver-documents/${docFile.filename}`
-        : null;
+    const uploadedDocs = [];
+    const fileList = Array.isArray(files) ? files : [files];
 
-    const existing = await prisma.driverDocument.findFirst({
-        where: { driverId: req.user.id, documentId: parseInt(documentId) },
-    });
-
-    let driverDoc;
-    if (existing) {
-        const updateData = { isVerified: false };
-        if (filePath) updateData.documentImage = filePath;
-        if (expireDate) updateData.expireDate = new Date(expireDate);
-
-        driverDoc = await prisma.driverDocument.update({
-            where: { id: existing.id },
-            data: updateData,
-            include: { document: true },
-        });
-    } else {
-        driverDoc = await prisma.driverDocument.create({
+    for (const file of fileList) {
+        const filePath = `/uploads/driver-documents/${file.filename}`;
+        
+        const driverDoc = await prisma.driverDocument.create({
             data: {
                 driverId: req.user.id,
-                documentId: parseInt(documentId),
-                isVerified: false,
                 documentImage: filePath,
-                expireDate: expireDate ? new Date(expireDate) : null,
+                isVerified: false,
             },
             include: { document: true },
         });
+
+        uploadedDocs.push({
+            ...driverDoc,
+            documentImage: driverDoc.documentImage ? fullImageUrl(req, driverDoc.documentImage) : null,
+        });
     }
 
-    return successResponse(res, {
-        ...driverDoc,
-        documentImage: driverDoc.documentImage ? fullImageUrl(req, driverDoc.documentImage) : null,
-    }, "Document uploaded");
+    return successResponse(res, uploadedDocs, "Documents uploaded successfully");
 });
 
+// ─── Get My Documents ──────────────────────────────────────────────────────────
 export const getMyDocuments = asyncHandler(async (req, res) => {
     const documents = await prisma.driverDocument.findMany({
         where: { driverId: req.user.id },
@@ -523,4 +504,53 @@ export const getRegistrationStatus = asyncHandler(async (req, res) => {
         unverifiedDocuments: unverifiedDocs,
         canDrive: driver.status === "active" && driver.isVerifiedDriver && missingDocs.length === 0,
     });
+});
+
+// ─── Get Current Status ────────────────────────────────────────────────────
+export const getMyStatus = asyncHandler(async (req, res) => {
+    const driver = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+            id: true,
+            isOnline: true,
+            isAvailable: true,
+            latitude: true,
+            longitude: true,
+            currentHeading: true,
+            lastLocationUpdateAt: true,
+            lastActivedAt: true,
+        },
+    });
+    if (!driver) return errorResponse(res, "Driver not found", 404);
+    return successResponse(res, driver);
+});
+
+// ─── Go Online/Offline (Toggle) ───────────────────────────────────────────────
+export const goOnlineOffline = asyncHandler(async (req, res) => {
+    const driver = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { isOnline: true },
+    });
+
+    if (!driver) return errorResponse(res, "Driver not found", 404);
+
+    const newStatus = !driver.isOnline;
+
+    const updated = await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+            isOnline: newStatus,
+            isAvailable: newStatus,
+            lastActivedAt: newStatus ? new Date() : undefined,
+        },
+        select: {
+            id: true,
+            isOnline: true,
+            isAvailable: true,
+            status: true,
+        },
+    });
+
+    const message = newStatus ? "You are now online" : "You are now offline";
+    return successResponse(res, updated, message);
 });
