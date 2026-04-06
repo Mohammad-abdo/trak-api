@@ -44,13 +44,13 @@ export const login = asyncHandler(async (req, res) => {
         select: fullUserSelect,
     });
 
-    const ratingsAgg = await prisma.rating.aggregate({
+    const ratingsAgg = await prisma.rideRequestRating.aggregate({
         where: { driverId: user.id },
         _avg: { rating: true },
         _count: { rating: true },
     });
 
-    const totalEarnings = await prisma.walletTransaction.aggregate({
+    const totalEarnings = await prisma.walletHistory.aggregate({
         where: { userId: user.id, type: "credit" },
         _sum: { amount: true },
     });
