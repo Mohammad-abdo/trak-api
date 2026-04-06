@@ -311,7 +311,7 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
 
     for (const file of fileList) {
         const filePath = `/uploads/driver-documents/${file.filename}`;
-        
+
         const driverDoc = await prisma.driverDocument.create({
             data: {
                 driverId: req.user.id,
@@ -547,7 +547,6 @@ export const goOnlineOffline = asyncHandler(async (req, res) => {
             id: true,
             isOnline: true,
             isAvailable: true,
-            status: true,
         },
     });
 

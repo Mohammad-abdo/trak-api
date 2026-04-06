@@ -635,7 +635,7 @@ router.get("/status", authenticate, getMyStatus);
  *                     id: { type: integer }
  *                     isOnline: { type: boolean }
  *                     isAvailable: { type: boolean }
- *                     status: { type: string }
+ *
  *                 message:
  *                   type: string
  */

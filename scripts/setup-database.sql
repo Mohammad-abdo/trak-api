@@ -2,10 +2,10 @@
 -- Run this script in MySQL to create the database
 
 -- Create the database
-CREATE DATABASE IF NOT EXISTS ala_elsareea CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS bark_leez CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Grant privileges (adjust username as needed)
--- GRANT ALL PRIVILEGES ON ala_elsareea.* TO 'root'@'localhost';
+-- GRANT ALL PRIVILEGES ON bark_leez.* TO 'root'@'localhost';
 -- FLUSH PRIVILEGES;
 
 -- Note: After running this script, execute the following commands in the backend directory:
