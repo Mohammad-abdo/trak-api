@@ -8,6 +8,7 @@
  */
 
 import prisma from '../utils/prisma.js'
+import { parseRideRequestIdParam } from '../utils/rideRequestId.js'
 import { sendNotificationToUsers, saveNotification } from '../utils/notificationService.js'
 import { debitWalletForRideOrThrow } from '../services/walletLedgerService.js'
 
@@ -310,10 +311,17 @@ export const cancelScheduledRide = async (req, res) => {
     const { id } = req.params
     const userId = req.user.id
     const { reason } = req.body
+    const rideId = parseRideRequestIdParam(id)
+    if (!rideId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ride id',
+      })
+    }
 
     // Find the ride
     const ride = await prisma.rideRequest.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: rideId },
       include: {
         payments: {
           where: {
@@ -375,7 +383,7 @@ export const cancelScheduledRide = async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       // Update ride status
       const updatedRide = await tx.rideRequest.update({
-        where: { id: parseInt(id) },
+        where: { id: rideId },
         data: {
           status: 'cancelled',
           cancelBy: 'rider',

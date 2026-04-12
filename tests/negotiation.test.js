@@ -414,7 +414,7 @@ describe("GET /api/negotiations/history/:rideRequestId", () => {
 
     it("returns 404 for non-existent ride", async () => {
         const res = await request(app)
-            .get("/api/negotiations/history/999999")
+            .get("/api/negotiations/history/123e4567-e89b-12d3-a456-426614174000")
             .set("Authorization", `Bearer ${rider.token}`);
 
         expect(res.status).toBe(404);

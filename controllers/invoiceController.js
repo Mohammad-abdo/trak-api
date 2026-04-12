@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 import PDFDocument from "pdfkit";
 import { formatCurrency, formatDate } from "../utils/exportUtils.js";
 
@@ -10,9 +11,13 @@ import { formatCurrency, formatDate } from "../utils/exportUtils.js";
 export const generateRideInvoice = async (req, res) => {
     try {
         const { id } = req.params;
+        const rideId = parseRideRequestIdParam(id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: "Invalid ride id" });
+        }
 
         const rideRequest = await prisma.rideRequest.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: rideId },
             include: {
                 rider: {
                     select: {

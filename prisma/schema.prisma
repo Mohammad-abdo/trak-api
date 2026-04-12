@@ -184,7 +184,7 @@ model Service {
 }
 
 model RideRequest {
-  id                                 Int       @id @default(autoincrement())
+  id                                 String    @id @default(uuid()) @db.VarChar(36)
   riderId                            Int       @map("rider_id")
   serviceId                          Int?      @map("service_id")
   vehicleCategoryId                  Int?      @map("vehicle_category_id")
@@ -299,7 +299,7 @@ model RideRequest {
 
 model Payment {
   id             Int      @id @default(autoincrement())
-  rideRequestId  Int      @map("ride_request_id")
+  rideRequestId  String   @map("ride_request_id") @db.VarChar(36)
   userId         Int      @map("user_id")
   driverId       Int      @map("driver_id")
   amount         Float    @db.Double
@@ -344,7 +344,7 @@ model WalletHistory {
   balance         Float    @db.Double
   description     String?  @db.Text
   transactionType String   @map("transaction_type")
-  rideRequestId   Int?     @map("ride_request_id")
+  rideRequestId   String?  @map("ride_request_id") @db.VarChar(36)
   createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
@@ -490,7 +490,7 @@ model Complaint {
   complaintBy   String?  @map("complaint_by")
   subject       String?
   description   String?  @db.Text
-  rideRequestId Int?     @map("ride_request_id")
+  rideRequestId String?  @map("ride_request_id") @db.VarChar(36)
   status        String?  @default("pending") @db.VarChar(20)
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
@@ -517,7 +517,7 @@ model ComplaintComment {
 
 model RideRequestBid {
   id            Int      @id @default(autoincrement())
-  rideRequestId Int      @map("ride_request_id")
+  rideRequestId String   @map("ride_request_id") @db.VarChar(36)
   driverId      Int      @map("driver_id")
   bidAmount     Float?   @map("bid_amount") @db.Double
   isBidAccept   Boolean  @default(false) @map("is_bid_accept")
@@ -535,7 +535,7 @@ model RideRequestBid {
 
 model RideRequestRating {
   id            Int      @id @default(autoincrement())
-  rideRequestId Int      @map("ride_request_id")
+  rideRequestId String   @map("ride_request_id") @db.VarChar(36)
   riderId       Int      @map("rider_id")
   driverId      Int      @map("driver_id")
   rating        Float    @db.Double
@@ -556,7 +556,7 @@ model RideRequestRating {
 
 model RideRequestHistory {
   id            Int       @id @default(autoincrement())
-  rideRequestId Int       @map("ride_request_id")
+  rideRequestId String    @map("ride_request_id") @db.VarChar(36)
   historyType   String?   @map("history_type")
   datetime      DateTime? @db.Timestamp
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
@@ -570,7 +570,7 @@ model RideRequestHistory {
 
 model RideNegotiation {
   id              Int      @id @default(autoincrement())
-  rideRequestId   Int      @map("ride_request_id")
+  rideRequestId   String   @map("ride_request_id") @db.VarChar(36)
   proposedBy      String   @map("proposed_by") @db.VarChar(10)
   proposedFare    Float    @map("proposed_fare") @db.Double
   percentChange   Float    @map("percent_change") @db.Double
@@ -854,7 +854,7 @@ model Review {
   id            Int      @id @default(autoincrement())
   driverId      Int      @map("driver_id")
   riderId       Int      @map("rider_id")
-  rideRequestId Int      @map("ride_request_id")
+  rideRequestId String   @map("ride_request_id") @db.VarChar(36)
   driverRating  Float?   @map("driver_rating") @db.Double
   riderRating   Float?   @map("rider_rating") @db.Double
   driverReview  String?  @map("driver_review") @db.Text

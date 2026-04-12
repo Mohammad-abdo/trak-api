@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 
 // @desc    Get dispatch list (ride requests)
 // @route   GET /api/dispatch
@@ -74,9 +75,16 @@ export const assignDriver = async (req, res) => {
     try {
         const { id } = req.params;
         const { driver_id } = req.body;
+        const rideId = parseRideRequestIdParam(id);
+        if (!rideId) {
+            return res.status(404).json({
+                success: false,
+                message: "Invalid ride id",
+            });
+        }
 
         const rideRequest = await prisma.rideRequest.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: rideId },
         });
 
         if (!rideRequest) {
@@ -103,7 +111,7 @@ export const assignDriver = async (req, res) => {
         }
 
         const updatedRideRequest = await prisma.rideRequest.update({
-            where: { id: parseInt(id) },
+            where: { id: rideId },
             data: {
                 driverId: parseInt(driver_id),
                 status: "accepted",

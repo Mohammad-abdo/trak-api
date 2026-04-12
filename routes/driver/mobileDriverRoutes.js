@@ -703,7 +703,7 @@ router.get("/rides", authenticate, getMyRides);
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string, format: uuid }
  *     responses:
  *       200: { description: Ride details }
  *       404: { description: Not found }
@@ -727,7 +727,7 @@ router.get("/rides/:id", authenticate, getRideDetail);
  *             type: object
  *             required: [rideRequestId, accept]
  *             properties:
- *               rideRequestId: { type: integer, example: 1 }
+ *               rideRequestId: { type: string, format: uuid, example: "123e4567-e89b-12d3-a456-426614174000" }
  *               accept: { type: boolean, example: true }
  *     responses:
  *       200: { description: Accepted or rejected }
@@ -748,7 +748,7 @@ router.post("/rides/respond", authenticate, respondToRide);
  *             type: object
  *             required: [rideRequestId, status]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               status: { type: string, enum: [arrived, started] }
  *     responses:
  *       200: { description: Status updated }
@@ -772,7 +772,7 @@ router.post("/rides/update-status", authenticate, updateRideStatus);
  *             type: object
  *             required: [rideRequestId]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               tips: { type: number, example: 5.0 }
  *     responses:
  *       200: { description: Ride completed }
@@ -793,7 +793,7 @@ router.post("/rides/complete", authenticate, completeRide);
  *             type: object
  *             required: [rideRequestId]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               reason: { type: string }
  *     responses:
  *       200: { description: Cancelled }
@@ -814,7 +814,7 @@ router.post("/rides/cancel", authenticate, cancelRide);
  *             type: object
  *             required: [rideRequestId, rating]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               rating: { type: number, minimum: 1, maximum: 5, example: 5 }
  *               comment: { type: string }
  *     responses:
@@ -836,7 +836,7 @@ router.post("/rides/rate-rider", authenticate, rateRider);
  *             type: object
  *             required: [rideRequestId, bidAmount]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               bidAmount: { type: number, example: 85.0 }
  *     responses:
  *       200: { description: Bid applied }
@@ -1029,7 +1029,7 @@ router.post("/withdrawals", authenticate, saveWithdrawRequest);
  *             properties:
  *               subject: { type: string, example: "Rider was rude" }
  *               description: { type: string }
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               riderId: { type: integer }
  *     responses:
  *       200: { description: Complaint saved }
@@ -1081,7 +1081,7 @@ router.get("/negotiation/settings", getNegotiationSettings);
  *             type: object
  *             required: [rideRequestId, proposedFare]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *               proposedFare: { type: number, example: 95.0 }
  *     responses:
  *       200: { description: Counter-offer submitted }
@@ -1102,7 +1102,7 @@ router.post("/negotiation/counter", authenticate, counterOffer);
  *             type: object
  *             required: [rideRequestId]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *     responses:
  *       200: { description: Fare accepted and locked }
  */
@@ -1122,7 +1122,7 @@ router.post("/negotiation/accept", authenticate, acceptNegotiation);
  *             type: object
  *             required: [rideRequestId]
  *             properties:
- *               rideRequestId: { type: integer }
+ *               rideRequestId: { type: string, format: uuid }
  *     responses:
  *       200: { description: Negotiation rejected }
  */
@@ -1138,7 +1138,7 @@ router.post("/negotiation/reject", authenticate, rejectNegotiation);
  *       - in: path
  *         name: rideRequestId
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string, format: uuid }
  *     responses:
  *       200: { description: Negotiation history }
  */

@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 import { saveAdminNotification } from "../utils/notificationService.js";
 
 // @desc    Save complaint
@@ -8,6 +9,14 @@ export const saveComplaint = async (req, res) => {
     try {
         const { driverId, riderId, complaintBy, subject, description, rideRequestId } = req.body;
 
+        let rideFk = null;
+        if (rideRequestId != null && String(rideRequestId).trim() !== "") {
+            rideFk = parseRideRequestIdParam(rideRequestId);
+            if (!rideFk) {
+                return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
+            }
+        }
+
         const complaint = await prisma.complaint.create({
             data: {
                 driverId: driverId ? parseInt(driverId) : null,
@@ -15,7 +24,7 @@ export const saveComplaint = async (req, res) => {
                 complaintBy: complaintBy || req.user.userType,
                 subject,
                 description,
-                rideRequestId: rideRequestId ? parseInt(rideRequestId) : null,
+                rideRequestId: rideFk,
                 status: "pending",
             },
         });

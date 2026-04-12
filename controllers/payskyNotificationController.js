@@ -16,6 +16,7 @@ import {
     notifyPayskyWebhookAuthFailure,
 } from "../utils/payskyWebhookAdminNotify.js";
 import { payskyTripSimulationAllowed } from "./payskySimulateTripPaymentController.js";
+import { parseRideRequestIdFromMerchantReference } from "../utils/rideRequestId.js";
 
 function payskyJson(res, statusCode, message, success) {
     return res.status(statusCode).json({ Message: message, Success: success });
@@ -41,20 +42,6 @@ export const payskyNotificationGetHelp = (req, res) => {
         paySkyDocs: "https://paysky.io/docs/paysky-omni-gateway/",
     });
 };
-
-/**
- * Parse ride request id from MerchantReference (optional TLV from PaySky).
- * Supports plain numeric id or prefixes like RIDE:123 / RIDE_123.
- */
-export function parseRideRequestIdFromMerchantReference(ref) {
-    if (ref == null) return null;
-    const s = String(ref).trim();
-    if (!s) return null;
-    if (/^\d+$/.test(s)) return parseInt(s, 10);
-    const prefixed = s.match(/RIDE[:_\s-]+(\d+)/i);
-    if (prefixed) return parseInt(prefixed[1], 10);
-    return null;
-}
 
 function mapPaidThroughToPaymentType(paidThrough) {
     const p = String(paidThrough ?? "").toLowerCase();
@@ -336,7 +323,7 @@ export const payskyWebhookInfo = async (req, res) => {
             merchantIdCheckEnabled: !!String(process.env.PAYSKY_MERCHANT_ID || "").trim(),
             terminalIdCheckEnabled: !!String(process.env.PAYSKY_TERMINAL_ID || "").trim(),
             merchantReferenceHint:
-                "Set MerchantReference to the ride request id (digits only), or prefixed forms like RIDE:123.",
+                "Set MerchantReference to the ride UUID, or prefixed forms like RIDE:<uuid>.",
             docsUrl: "https://paysky.io/docs/paysky-omni-gateway/",
             simulateTripPaymentEnabled: payskyTripSimulationAllowed(),
         },

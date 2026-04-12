@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
 
 // @desc    Verify coupon
 // @route   POST /api/ride-requests/verify-coupon
@@ -21,12 +22,14 @@ export const verifyCoupon = async (req, res) => {
 export const applyBid = async (req, res) => {
     try {
         const { rideRequestId, bidAmount } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
 
-        await prisma.rideRequestBid.create({ data: { rideRequestId, driverId: req.user.id, bidAmount } });
-        await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { rideHasBid: true } });
+        await prisma.rideRequestBid.create({ data: { rideRequestId: rideId, driverId: req.user.id, bidAmount } });
+        await prisma.rideRequest.update({ where: { id: rideId }, data: { rideHasBid: true } });
 
         res.json({ success: true, message: "Bid applied successfully" });
     } catch (error) {
@@ -40,8 +43,10 @@ export const applyBid = async (req, res) => {
 export const getBiddingDrivers = async (req, res) => {
     try {
         const { rideRequestId } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
         const bids = await prisma.rideRequestBid.findMany({
-            where: { rideRequestId },
+            where: { rideRequestId: rideId },
             include: { driver: { select: { id: true, firstName: true, lastName: true } } },
         });
         res.json({ success: true, data: bids.map((bid) => bid.driver) });
@@ -56,16 +61,18 @@ export const getBiddingDrivers = async (req, res) => {
 export const acceptBidRequest = async (req, res) => {
     try {
         const { rideRequestId, driverId, accept } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         if (accept) {
-            await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { driverId, status: "accepted" } });
-            await prisma.rideRequestBid.updateMany({ where: { rideRequestId, driverId }, data: { isBidAccept: true } });
+            await prisma.rideRequest.update({ where: { id: rideId }, data: { driverId, status: "accepted" } });
+            await prisma.rideRequestBid.updateMany({ where: { rideRequestId: rideId, driverId }, data: { isBidAccept: true } });
         }
 
-        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         res.json({ success: true, message: accept ? "Bid accepted" : "Bid rejected", data: updatedRideRequest });
     } catch (error) {
         console.error("Accept bid request error:", error);
@@ -78,18 +85,20 @@ export const acceptBidRequest = async (req, res) => {
 export const rideRating = async (req, res) => {
     try {
         const { rideRequestId, rating, comment, ratingBy } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         await prisma.rideRequestRating.create({
-            data: { rideRequestId, riderId: rideRequest.riderId, driverId: rideRequest.driverId, rating, comment, ratingBy },
+            data: { rideRequestId: rideId, riderId: rideRequest.riderId, driverId: rideRequest.driverId, rating, comment, ratingBy },
         });
 
         if (ratingBy === "rider") {
-            await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { isRiderRated: true } });
+            await prisma.rideRequest.update({ where: { id: rideId }, data: { isRiderRated: true } });
         } else if (ratingBy === "driver") {
-            await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { isDriverRated: true } });
+            await prisma.rideRequest.update({ where: { id: rideId }, data: { isDriverRated: true } });
         }
 
         res.json({ success: true, message: "Rating saved successfully" });

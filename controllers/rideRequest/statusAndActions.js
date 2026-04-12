@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
 
 // @desc    Update ride request
@@ -6,7 +7,9 @@ import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
 export const updateRideRequest = async (req, res) => {
     try {
         const { id } = req.params;
-        const rideRequest = await prisma.rideRequest.update({ where: { id: parseInt(id) }, data: req.body });
+        const rideId = parseRideRequestIdParam(id);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid ride id" });
+        const rideRequest = await prisma.rideRequest.update({ where: { id: rideId }, data: req.body });
         res.json({ success: true, message: "Ride request updated successfully", data: rideRequest });
     } catch (error) {
         console.error("Update ride request error:", error);
@@ -19,7 +22,9 @@ export const updateRideRequest = async (req, res) => {
 // @route   POST /api/ride-requests/riderequest-delete/:id
 export const deleteRideRequest = async (req, res) => {
     try {
-        await prisma.rideRequest.delete({ where: { id: parseInt(req.params.id) } });
+        const rideId = parseRideRequestIdParam(req.params.id);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid ride id" });
+        await prisma.rideRequest.delete({ where: { id: rideId } });
         res.json({ success: true, message: "Ride request deleted successfully" });
     } catch (error) {
         console.error("Delete ride request error:", error);
@@ -33,19 +38,21 @@ export const deleteRideRequest = async (req, res) => {
 export const acceptRideRequest = async (req, res) => {
     try {
         const { rideRequestId, accept } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         if (accept) {
-            await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { driverId: req.user.id, status: "accepted" } });
+            await prisma.rideRequest.update({ where: { id: rideId }, data: { driverId: req.user.id, status: "accepted" } });
         } else {
             const cancelledIds = rideRequest.cancelledDriverIds ? JSON.parse(rideRequest.cancelledDriverIds) : [];
             cancelledIds.push(req.user.id);
-            await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { cancelledDriverIds: JSON.stringify(cancelledIds) } });
+            await prisma.rideRequest.update({ where: { id: rideId }, data: { cancelledDriverIds: JSON.stringify(cancelledIds) } });
         }
 
-        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         res.json({ success: true, message: accept ? "Ride request accepted" : "Ride request rejected", data: updatedRideRequest });
     } catch (error) {
         console.error("Accept ride request error:", error);
@@ -58,8 +65,10 @@ export const acceptRideRequest = async (req, res) => {
 export const completeRideRequest = async (req, res) => {
     try {
         const { rideRequestId, tips } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
         if (rideRequest.driverId !== req.user.id) return res.status(403).json({ success: false, message: "Not authorized to complete this ride" });
 
@@ -69,7 +78,7 @@ export const completeRideRequest = async (req, res) => {
                 : parseFloat(rideRequest.totalAmount);
         const totalAmount = effectiveFare + (parseFloat(tips) || 0);
 
-        await prisma.rideRequest.update({ where: { id: rideRequestId }, data: { status: "completed", tips: tips || 0, totalAmount } });
+        await prisma.rideRequest.update({ where: { id: rideId }, data: { status: "completed", tips: tips || 0, totalAmount } });
 
         await prisma.payment.create({
             data: {
@@ -107,7 +116,7 @@ export const completeRideRequest = async (req, res) => {
             });
         }
 
-        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });
+        const updatedRideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         res.json({ success: true, message: "Ride completed successfully", data: updatedRideRequest });
     } catch (error) {
         console.error("Complete ride request error:", error);
@@ -121,8 +130,10 @@ export const updateDropLocation = async (req, res) => {
     try {
         const { id, index } = req.params;
         const { latitude, longitude, address } = req.body;
+        const rideId = parseRideRequestIdParam(id);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid ride id" });
 
-        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: parseInt(id) } });
+        const rideRequest = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!rideRequest) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         let dropLocations = rideRequest.dropLocation ? JSON.parse(JSON.stringify(rideRequest.dropLocation)) : [];
@@ -139,7 +150,7 @@ export const updateDropLocation = async (req, res) => {
         }
 
         const updatedRideRequest = await prisma.rideRequest.update({
-            where: { id: parseInt(id) },
+            where: { id: rideId },
             data: { dropLocation: JSON.parse(JSON.stringify(dropLocations)) },
         });
 

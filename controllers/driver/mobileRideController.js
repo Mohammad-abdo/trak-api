@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
@@ -51,8 +52,10 @@ export const getMyRides = asyncHandler(async (req, res) => {
 
 // Single ride detail
 export const getRideDetail = asyncHandler(async (req, res) => {
+    const rideId = parseRideRequestIdParam(req.params.id);
+    if (!rideId) return errorResponse(res, "Invalid ride id", 400);
     const ride = await prisma.rideRequest.findUnique({
-        where: { id: parseInt(req.params.id) },
+        where: { id: rideId },
         include: {
             rider: { select: { id: true, firstName: true, lastName: true, contactNumber: true, avatar: true } },
             service: { select: { id: true, name: true, nameAr: true } },
@@ -70,8 +73,10 @@ export const getRideDetail = asyncHandler(async (req, res) => {
 export const respondToRide = asyncHandler(async (req, res) => {
     const { rideRequestId, accept } = req.body;
     if (!rideRequestId) return errorResponse(res, "rideRequestId is required", 400);
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride request not found", 404);
 
     if (accept) {
@@ -103,7 +108,9 @@ export const updateRideStatus = asyncHandler(async (req, res) => {
     const allowed = ["arrived", "started"];
     if (!allowed.includes(status)) return errorResponse(res, `status must be one of: ${allowed.join(", ")}`, 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
 
@@ -121,8 +128,10 @@ export const updateRideStatus = asyncHandler(async (req, res) => {
 // Complete ride (driver ends trip)
 export const completeRide = asyncHandler(async (req, res) => {
     const { rideRequestId, tips } = req.body;
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
 
@@ -178,8 +187,10 @@ export const completeRide = asyncHandler(async (req, res) => {
 // Cancel ride from driver side
 export const cancelRide = asyncHandler(async (req, res) => {
     const { rideRequestId, reason } = req.body;
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
 
@@ -201,8 +212,10 @@ export const cancelRide = asyncHandler(async (req, res) => {
 export const rateRider = asyncHandler(async (req, res) => {
     const { rideRequestId, rating, comment } = req.body;
     if (!rideRequestId || !rating) return errorResponse(res, "rideRequestId and rating are required", 400);
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
 
@@ -288,8 +301,10 @@ export const getEarningsSummary = asyncHandler(async (req, res) => {
 export const applyBid = asyncHandler(async (req, res) => {
     const { rideRequestId, bidAmount } = req.body;
     if (!rideRequestId || bidAmount == null) return errorResponse(res, "rideRequestId and bidAmount are required", 400);
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
 
     await prisma.rideRequestBid.create({ data: { rideRequestId: ride.id, driverId: req.user.id, bidAmount: parseFloat(bidAmount) } });

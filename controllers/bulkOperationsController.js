@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 
 /**
  * Bulk delete users
@@ -52,9 +53,17 @@ export const bulkDeleteRideRequests = async (req, res) => {
             });
         }
 
+        const rideIds = ids.map((id) => parseRideRequestIdParam(id)).filter(Boolean);
+        if (rideIds.length !== ids.length) {
+            return res.status(400).json({
+                success: false,
+                message: "Each ride id must be a valid UUID",
+            });
+        }
+
         const deleted = await prisma.rideRequest.deleteMany({
             where: {
-                id: { in: ids.map(id => parseInt(id)) },
+                id: { in: rideIds },
             },
         });
 

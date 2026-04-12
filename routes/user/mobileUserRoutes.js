@@ -818,7 +818,7 @@ router.post('/booking/create', authenticate, createBooking);
  *             type: object
  *             required: [booking_location, booking_id]
  *             properties:
- *               booking_id: { type: integer, example: 1 }
+ *               booking_id: { type: string, format: uuid, example: "123e4567-e89b-12d3-a456-426614174000" }
  *               booking_location:
  *                 type: object
  *                 properties:
@@ -871,7 +871,7 @@ router.post('/offers/near-drivers', authenticate, getNearDrivers);
  *             required: [driver_id, booking_id]
  *             properties:
  *               driver_id: { type: integer, description: ID of the driver to accept }
- *               booking_id: { type: integer, description: ID of the ride request/booking }
+ *               booking_id: { type: string, format: uuid, description: ID of the ride request/booking (UUID) }
  *     responses:
  *       200:
  *         description: Driver accepted – returns DriverInfo, vehicle, trip_code, price, from/to, tripStatus
@@ -903,7 +903,7 @@ router.post('/offers/accept-driver', authenticate, acceptDriver);
  *             required: [driver_id, booking_id]
  *             properties:
  *               driver_id: { type: integer, description: ID of the driver to remove from the booking }
- *               booking_id: { type: integer, description: ID of the booking }
+ *               booking_id: { type: string, format: uuid, description: ID of the booking (UUID) }
  *     responses:
  *       200:
  *         description: Driver offer cancelled – booking is pending again
@@ -917,7 +917,7 @@ router.post('/offers/accept-driver', authenticate, acceptDriver);
  *                 data:
  *                   type: object
  *                   properties:
- *                     booking_id: { type: integer }
+ *                     booking_id: { type: string, format: uuid }
  *                     status: { type: string, example: "pending" }
  *       400:
  *         description: Missing params, no driver assigned, or driver does not match booking
@@ -943,7 +943,7 @@ router.post('/offers/cancel-driver-offer', authenticate, cancelDriverOffer);
  *             required: [driver_id, booking_id]
  *             properties:
  *               driver_id: { type: integer }
- *               booking_id: { type: integer }
+ *               booking_id: { type: string, format: uuid }
  *     responses:
  *       200:
  *         description: Tracking started – subscribe to ride-{bookingId} WebSocket room
@@ -963,7 +963,8 @@ router.post('/offers/track-driver', authenticate, trackDriver);
  *         name: bookingId
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
+ *           format: uuid
  *     responses:
  *       200:
  *         description: Trip status and location info
@@ -987,7 +988,7 @@ router.get('/offers/trip-status/:bookingId', authenticate, getTripStatus);
  *             required: [booking_id]
  *             properties:
  *               driver_id: { type: integer }
- *               booking_id: { type: integer }
+ *               booking_id: { type: string, format: uuid }
  *     responses:
  *       200:
  *         description: Trip cancelled successfully
@@ -1011,7 +1012,7 @@ router.post('/offers/cancel-trip', authenticate, cancelTrip);
  *             required: [booking_id]
  *             properties:
  *               driver_id: { type: integer }
- *               booking_id: { type: integer }
+ *               booking_id: { type: string, format: uuid }
  *     responses:
  *       200:
  *         description: Trip ended successfully
@@ -1035,7 +1036,7 @@ router.post('/offers/trip-end', authenticate, tripEnd);
  *             required: [driver_id, booking_id, rate]
  *             properties:
  *               driver_id: { type: integer }
- *               booking_id: { type: integer }
+ *               booking_id: { type: string, format: uuid }
  *               rate: { type: number, minimum: 1, maximum: 5, example: 5 }
  *               text: { type: string, nullable: true }
  *     responses:
@@ -1117,7 +1118,7 @@ router.get('/my-bookings/filter', authenticate, filterBookings);
  *             type: object
  *             required: [book_id, text]
  *             properties:
- *               book_id: { type: integer }
+ *               book_id: { type: string, format: uuid }
  *               text: { type: string }
  *               trip_code: { type: string }
  *     responses:
@@ -1487,9 +1488,10 @@ router.get('/negotiation/settings', getNegotiationSettings);
  *             required: [rideRequestId, proposedFare]
  *             properties:
  *               rideRequestId:
- *                 type: integer
- *                 example: 1
- *                 description: ID of the ride request
+ *                 type: string
+ *                 format: uuid
+ *                 example: "123e4567-e89b-12d3-a456-426614174000"
+ *                 description: ID of the ride request (UUID)
  *               proposedFare:
  *                 type: number
  *                 example: 85.0
@@ -1507,7 +1509,7 @@ router.get('/negotiation/settings', getNegotiationSettings);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: integer }
+ *                     rideRequestId: { type: string, format: uuid }
  *                     baseFare: { type: number }
  *                     proposedFare: { type: number }
  *                     percentChange: { type: number, example: -15 }
@@ -1545,8 +1547,9 @@ router.post('/negotiation/start', authenticate, startNegotiation);
  *             required: [rideRequestId, proposedFare]
  *             properties:
  *               rideRequestId:
- *                 type: integer
- *                 example: 1
+ *                 type: string
+ *                 format: uuid
+ *                 example: "123e4567-e89b-12d3-a456-426614174000"
  *               proposedFare:
  *                 type: number
  *                 example: 90.0
@@ -1563,7 +1566,7 @@ router.post('/negotiation/start', authenticate, startNegotiation);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: integer }
+ *                     rideRequestId: { type: string, format: uuid }
  *                     baseFare: { type: number }
  *                     proposedFare: { type: number }
  *                     percentChange: { type: number }
@@ -1601,8 +1604,9 @@ router.post('/negotiation/counter', authenticate, counterOffer);
  *             required: [rideRequestId]
  *             properties:
  *               rideRequestId:
- *                 type: integer
- *                 example: 1
+ *                 type: string
+ *                 format: uuid
+ *                 example: "123e4567-e89b-12d3-a456-426614174000"
  *     responses:
  *       200:
  *         description: Negotiation accepted — fare locked
@@ -1616,7 +1620,7 @@ router.post('/negotiation/counter', authenticate, counterOffer);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: integer }
+ *                     rideRequestId: { type: string, format: uuid }
  *                     baseFare: { type: number }
  *                     negotiatedFare: { type: number }
  *                     percentChange: { type: number }
@@ -1650,8 +1654,9 @@ router.post('/negotiation/accept', authenticate, acceptNegotiation);
  *             required: [rideRequestId]
  *             properties:
  *               rideRequestId:
- *                 type: integer
- *                 example: 1
+ *                 type: string
+ *                 format: uuid
+ *                 example: "123e4567-e89b-12d3-a456-426614174000"
  *     responses:
  *       200:
  *         description: Negotiation rejected — baseFare restored
@@ -1665,7 +1670,7 @@ router.post('/negotiation/accept', authenticate, acceptNegotiation);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: integer }
+ *                     rideRequestId: { type: string, format: uuid }
  *                     baseFare: { type: number }
  *                     negotiatedFare: { type: number, nullable: true, example: null }
  *                     negotiationStatus: { type: string, example: "rejected" }
@@ -1694,8 +1699,9 @@ router.post('/negotiation/reject', authenticate, rejectNegotiation);
  *         name: rideRequestId
  *         required: true
  *         schema:
- *           type: integer
- *         example: 1
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
  *     responses:
  *       200:
  *         description: Negotiation history
@@ -1711,7 +1717,7 @@ router.post('/negotiation/reject', authenticate, rejectNegotiation);
  *                     ride:
  *                       type: object
  *                       properties:
- *                         id: { type: integer }
+ *                         id: { type: string, format: uuid }
  *                         baseFare: { type: number }
  *                         negotiatedFare: { type: number, nullable: true }
  *                         negotiationStatus: { type: string }

@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 import { debitWalletForRideIfSufficient } from "../services/walletLedgerService.js";
 import { userHasAnyPermission } from "../utils/staffPermissions.js";
 import {
@@ -76,9 +77,16 @@ export const getPaymentList = async (req, res) => {
 export const savePayment = async (req, res) => {
     try {
         const { rideRequestId, paymentType, transactionId } = req.body;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid rideRequestId",
+            });
+        }
 
         const rideRequest = await prisma.rideRequest.findUnique({
-            where: { id: rideRequestId },
+            where: { id: rideId },
         });
 
         if (!rideRequest) {

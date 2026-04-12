@@ -5,6 +5,7 @@ import {
     getEffectiveRidePaymentTotal,
 } from "../services/ridePaymentCompletionService.js";
 import { notifyPayskyWebhookAdmin } from "../utils/payskyWebhookAdminNotify.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 
 /** Exported for webhook-info / UI. */
 export function payskyTripSimulationAllowed() {
@@ -28,9 +29,9 @@ export const payskySimulateTripPayment = async (req, res) => {
         });
     }
 
-    const rideRequestId = parseInt(req.body?.rideRequestId ?? req.body?.ride_request_id, 10);
-    if (!Number.isFinite(rideRequestId) || rideRequestId < 1) {
-        return res.status(400).json({ success: false, message: "rideRequestId is required (positive integer)" });
+    const rideRequestId = parseRideRequestIdParam(req.body?.rideRequestId ?? req.body?.ride_request_id);
+    if (!rideRequestId) {
+        return res.status(400).json({ success: false, message: "rideRequestId is required (UUID string)" });
     }
 
     const ride = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });

@@ -1,5 +1,6 @@
 import prisma from '../../utils/prisma.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
+import { parseRideRequestIdParam } from '../../utils/rideRequestId.js';
 
 // Helper: Calculate distance between two coordinates (Haversine formula)
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -22,9 +23,13 @@ export const getNearDrivers = async (req, res) => {
         if (!booking_location || !booking_location.lat || !booking_location.lng || !booking_id) {
             return res.status(400).json({ success: false, message: 'booking_location (lat/lng) and booking_id are required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findUnique({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             select: { id: true, vehicleCategoryId: true, totalAmount: true },
         });
 
@@ -109,9 +114,13 @@ export const acceptDriver = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(booking_id), riderId },
+            where: { id: rideId, riderId },
         });
 
         if (!booking) {
@@ -121,7 +130,7 @@ export const acceptDriver = async (req, res) => {
         const tripCode = `TRP${Date.now()}`;
 
         const updated = await prisma.rideRequest.update({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             data: {
                 driverId: parseInt(driver_id),
                 status: 'accepted',
@@ -159,7 +168,7 @@ export const acceptDriver = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(`driver-${driver_id}`).emit('ride-request-accepted', {
-                booking_id: parseInt(booking_id),
+                booking_id: rideId,
                 rider_id: riderId,
             });
         }
@@ -201,9 +210,13 @@ export const cancelDriverOffer = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(booking_id), riderId },
+            where: { id: rideId, riderId },
             select: { id: true, status: true, driverId: true },
         });
 
@@ -223,7 +236,7 @@ export const cancelDriverOffer = async (req, res) => {
         }
 
         await prisma.rideRequest.update({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             data: {
                 driverId: null,
                 riderequestInDriverId: null,
@@ -235,7 +248,7 @@ export const cancelDriverOffer = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(`driver-${driver_id}`).emit('driver-offer-cancelled', {
-                booking_id: parseInt(booking_id),
+                booking_id: rideId,
                 rider_id: riderId,
             });
         }
@@ -243,7 +256,7 @@ export const cancelDriverOffer = async (req, res) => {
         return res.json({
             success: true,
             message: 'Driver offer cancelled. You can select another driver.',
-            data: { booking_id: parseInt(booking_id), status: 'pending' },
+            data: { booking_id: rideId, status: 'pending' },
         });
     } catch (error) {
         console.error('Cancel driver offer error:', error);
@@ -261,6 +274,10 @@ export const trackDriver = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const driver = await prisma.user.findUnique({
             where: { id: parseInt(driver_id) },
@@ -275,20 +292,20 @@ export const trackDriver = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(`user-${req.user.id}`).emit('trip-tracking-started', {
-                booking_id: parseInt(booking_id),
+                booking_id: rideId,
                 driver_id: parseInt(driver_id),
             });
         }
 
         return res.json({
             success: true,
-            message: 'Tracking started. Connect to WebSocket room: ride-' + booking_id,
+            message: 'Tracking started. Connect to WebSocket room: ride-' + rideId,
             data: {
-                booking_id: parseInt(booking_id),
+                booking_id: rideId,
                 driver_id: parseInt(driver_id),
                 driverCurrentLocation: { lat: driver.latitude, lng: driver.longitude },
                 lastUpdated: driver.lastLocationUpdateAt,
-                webSocket: { event: 'subscribe-ride', room: `ride-${booking_id}` },
+                webSocket: { event: 'subscribe-ride', room: `ride-${rideId}` },
             },
         });
     } catch (error) {
@@ -304,9 +321,13 @@ export const getTripStatus = async (req, res) => {
     try {
         const { bookingId } = req.params;
         const riderId = req.user.id;
+        const rideId = parseRideRequestIdParam(bookingId);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(bookingId), riderId },
+            where: { id: rideId, riderId },
             select: {
                 id: true,
                 status: true,
@@ -366,9 +387,13 @@ export const cancelTrip = async (req, res) => {
         if (!booking_id) {
             return res.status(400).json({ success: false, message: 'booking_id is required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(booking_id), riderId },
+            where: { id: rideId, riderId },
         });
 
         if (!booking) {
@@ -380,14 +405,14 @@ export const cancelTrip = async (req, res) => {
         }
 
         await prisma.rideRequest.update({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             data: { status: 'cancelled', cancelBy: 'rider' },
         });
 
         // Notify driver
         const io = req.app.get('io');
         if (io && driver_id) {
-            io.to(`driver-${driver_id}`).emit('trip-cancelled', { booking_id: parseInt(booking_id), cancelled_by: 'rider' });
+            io.to(`driver-${driver_id}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider' });
         }
 
         return res.json({ success: true, message: 'Trip cancelled successfully' });
@@ -408,9 +433,13 @@ export const tripEnd = async (req, res) => {
         if (!booking_id) {
             return res.status(400).json({ success: false, message: 'booking_id is required' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(booking_id), riderId },
+            where: { id: rideId, riderId },
         });
 
         if (!booking) {
@@ -418,14 +447,14 @@ export const tripEnd = async (req, res) => {
         }
 
         await prisma.rideRequest.update({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             data: { status: 'completed' },
         });
 
         // Notify driver
         const io = req.app.get('io');
         if (io && driver_id) {
-            io.to(`driver-${driver_id}`).emit('trip-completed', { booking_id: parseInt(booking_id) });
+            io.to(`driver-${driver_id}`).emit('trip-completed', { booking_id: rideId });
         }
 
         return res.json({ success: true, message: 'Trip ended successfully. Please rate your driver.' });
@@ -450,9 +479,13 @@ export const rateDriver = async (req, res) => {
         if (rate < 1 || rate > 5) {
             return res.status(400).json({ success: false, message: 'Rate must be between 1 and 5' });
         }
+        const rideId = parseRideRequestIdParam(booking_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(booking_id), riderId },
+            where: { id: rideId, riderId },
         });
 
         if (!booking) {
@@ -465,7 +498,7 @@ export const rateDriver = async (req, res) => {
 
         await prisma.rideRequestRating.create({
             data: {
-                rideRequestId: parseInt(booking_id),
+                rideRequestId: rideId,
                 riderId,
                 driverId: parseInt(driver_id),
                 rating: parseFloat(rate),
@@ -475,7 +508,7 @@ export const rateDriver = async (req, res) => {
         });
 
         await prisma.rideRequest.update({
-            where: { id: parseInt(booking_id) },
+            where: { id: rideId },
             data: { isDriverRated: true },
         });
 

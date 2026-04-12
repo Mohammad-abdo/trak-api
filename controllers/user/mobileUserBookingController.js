@@ -1,4 +1,5 @@
 import prisma from '../../utils/prisma.js';
+import { parseRideRequestIdParam } from '../../utils/rideRequestId.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
 
 // @desc    Get all user bookings with status
@@ -237,9 +238,13 @@ export const addReview = async (req, res) => {
         if (!book_id || !text) {
             return res.status(400).json({ success: false, message: 'book_id and text are required' });
         }
+        const rideId = parseRideRequestIdParam(book_id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: 'Invalid book_id' });
+        }
 
         const booking = await prisma.rideRequest.findFirst({
-            where: { id: parseInt(book_id), riderId },
+            where: { id: rideId, riderId },
         });
 
         if (!booking) {
@@ -256,7 +261,7 @@ export const addReview = async (req, res) => {
 
         // Upsert review
         const existing = await prisma.rideRequestRating.findFirst({
-            where: { rideRequestId: parseInt(book_id), riderId, ratingBy: 'rider' },
+            where: { rideRequestId: rideId, riderId, ratingBy: 'rider' },
         });
 
         if (existing) {
@@ -267,7 +272,7 @@ export const addReview = async (req, res) => {
         } else {
             await prisma.rideRequestRating.create({
                 data: {
-                    rideRequestId: parseInt(book_id),
+                    rideRequestId: rideId,
                     riderId,
                     driverId: booking.driverId,
                     rating: 5,

@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
 
 // @desc    Get ride request list with advanced filtering
 // @route   GET /api/ride-requests/riderequest-list
@@ -89,9 +90,13 @@ export const getRideRequestList = async (req, res) => {
 export const getRideRequestDetail = async (req, res) => {
     try {
         const { id } = req.query;
+        const rideId = parseRideRequestIdParam(id);
+        if (!rideId) {
+            return res.status(400).json({ success: false, message: "Invalid ride id" });
+        }
 
         const rideRequest = await prisma.rideRequest.findUnique({
-            where: { id: parseInt(id) },
+            where: { id: rideId },
             include: {
                 rider: { select: { id: true, firstName: true, lastName: true, contactNumber: true, email: true } },
                 driver: { select: { id: true, firstName: true, lastName: true, contactNumber: true, email: true, latitude: true, longitude: true } },

@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 import {
     getNegotiationSettings,
     validateFareBounds,
@@ -32,13 +33,15 @@ export const startNegotiation = async (req, res) => {
         if (!rideRequestId || proposedFare == null) {
             return res.status(400).json({ success: false, message: "rideRequestId and proposedFare are required" });
         }
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
         const settings = await getNegotiationSettings();
         if (!settings.enabled) {
             return res.status(403).json({ success: false, message: "Negotiation is disabled" });
         }
 
-        const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+        const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!ride) return res.status(404).json({ success: false, message: "Ride request not found" });
         if (ride.riderId !== req.user.id) {
             return res.status(403).json({ success: false, message: "Only the rider can start negotiation" });
@@ -112,13 +115,15 @@ export const counterOffer = async (req, res) => {
         if (!rideRequestId || proposedFare == null) {
             return res.status(400).json({ success: false, message: "rideRequestId and proposedFare are required" });
         }
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
         const settings = await getNegotiationSettings();
         if (!settings.enabled) {
             return res.status(403).json({ success: false, message: "Negotiation is disabled" });
         }
 
-        const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+        const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!ride) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         const userId = req.user.id;
@@ -209,8 +214,10 @@ export const acceptNegotiation = async (req, res) => {
     try {
         const { rideRequestId } = req.body;
         if (!rideRequestId) return res.status(400).json({ success: false, message: "rideRequestId is required" });
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+        const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!ride) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         const userId = req.user.id;
@@ -284,8 +291,10 @@ export const rejectNegotiation = async (req, res) => {
     try {
         const { rideRequestId } = req.body;
         if (!rideRequestId) return res.status(400).json({ success: false, message: "rideRequestId is required" });
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
 
-        const ride = await prisma.rideRequest.findUnique({ where: { id: parseInt(rideRequestId) } });
+        const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
         if (!ride) return res.status(404).json({ success: false, message: "Ride request not found" });
 
         const userId = req.user.id;
@@ -346,8 +355,10 @@ export const rejectNegotiation = async (req, res) => {
 export const getNegotiationHistory = async (req, res) => {
     try {
         const { rideRequestId } = req.params;
+        const rideId = parseRideRequestIdParam(rideRequestId);
+        if (!rideId) return res.status(400).json({ success: false, message: "Invalid rideRequestId" });
         const ride = await prisma.rideRequest.findUnique({
-            where: { id: parseInt(rideRequestId) },
+            where: { id: rideId },
             select: {
                 id: true,
                 riderId: true,
