@@ -4,10 +4,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { authenticate } from "../../middleware/auth.js";
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
+// ─── Auth (OTP aligned with mobile user: shared validation, test OTP, token on resend) ──
 import { login } from "../../controllers/driver/mobileAuthController.js";
-import { submitOtp, resendOtp } from "../../controllers/auth/otp.js";
-import { sendOtp, forgotPassword, resetPassword } from "../../controllers/user/mobileAuthController.js";
+import { submitOtp, resendOtp, sendOtp, forgotPassword, resetPassword } from "../../controllers/user/mobileAuthController.js";
 import { logout } from "../../controllers/auth/login.js";
 
 // ─── Driver profile/vehicle/docs/bank/status ─────────────────────────────────

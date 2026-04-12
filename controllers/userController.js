@@ -1,12 +1,13 @@
 import prisma from "../utils/prisma.js";
+import { getDashboardPermissionPayload } from "../utils/staffPermissions.js";
 import bcrypt from "bcryptjs";
 import { generateExcel, generatePDF, generateCSV, formatDate } from "../utils/exportUtils.js";
 import { saveAdminNotification } from "../utils/notificationService.js";
 import { fullImageUrl } from "../utils/imageUrl.js";
 
 // @desc    Get user list with advanced filtering
-// @route   GET /api/users/list
-// @access  Public
+// @route   GET /api/users/user-list
+// @access  Private (admin or sub_admin with users.view / drivers.view / riders.view)
 export const getUserList = async (req, res) => {
     try {
         const {
@@ -39,19 +40,19 @@ export const getUserList = async (req, res) => {
         // Search filters
         if (search) {
             where.OR = [
-                { firstName: { contains: search, mode: "insensitive" } },
-                { lastName: { contains: search, mode: "insensitive" } },
-                { email: { contains: search, mode: "insensitive" } },
-                { contactNumber: { contains: search, mode: "insensitive" } },
+                { firstName: { contains: search } },
+                { lastName: { contains: search } },
+                { email: { contains: search } },
+                { contactNumber: { contains: search } },
             ];
         }
 
         if (contactNumber) {
-            where.contactNumber = { contains: contactNumber, mode: "insensitive" };
+            where.contactNumber = { contains: contactNumber };
         }
 
         if (email) {
-            where.email = { contains: email, mode: "insensitive" };
+            where.email = { contains: email };
         }
 
         // Last active filter
@@ -138,7 +139,7 @@ export const getUserList = async (req, res) => {
 };
 
 // @desc    Get user detail
-// @route   GET /api/users/detail
+// @route   GET /api/users/user-detail
 // @access  Private
 export const getUserDetail = async (req, res) => {
     try {
@@ -178,9 +179,22 @@ export const getUserDetail = async (req, res) => {
             },
         });
 
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const rbac = await getDashboardPermissionPayload(req.user.id, user.userType);
+
         res.json({
             success: true,
-            data: user,
+            data: {
+                ...user,
+                permissionNames: rbac.permissionNames,
+                isDashboardAdmin: rbac.isDashboardAdmin,
+            },
         });
     } catch (error) {
         console.error("Get user detail error:", error);

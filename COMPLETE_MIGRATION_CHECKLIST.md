@@ -91,8 +91,8 @@
 - ✅ POST /api/auth/social-login
 
 ### User Routes
-- ✅ GET /api/users/list
-- ✅ GET /api/users/detail
+- ✅ GET /api/users/user-list
+- ✅ GET /api/users/user-detail
 - ✅ POST /api/users/update-profile
 - ✅ POST /api/users/change-password
 - ✅ POST /api/users/update-user-status

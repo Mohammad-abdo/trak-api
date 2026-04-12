@@ -9,6 +9,7 @@
 
 import prisma from '../utils/prisma.js'
 import { sendNotificationToUsers, saveNotification } from '../utils/notificationService.js'
+import { debitWalletForRideOrThrow } from '../services/walletLedgerService.js'
 
 /**
  * @desc    Schedule a prepaid ride
@@ -152,32 +153,12 @@ export const scheduleRide = async (req, res) => {
 
       // If wallet payment, deduct from wallet
       if (paymentType === 'wallet') {
-        const wallet = await tx.wallet.findUnique({
-          where: { userId }
-        })
-
-        if (!wallet || wallet.balance < fareCalculation.totalAmount) {
-          throw new Error('Insufficient wallet balance')
-        }
-
-        const newBalance = wallet.balance - fareCalculation.totalAmount
-
-        await tx.wallet.update({
-          where: { id: wallet.id },
-          data: { balance: newBalance }
-        })
-
-        await tx.walletHistory.create({
-          data: {
-            walletId: wallet.id,
-            userId,
-            type: 'debit',
-            amount: fareCalculation.totalAmount,
-            balance: newBalance,
-            description: 'Prepaid scheduled ride payment',
-            transactionType: 'ride_payment',
-            rideRequestId: ride.id
-          }
+        await debitWalletForRideOrThrow(tx, {
+          userId,
+          amount: fareCalculation.totalAmount,
+          rideRequestId: ride.id,
+          description: 'Prepaid scheduled ride payment',
+          transactionType: 'ride_payment'
         })
       }
 

@@ -19,7 +19,7 @@ import {
     createDriver,
     updateDriver,
 } from "../controllers/userController.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticate, authorize, authorizeAnyPermission } from "../middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,8 +54,16 @@ const driverFields = driverUpload.fields([
 const router = express.Router();
 
 // Public routes
-router.get("/user-list", getUserList);
 router.get("/get-appsetting", getAppSetting);
+
+// Staff-only: listing users (PII) — requires dashboard staff + directory permission
+router.get(
+    "/user-list",
+    authenticate,
+    authorize("admin", "sub_admin"),
+    authorizeAnyPermission("users.view", "drivers.view", "riders.view"),
+    getUserList
+);
 
 // Authenticated routes
 router.get("/user-detail", authenticate, getUserDetail);

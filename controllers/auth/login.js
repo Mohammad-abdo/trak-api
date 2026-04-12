@@ -1,4 +1,5 @@
 import prisma from "../../utils/prisma.js";
+import { getDashboardPermissionPayload } from "../../utils/staffPermissions.js";
 import bcrypt from "bcryptjs";
 import { generateOtp, getOtpExpiresAt } from "../../utils/otpHelper.js";
 import { generateToken } from "../../utils/jwtHelper.js";
@@ -92,7 +93,7 @@ export const login = async (req, res) => {
 
         const token = generateToken(user.id);
 
-        console.log("Login successful for:", user.email);
+        const rbac = await getDashboardPermissionPayload(user.id, user.userType);
 
         res.json({
             success: true,
@@ -109,6 +110,8 @@ export const login = async (req, res) => {
                     status: user.status,
                     isOnline: user.isOnline,
                     isAvailable: user.isAvailable,
+                    permissionNames: rbac.permissionNames,
+                    isDashboardAdmin: rbac.isDashboardAdmin,
                 },
             },
         });

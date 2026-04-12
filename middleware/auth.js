@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import prisma from "../utils/prisma.js";
+import { getDashboardPermissionPayload } from "../utils/staffPermissions.js";
 
 const getTokenFromRequest = (req) => {
     const fromHeader = req.header("Authorization")?.replace(/^Bearer\s+/i, "").trim();
@@ -158,6 +159,41 @@ export const authorizePermission = (permissionName) => {
             next();
         } catch (error) {
             console.error("Permission check error:", error);
+            res.status(500).json({ success: false, message: "Permission check failed" });
+        }
+    };
+};
+
+/**
+ * Staff (non-admin) must have at least one of the listed permissions. Admin always passes.
+ */
+export const authorizeAnyPermission = (...permissionNames) => {
+    return async (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (req.user.userType === "admin") return next();
+
+        try {
+            const { permissionNames: held, isDashboardAdmin } = await getDashboardPermissionPayload(
+                req.user.id,
+                req.user.userType
+            );
+
+            if (isDashboardAdmin || held.includes("*")) return next();
+
+            const ok = permissionNames.some((name) => held.includes(name));
+            if (!ok) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Access denied. Insufficient permissions for this resource.",
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error("authorizeAnyPermission error:", error);
             res.status(500).json({ success: false, message: "Permission check failed" });
         }
     };

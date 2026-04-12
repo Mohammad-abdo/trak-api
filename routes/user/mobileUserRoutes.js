@@ -24,6 +24,7 @@ import { myProfile, updateProfile, deleteAccount, getUserAddresses, addAddress, 
 import { addBankCard, getBankCards, deleteBankCard } from '../../controllers/user/mobileCardController.js';
 // Static
 import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications } from '../../controllers/user/mobileStaticController.js';
+import { payskySimulateTripPayment } from '../../controllers/payskySimulateTripPaymentController.js';
 // Negotiation
 import { getSettings as getNegotiationSettings, startNegotiation, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from '../../controllers/negotiationController.js';
 
@@ -752,6 +753,9 @@ router.get('/booking/shipment-weights', authenticate, getShipmentWeights);
  *         description: Array [payment_id, name]
  */
 router.get('/booking/payment-methods', authenticate, getPaymentMethods);
+
+/** Dev/QA: simulate successful PaySky card payment for your ride (same as dashboard test). */
+router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment);
 
 /**
  * @swagger

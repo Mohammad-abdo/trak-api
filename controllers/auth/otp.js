@@ -1,6 +1,7 @@
 import prisma from "../../utils/prisma.js";
 import { generateOtp, getOtpExpiresAt } from "../../utils/otpHelper.js";
 import { sendOtpSms } from "../../utils/smsService.js";
+import { normalizeOtpInput, validateOtpAgainstUser } from "../../services/otpVerificationService.js";
 
 // @desc    Verify OTP and set isVerified (authenticated user)
 // @route   POST /api/auth/submit-otp
@@ -8,9 +9,9 @@ import { sendOtpSms } from "../../utils/smsService.js";
 export const submitOtp = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { otp } = req.body;
+        const submittedOtp = normalizeOtpInput(req.body?.otp);
 
-        if (!otp) {
+        if (!submittedOtp) {
             return res.status(400).json({
                 success: false,
                 message: "OTP is required",
@@ -28,17 +29,13 @@ export const submitOtp = async (req, res) => {
             });
         }
 
-        if (user.otp !== otp) {
+        const v = validateOtpAgainstUser(user, submittedOtp, { allowTestOtp: false });
+        if (!v.ok) {
+            const message =
+                v.reason === "expired" ? "OTP has expired" : v.reason === "missing" ? "OTP is required" : "Invalid OTP";
             return res.status(400).json({
                 success: false,
-                message: "Invalid OTP",
-            });
-        }
-
-        if (user.otpExpiresAt && new Date() > user.otpExpiresAt) {
-            return res.status(400).json({
-                success: false,
-                message: "OTP has expired",
+                message,
             });
         }
 

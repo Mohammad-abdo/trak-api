@@ -1578,6 +1578,71 @@ async function main() {
     })
   }
 
+  // Last: PaySky test rides so they sort first (newest) on admin ride list (per_page default was hiding them)
+  console.log('Creating PaySky payment-test ride requests (pending card payment)...')
+  const payTestRideDefs = [
+    {
+      rider: rider1,
+      driver: driver1,
+      amount: 55.0,
+      note: 'SEED PaySky test A — rider1 / driver1',
+    },
+    {
+      rider: rider2,
+      driver: driver3,
+      amount: 72.5,
+      note: 'SEED PaySky test B — rider2 / driver3',
+    },
+    {
+      rider: mobileTestUser,
+      driver: driver2,
+      amount: 99.99,
+      note: 'SEED PaySky test C — mobile user 01234567890 / driver2',
+    },
+  ]
+  const payTestRides = []
+  for (const d of payTestRideDefs) {
+    const rr = await prisma.rideRequest.create({
+      data: {
+        riderId: d.rider.id,
+        serviceId: service1.id,
+        datetime: new Date(),
+        isSchedule: false,
+        rideAttempt: 1,
+        distanceUnit: 'km',
+        totalAmount: d.amount,
+        surgeAmount: 0,
+        subtotal: d.amount,
+        extraChargesAmount: 0,
+        driverId: d.driver.id,
+        startLatitude: '30.0444',
+        startLongitude: '31.2357',
+        startAddress: `${d.note} — pickup`,
+        endLatitude: '30.06',
+        endLongitude: '31.25',
+        endAddress: `${d.note} — dropoff`,
+        distance: 9.0,
+        duration: 18,
+        seatCount: 1,
+        status: 'completed',
+        rideHasBid: false,
+        baseFare: 12.0,
+        minimumFare: 18.0,
+        perDistance: 2.5,
+        perDistanceCharge: Math.round(d.amount * 0.45 * 100) / 100,
+        perMinuteDrive: 0.5,
+        perMinuteDriveCharge: Math.round(d.amount * 0.12 * 100) / 100,
+        paymentType: 'card',
+        tips: 0,
+        isRiderRated: false,
+        isDriverRated: false,
+        internalNote:
+          'Seed: card payment pending (awaiting PaySky / simulate). IDs logged after seed.',
+      },
+    })
+    payTestRides.push(rr)
+  }
+
   // Wallet operations for rider1 (so GET /apimobile/user/wallet/operations returns data)
   const walletR1 = await prisma.wallet.findFirst({ where: { userId: rider1.id } })
   if (walletR1) {
@@ -1698,6 +1763,23 @@ async function main() {
       paymentDate: new Date()
     }
   })
+
+  for (const rr of payTestRides) {
+    await prisma.payment.create({
+      data: {
+        rideRequestId: rr.id,
+        userId: rr.riderId,
+        driverId: rr.driverId,
+        amount: rr.totalAmount,
+        paymentType: 'card',
+        paymentStatus: 'pending',
+        paymentDate: new Date(),
+      },
+    })
+  }
+  console.log(
+    `   PaySky / simulate test ride IDs (pending card): ${payTestRides.map((r) => r.id).join(', ')}`
+  )
 
   // رحلة 1 كاش: خصم نسبة السستم من محفظة السائق (لا إيداع أرباح — استلم الكاش)
   const walletD1 = await prisma.wallet.findFirst({ where: { userId: driver1.id } })
@@ -2491,6 +2573,54 @@ async function main() {
     }
   })
 
+  const adminNotifCount = await prisma.notification.count({ where: { notifiableType: 'Admin' } })
+  if (adminNotifCount === 0) {
+    console.log('Seeding sample admin notifications (header bell + /admin-notifications)...')
+    await prisma.notification.createMany({
+      data: [
+        {
+          type: 'new_ride',
+          notifiableType: 'Admin',
+          notifiableId: 0,
+          data: {
+            title: 'Sample: dashboard notifications',
+            titleAr: 'عينة: إشعارات لوحة التحكم',
+            message: 'You will see real alerts here (new drivers, PaySky webhooks, etc.).',
+            messageAr: 'ستظهر هنا التنبيهات الحقيقية (سائقون جدد، PaySky، إلخ).',
+            link: '/ride-requests',
+          },
+          isRead: false,
+        },
+        {
+          type: 'new_driver',
+          notifiableType: 'Admin',
+          notifiableId: 0,
+          data: {
+            title: 'Sample: driver pending approval',
+            titleAr: 'عينة: سائق بانتظار الموافقة',
+            message: 'Open Drivers to review registrations.',
+            messageAr: 'افتح السائقين لمراجعة التسجيلات.',
+            link: '/drivers',
+          },
+          isRead: false,
+        },
+        {
+          type: 'new_complaint',
+          notifiableType: 'Admin',
+          notifiableId: 0,
+          data: {
+            title: 'Sample: complaint',
+            titleAr: 'عينة: شكوى',
+            message: 'Complaints from riders/drivers appear here.',
+            messageAr: 'تظهر هنا الشكاوى من الركاب أو السائقين.',
+            link: '/complaints',
+          },
+          isRead: false,
+        },
+      ],
+    })
+  }
+
   console.log('')
   console.log('✅ Multi-service platform data seeded successfully!')
   console.log('   - Service Categories: 3 (Passenger, Cargo, Additional)')
@@ -2506,6 +2636,14 @@ async function main() {
   console.log('   Fleet: fleet@alaelsareea.com / password123')
   console.log('   Rider: ahmed@example.com / password123')
   console.log('   Driver: khalid@example.com / password123')
+  console.log('')
+  console.log('💳 PaySky payment-test rides (completed, card, payment pending):')
+  payTestRides.forEach((r, i) => {
+    console.log(
+      `   ${i + 1}. ride id=${r.id} | amount=${r.totalAmount} | riderId=${r.riderId} | driverId=${r.driverId}`
+    )
+  })
+  console.log('   → Dashboard: /payments/paysky-test → «Simulate full trip payment» or real PaySky webhook.')
   console.log('')
   console.log('📱 Mobile API test user (for /apimobile/user/*):')
   console.log('   Phone: 01234567890')

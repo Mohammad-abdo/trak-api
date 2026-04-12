@@ -1,5 +1,6 @@
 import prisma from "../utils/prisma.js";
 import { saveAdminNotification } from "../utils/notificationService.js";
+import { userHasAnyPermission } from "../utils/staffPermissions.js";
 
 // @desc    Get withdraw request list (admin: drivers only; user: own only)
 // @route   GET /api/withdraw-requests/withdrawrequest-list
@@ -8,7 +9,16 @@ export const getWithdrawRequestList = async (req, res) => {
     try {
         const where = {};
 
-        if (req.user.userType === "admin") {
+        const canViewAllDriverWithdrawals =
+            req.user.userType === "admin" ||
+            (req.user.userType === "sub_admin" &&
+                (await userHasAnyPermission(req.user.id, req.user.userType, [
+                    "wallets.view",
+                    "wallets.manage",
+                    "wallets.withdraw",
+                ])));
+
+        if (canViewAllDriverWithdrawals) {
             where.user = { userType: "driver" };
             if (req.query.userId) {
                 const uid = parseInt(req.query.userId, 10);

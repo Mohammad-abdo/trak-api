@@ -42,8 +42,8 @@ export const getRideRequestList = async (req, res) => {
 
         if (search) {
             where.OR = [
-                { startAddress: { contains: search, mode: "insensitive" } },
-                { endAddress: { contains: search, mode: "insensitive" } },
+                { startAddress: { contains: search } },
+                { endAddress: { contains: search } },
             ];
         }
 
@@ -96,6 +96,11 @@ export const getRideRequestDetail = async (req, res) => {
                 rider: { select: { id: true, firstName: true, lastName: true, contactNumber: true, email: true } },
                 driver: { select: { id: true, firstName: true, lastName: true, contactNumber: true, email: true, latitude: true, longitude: true } },
                 service: { select: { id: true, name: true, baseFare: true } },
+                payments: {
+                    select: { id: true, paymentStatus: true, paymentType: true, amount: true },
+                    take: 1,
+                    orderBy: { createdAt: "desc" },
+                },
             },
         });
 

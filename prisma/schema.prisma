@@ -1540,3 +1540,23 @@ model ShipmentWeight {
   @@index([vehicleCategoryId])
   @@map("shipment_weights")
 }
+
+model SecurityAuditLog {
+  id           Int      @id @default(autoincrement())
+  category     String   @db.VarChar(32)
+  userId       Int?     @map("user_id")
+  userType     String?  @map("user_type") @db.VarChar(32)
+  ip           String?  @db.VarChar(128)
+  forwardedFor String?  @map("forwarded_for") @db.Text
+  userAgent    String?  @map("user_agent") @db.VarChar(512)
+  method       String   @db.VarChar(10)
+  route        String   @db.VarChar(512)
+  requestId    String?  @map("request_id") @db.VarChar(64)
+  statusCode   Int?     @map("status_code")
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(6)
+
+  @@index([category, createdAt])
+  @@index([userId])
+  @@map("security_audit_logs")
+}

@@ -78,6 +78,8 @@ import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
 import mobileDriverRoutes from './routes/driver/mobileDriverRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
+import { requestContextMiddleware } from './middleware/requestContext.js';
+import { securityAuditMiddleware } from './middleware/securityAuditMiddleware.js';
 
 dotenv.config();
 
@@ -94,10 +96,23 @@ const io = new Server(httpServer, {
 });
 const PORT = process.env.PORT || 5000;
 
+function parseTrustProxy() {
+  const v = process.env.TRUST_PROXY;
+  if (v === undefined || v === '' || v === '0' || v === 'false') return false;
+  if (v === '1' || v === 'true') return true;
+  const n = parseInt(v, 10);
+  if (!Number.isNaN(n) && String(n) === String(v).trim()) return n;
+  return true;
+}
+
+app.set('trust proxy', parseTrustProxy());
+
 // Middleware
+app.use(requestContextMiddleware);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(securityAuditMiddleware);
 
 // Static files
 app.use('/uploads', express.static(join(__dirname, 'uploads')));

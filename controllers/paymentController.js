@@ -1,5 +1,10 @@
 import prisma from "../utils/prisma.js";
-import { getDriverAndSystemShare } from "../utils/settingsHelper.js";
+import { debitWalletForRideIfSufficient } from "../services/walletLedgerService.js";
+import { userHasAnyPermission } from "../utils/staffPermissions.js";
+import {
+    completePaidGatewayPayment,
+    getEffectiveRidePaymentTotal,
+} from "../services/ridePaymentCompletionService.js";
 
 // @desc    Get payment list
 // @route   GET /api/payments
@@ -83,108 +88,40 @@ export const savePayment = async (req, res) => {
             });
         }
 
-        // Create or update payment
-        let payment = await prisma.payment.findFirst({
-            where: { rideRequestId },
-        });
+        const uid = req.user.id;
+        const isRiderOrDriver =
+            uid === rideRequest.riderId || (rideRequest.driverId != null && uid === rideRequest.driverId);
+        const isStaffFinance = await userHasAnyPermission(uid, req.user.userType, [
+            "rides.manage",
+            "rides.view",
+            "wallets.manage",
+            "wallets.view",
+        ]);
 
-        if (payment) {
-            payment = await prisma.payment.update({
-                where: { id: payment.id },
-                data: {
-                    paymentType,
-                    paymentStatus: "paid",
-                    transactionId,
-                },
-            });
-        } else {
-            payment = await prisma.payment.create({
-                data: {
-                    rideRequestId: rideRequest.id,
-                    userId: rideRequest.riderId,
-                    driverId: rideRequest.driverId,
-                    amount: rideRequest.totalAmount,
-                    paymentType,
-                    paymentStatus: "paid",
-                    transactionId,
-                },
+        if (req.user.userType !== "admin" && !isRiderOrDriver && !isStaffFinance) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You cannot record payment for this ride.",
             });
         }
 
-        // If wallet payment, deduct from rider wallet
+        // If wallet payment, deduct from rider wallet before marking paid
         if (paymentType === "wallet") {
-            const wallet = await prisma.wallet.findUnique({
-                where: { userId: rideRequest.riderId },
+            await debitWalletForRideIfSufficient(prisma, {
+                userId: rideRequest.riderId,
+                amount: rideRequest.totalAmount,
+                rideRequestId: rideRequest.id,
+                description: "Ride payment",
+                transactionType: "ride_payment",
             });
-
-            if (wallet && wallet.balance >= rideRequest.totalAmount) {
-                const newBalance = wallet.balance - rideRequest.totalAmount;
-
-                await prisma.wallet.update({
-                    where: { id: wallet.id },
-                    data: { balance: newBalance },
-                });
-
-                await prisma.walletHistory.create({
-                    data: {
-                        walletId: wallet.id,
-                        userId: rideRequest.riderId,
-                        type: "debit",
-                        amount: rideRequest.totalAmount,
-                        balance: newBalance,
-                        description: "Ride payment",
-                        transactionType: "ride_payment",
-                        rideRequestId: rideRequest.id,
-                    },
-                });
-            }
         }
 
-        // Credit driver wallet: store gross (ride total); add net to balance (commission is on total wallet earnings)
-        const rideTotal = parseFloat(rideRequest.totalAmount ?? payment.amount ?? 0) || 0;
-        const driverId = rideRequest.driverId;
-        if (driverId && rideTotal > 0) {
-            const alreadyCredited = await prisma.walletHistory.findFirst({
-                where: {
-                    rideRequestId: rideRequest.id,
-                    userId: driverId,
-                    type: "credit",
-                    transactionType: "ride_earnings",
-                },
-            });
-            if (!alreadyCredited) {
-                const { driverShare } = await getDriverAndSystemShare(rideTotal);
-                const amountToCredit = driverShare > 0 ? driverShare : 0;
-                if (amountToCredit > 0) {
-                    let driverWallet = await prisma.wallet.findUnique({
-                        where: { userId: driverId },
-                    });
-                    if (!driverWallet) {
-                        driverWallet = await prisma.wallet.create({
-                            data: { userId: driverId, balance: 0 },
-                        });
-                    }
-                    const currentBalance = parseFloat(driverWallet.balance) || 0;
-                    const newDriverBalance = Math.round((currentBalance + amountToCredit) * 100) / 100;
-                    await prisma.wallet.update({
-                        where: { id: driverWallet.id },
-                        data: { balance: newDriverBalance },
-                    });
-                    await prisma.walletHistory.create({
-                        data: {
-                            walletId: driverWallet.id,
-                            userId: driverId,
-                            type: "credit",
-                            amount: rideTotal,
-                            balance: newDriverBalance,
-                            description: `Ride earnings | total: ${rideTotal} | net credited: ${amountToCredit}`,
-                            transactionType: "ride_earnings",
-                            rideRequestId: rideRequest.id,
-                        },
-                    });
-                }
-            }
-        }
+        const payment = await completePaidGatewayPayment(prisma, rideRequest, {
+            paymentType,
+            transactionId,
+            paymentGateway: null,
+            amount: getEffectiveRidePaymentTotal(rideRequest),
+        });
 
         res.json({
             success: true,

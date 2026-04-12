@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma.js';
-import { generateOtp, getOtpExpiresAt, getTestOtpValue } from '../../utils/otpHelper.js';
+import { generateOtp, getOtpExpiresAt } from '../../utils/otpHelper.js';
+import { normalizeOtpInput, validateOtpAgainstUser } from '../../services/otpVerificationService.js';
 import { sendOtpSms } from '../../utils/smsService.js';
 import { generateToken } from '../../utils/jwtHelper.js';
 import { fullUserSelect } from '../../utils/prismaSelects.js';
@@ -173,9 +174,7 @@ export const sendOtp = async (req, res) => {
 export const submitOtp = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { otp } = req.body;
-
-        const submittedOtp = otp != null ? String(otp).trim() : '';
+        const submittedOtp = normalizeOtpInput(req.body?.otp);
         if (!submittedOtp) {
             return res.status(400).json({ success: false, message: 'OTP is required' });
         }
@@ -186,15 +185,11 @@ export const submitOtp = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const storedOtp = user.otp ? String(user.otp).trim() : '';
-        const testOtp = getTestOtpValue();
-        const otpValid = (testOtp && submittedOtp === testOtp) || (storedOtp && submittedOtp === storedOtp);
-        if (!otpValid) {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
-        }
-
-        if (!testOtp && user.otpExpiresAt && new Date() > user.otpExpiresAt) {
-            return res.status(400).json({ success: false, message: 'OTP has expired' });
+        const v = validateOtpAgainstUser(user, submittedOtp, { allowTestOtp: true });
+        if (!v.ok) {
+            const message =
+                v.reason === 'expired' ? 'OTP has expired' : v.reason === 'missing' ? 'OTP is required' : 'Invalid OTP';
+            return res.status(400).json({ success: false, message });
         }
 
         const updatedUser = await prisma.user.update({
@@ -342,17 +337,12 @@ export const resetPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const submittedOtp = String(otp).trim();
-        const storedOtp = user.otp ? String(user.otp).trim() : '';
-        const testOtp = getTestOtpValue();
-        const otpValid = (testOtp && submittedOtp === testOtp) || (storedOtp && submittedOtp === storedOtp);
-
-        if (!otpValid) {
-            return res.status(400).json({ success: false, message: 'Invalid OTP' });
-        }
-
-        if (!testOtp && user.otpExpiresAt && new Date() > user.otpExpiresAt) {
-            return res.status(400).json({ success: false, message: 'OTP has expired' });
+        const submittedOtp = normalizeOtpInput(otp);
+        const v = validateOtpAgainstUser(user, submittedOtp, { allowTestOtp: true });
+        if (!v.ok) {
+            const message =
+                v.reason === 'expired' ? 'OTP has expired' : v.reason === 'missing' ? 'OTP is required' : 'Invalid OTP';
+            return res.status(400).json({ success: false, message });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);

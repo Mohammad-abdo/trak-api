@@ -1,7 +1,5 @@
 import bcrypt from "bcryptjs";
 import prisma from "../../utils/prisma.js";
-import { generateOtp, getOtpExpiresAt, getTestOtpValue } from "../../utils/otpHelper.js";
-import { sendOtpSms } from "../../utils/smsService.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { generateToken } from "../../utils/jwtHelper.js";

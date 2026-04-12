@@ -115,8 +115,8 @@ npm start
 - `POST /api/auth/social-login` - Social login
 
 ### Users
-- `GET /api/users/list` - Get user list
-- `GET /api/users/detail` - Get user detail
+- `GET /api/users/user-list` - Get user list (authenticated staff with directory permission)
+- `GET /api/users/user-detail` - Get user detail
 - `POST /api/users/update-profile` - Update profile
 - `POST /api/users/change-password` - Change password
 - `POST /api/users/update-user-status` - Update online/available status
