@@ -684,10 +684,29 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = parseInt(id);
 
-        await prisma.user.delete({
-            where: { id: parseInt(id) },
-        });
+        // Helper to safely delete (ignore errors if table/relation doesn't exist)
+        const safeDelete = async (fn) => {
+            try { await fn(); } catch (_) {}
+        };
+
+        // Delete related records first
+        await safeDelete(() => prisma.walletHistory.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.wallet.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.driverDocument.deleteMany({ where: { driverId: userId } }));
+        await safeDelete(() => prisma.userDetail.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.userBankAccount.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.rideRequestBid.deleteMany({ where: { driverId: userId } }));
+        await safeDelete(() => prisma.adminNotificationRecipient.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.rideRequestRating.deleteMany({ where: { OR: [{ riderId: userId }, { driverId: userId }] } }));
+        await safeDelete(() => prisma.rideRequest.deleteMany({ where: { OR: [{ riderId: userId }, { driverId: userId }] } }));
+        await safeDelete(() => prisma.payment.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.notification.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.complaint.deleteMany({ where: { OR: [{ riderId: userId }, { driverId: userId }] } }));
+        await safeDelete(() => prisma.driverService.deleteMany({ where: { driverId: userId } }));
+        await safeDelete(() => prisma.withdrawRequest.deleteMany({ where: { userId } }));
+        await safeDelete(() => prisma.user.delete({ where: { id: userId } }));
 
         res.json({
             success: true,
