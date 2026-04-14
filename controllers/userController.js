@@ -998,13 +998,13 @@ export const reviewDriver = async (req, res) => {
 
             res.json({
                 success: true,
-                message: language === 'ar' ? 'تم قبول السائق بنجاح' : 'Driver approved successfully',
+                message: "Driver approved successfully",
             });
         } else if (action === 'reject') {
             if (!rejectionReason || rejectionReason.trim() === '') {
                 return res.status(400).json({
                     success: false,
-                    message: language === 'ar' ? 'سبب الرفض مطلوب' : 'Rejection reason is required',
+                    message: "Rejection reason is required",
                 });
             }
 
@@ -1019,7 +1019,7 @@ export const reviewDriver = async (req, res) => {
 
             res.json({
                 success: true,
-                message: language === 'ar' ? 'تم رفض السائق' : 'Driver rejected',
+                message: "Driver rejected",
             });
         } else {
             res.status(400).json({
