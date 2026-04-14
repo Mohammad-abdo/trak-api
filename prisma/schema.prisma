@@ -184,7 +184,7 @@ model Service {
 }
 
 model RideRequest {
-  id                                 String    @id @default(uuid()) @db.VarChar(36)
+  id                                 String    @id @default(uuid()) 
   riderId                            Int       @map("rider_id")
   serviceId                          Int?      @map("service_id")
   vehicleCategoryId                  Int?      @map("vehicle_category_id")
