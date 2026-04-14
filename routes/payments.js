@@ -11,6 +11,7 @@ import {
     payskyDebugBuildHash,
 } from "../controllers/payskyNotificationController.js";
 import { payskySimulateTripPayment } from "../controllers/payskySimulateTripPaymentController.js";
+import { payskyInitPayment, payskyConfirmPayment } from "../controllers/payskyPaymentController.js";
 import { authenticate, authorize, authorizeAnyPermission } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -20,6 +21,8 @@ router.get("/paysky/notification", payskyNotificationGetHelp);
 router.post("/paysky/notification", payskyNotification);
 router.get("/paysky/webhook-info", payskyWebhookInfo);
 router.post("/paysky/simulate-trip-payment", authenticate, payskySimulateTripPayment);
+router.post("/paysky/init", authenticate, payskyInitPayment);
+router.post("/paysky/confirm", authenticate, payskyConfirmPayment);
 router.post(
     "/paysky/debug-build-hash",
     authenticate,
