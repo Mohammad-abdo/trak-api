@@ -184,7 +184,7 @@ model Service {
 }
 
 model RideRequest {
-  id                                 String    @id @default(uuid()) 
+  id                                 Int    @id @default(autoincrement()) 
   riderId                            Int       @map("rider_id")
   serviceId                          Int?      @map("service_id")
   vehicleCategoryId                  Int?      @map("vehicle_category_id")
@@ -396,7 +396,7 @@ enum PromotionBookingType {
 }
 
 model Promotion {
-  id            String               @id @default(uuid())
+  id            Int                  @id @default(autoincrement())
   code          String               @unique
   discountType  DiscountType         @map("discount_type")
   discountValue Float                @map("discount_value") @db.Double
@@ -642,7 +642,7 @@ model UserBankAccount {
 }
 
 model Notification {
-  id             String    @id @default(uuid())
+  id             Int    @id @default(autoincrement())
   type           String
   notifiableType String    @map("notifiable_type")
   notifiableId   Int       @map("notifiable_id")
@@ -1378,7 +1378,7 @@ enum PaymentStatus {
 }
 
 model DedicatedBooking {
-  id                String @id @default(uuid())
+  id                Int @id @default(autoincrement())
   userId            Int    @map("user_id")
   driverId          Int?   @map("driver_id")
   vehicleCategoryId Int    @map("vehicle_category_id")
