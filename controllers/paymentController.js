@@ -113,10 +113,11 @@ export const savePayment = async (req, res) => {
             });
         }
 
-        if (paymentType !== "cash" && paymentType !== "wallet" && !String(transactionId || "").trim()) {
+        if (paymentType !== "cash" && paymentType !== "wallet") {
             return res.status(400).json({
                 success: false,
-                message: "A real gateway transactionId is required for non-cash payments",
+                message:
+                    "Direct save-payment is allowed only for cash or wallet. Card and gateway payments must come from a real payment gateway callback.",
             });
         }
 

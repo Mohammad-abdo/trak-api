@@ -791,7 +791,13 @@ export const createDriver = async (req, res) => {
             const filePath = docFiles[i] ? `/uploads/driver-documents/${docFiles[i].filename}` : null;
             const expDate = docExpArr[i] ? new Date(docExpArr[i]) : null;
             await prisma.driverDocument.create({
-                data: { driverId: driver.id, documentId: docId, isVerified: false, documentImage: filePath, expireDate: expDate },
+                data: { 
+                    driver: { connect: { id: driver.id } }, 
+                    documentId: docId, 
+                    isVerified: false, 
+                    documentImage: filePath, 
+                    expireDate: expDate 
+                },
             });
         }
 
@@ -909,7 +915,13 @@ export const updateDriver = async (req, res) => {
                 }
             } else {
                 await prisma.driverDocument.create({
-                    data: { driverId, documentId: docId, isVerified: false, documentImage: filePath, expireDate: expDate },
+                    data: { 
+                        driver: { connect: { id: driverId } }, 
+                        documentId: docId, 
+                        isVerified: false, 
+                        documentImage: filePath, 
+                        expireDate: expDate 
+                    },
                 });
             }
         }

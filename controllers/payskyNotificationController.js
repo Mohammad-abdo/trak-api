@@ -15,8 +15,9 @@ import {
     notifyPayskyWebhookAdmin,
     notifyPayskyWebhookAuthFailure,
 } from "../utils/payskyWebhookAdminNotify.js";
-import { payskyTripSimulationAllowed } from "./payskySimulateTripPaymentController.js";
+import { payskyTripSimulationAllowed } from "./payskyRealPaymentsOnlyController.js";
 import { parseRideRequestIdFromMerchantReference } from "../utils/rideRequestId.js";
+import { getPayskyEnv, isPayskyProductionMode } from "../utils/payskyApi.js";
 
 function payskyJson(res, statusCode, message, success) {
     return res.status(statusCode).json({ Message: message, Success: success });
@@ -326,6 +327,38 @@ export const payskyWebhookInfo = async (req, res) => {
                 "Set MerchantReference to the ride ID (integer), or prefixed forms like RIDE:<id>.",
             docsUrl: "https://paysky.io/docs/paysky-omni-gateway/",
             simulateTripPaymentEnabled: payskyTripSimulationAllowed(),
+        },
+    });
+};
+
+/**
+ * Tiny diagnostic endpoint for runtime PaySky environment verification.
+ * @route GET /api/payments/paysky/runtime-info
+ */
+export const payskyRuntimeInfo = async (req, res) => {
+    const env = getPayskyEnv();
+    const configuredWebhookUrl = getConfiguredPayskyWebhookUrl();
+    const runtimeWebhookUrl =
+        configuredWebhookUrl || buildPayskyWebhookUrlFromRequest(req) || undefined;
+    const mode = isPayskyProductionMode() ? "production" : "test";
+
+    console.info(
+        `[PaySky runtime] mode=${mode} jsUrl=${env.JS_URL} apiBase=${env.API_BASE} webhook=${runtimeWebhookUrl || "unset"}`
+    );
+
+    return res.json({
+        success: true,
+        data: {
+            mode,
+            jsUrl: env.JS_URL,
+            apiBase: env.API_BASE,
+            webhookUrl: runtimeWebhookUrl,
+            nodeEnv: process.env.NODE_ENV || "development",
+            merchantId: String(process.env.PAYSKY_MERCHANT_ID || "").trim() || undefined,
+            terminalId: String(process.env.PAYSKY_TERMINAL_ID || "").trim() || undefined,
+            currencyNumeric:
+                String(process.env.PAYSKY_MERCHANT_CURRENCY_NUMERIC || "").trim() || undefined,
+            simulationEnabled: payskyTripSimulationAllowed(),
         },
     });
 };

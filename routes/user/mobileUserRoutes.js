@@ -24,7 +24,7 @@ import { myProfile, updateProfile, deleteAccount, getUserAddresses, addAddress, 
 import { addBankCard, getBankCards, deleteBankCard } from '../../controllers/user/mobileCardController.js';
 // Static
 import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications } from '../../controllers/user/mobileStaticController.js';
-import { payskySimulateTripPayment } from '../../controllers/payskySimulateTripPaymentController.js';
+import { payskySimulateTripPayment } from '../../controllers/payskyRealPaymentsOnlyController.js';
 // Negotiation
 import { getSettings as getNegotiationSettings, startNegotiation, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from '../../controllers/negotiationController.js';
 
