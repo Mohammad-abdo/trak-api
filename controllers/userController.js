@@ -968,6 +968,71 @@ export const updateDriver = async (req, res) => {
     }
 };
 
+// @desc    Approve or reject driver
+// @route   POST /api/users/drivers/:id/review
+// @access  Private (Admin)
+export const reviewDriver = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action, rejectionReason } = req.body;
+        const driverId = parseInt(id);
+
+        const existing = await prisma.user.findUnique({ where: { id: driverId } });
+        if (!existing) {
+            return res.status(404).json({ success: false, message: "Driver not found" });
+        }
+
+        if (existing.userType !== 'driver') {
+            return res.status(400).json({ success: false, message: "User is not a driver" });
+        }
+
+        if (action === 'approve') {
+            await prisma.user.update({
+                where: { id: driverId },
+                data: {
+                    status: 'active',
+                    isVerifiedDriver: true,
+                    rejectionReason: null,
+                },
+            });
+
+            res.json({
+                success: true,
+                message: language === 'ar' ? 'تم قبول السائق بنجاح' : 'Driver approved successfully',
+            });
+        } else if (action === 'reject') {
+            if (!rejectionReason || rejectionReason.trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    message: language === 'ar' ? 'سبب الرفض مطلوب' : 'Rejection reason is required',
+                });
+            }
+
+            await prisma.user.update({
+                where: { id: driverId },
+                data: {
+                    status: 'inactive',
+                    isVerifiedDriver: false,
+                    rejectionReason: rejectionReason.trim(),
+                },
+            });
+
+            res.json({
+                success: true,
+                message: language === 'ar' ? 'تم رفض السائق' : 'Driver rejected',
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                message: "Invalid action. Use 'approve' or 'reject'",
+            });
+        }
+    } catch (error) {
+        console.error("Review driver error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Export users (riders/drivers)
 // @route   GET /api/users/export
 // @access  Private (Admin)

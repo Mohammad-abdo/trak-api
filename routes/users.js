@@ -18,6 +18,7 @@ import {
     exportUsers,
     createDriver,
     updateDriver,
+    reviewDriver,
 } from "../controllers/userController.js";
 import { authenticate, authorize, authorizeAnyPermission } from "../middleware/auth.js";
 
@@ -75,6 +76,7 @@ router.post("/delete-user-account", authenticate, deleteUserAccount);
 // Admin driver CRUD (with file uploads) — must be before /:id routes
 router.post("/drivers", authenticate, authorize("admin"), driverFields, createDriver);
 router.put("/drivers/:id", authenticate, authorize("admin"), driverFields, updateDriver);
+router.post("/drivers/:id/review", authenticate, authorize("admin"), reviewDriver);
 
 // Export route
 router.get("/export", authenticate, authorize("admin"), exportUsers);
