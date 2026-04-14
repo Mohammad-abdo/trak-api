@@ -29,7 +29,7 @@ const CURRENCY = process.env.DEDICATED_BOOKING_CURRENCY || 'sar';
 /**
  * Create PaymentIntent (pre-authorize). Amount in smallest unit (e.g. halalas for SAR).
  * @param {number} amountTotal - total in main unit (e.g. SAR)
- * @param {string} bookingId
+ * @param {number} bookingId
  * @param {string} [customerId]
  * @returns {{ paymentIntentId: string | null, clientSecret: string | null } }
  */

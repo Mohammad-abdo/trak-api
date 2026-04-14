@@ -31,7 +31,7 @@ export const payskySimulateTripPayment = async (req, res) => {
 
     const rideRequestId = parseRideRequestIdParam(req.body?.rideRequestId ?? req.body?.ride_request_id);
     if (!rideRequestId) {
-        return res.status(400).json({ success: false, message: "rideRequestId is required (UUID string)" });
+        return res.status(400).json({ success: false, message: "rideRequestId is required (integer)" });
     }
 
     const ride = await prisma.rideRequest.findUnique({ where: { id: rideRequestId } });

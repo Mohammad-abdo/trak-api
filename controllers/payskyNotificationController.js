@@ -323,7 +323,7 @@ export const payskyWebhookInfo = async (req, res) => {
             merchantIdCheckEnabled: !!String(process.env.PAYSKY_MERCHANT_ID || "").trim(),
             terminalIdCheckEnabled: !!String(process.env.PAYSKY_TERMINAL_ID || "").trim(),
             merchantReferenceHint:
-                "Set MerchantReference to the ride UUID, or prefixed forms like RIDE:<uuid>.",
+                "Set MerchantReference to the ride ID (integer), or prefixed forms like RIDE:<id>.",
             docsUrl: "https://paysky.io/docs/paysky-omni-gateway/",
             simulateTripPaymentEnabled: payskyTripSimulationAllowed(),
         },

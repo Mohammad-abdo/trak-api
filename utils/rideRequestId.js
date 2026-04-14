@@ -1,20 +1,17 @@
 /**
- * RideRequest primary keys are UUID strings (v4-style).
+ * RideRequest primary keys are now integers (autoincrement).
  * Use this module anywhere an id is parsed from HTTP params/body/query.
  */
 
-const UUID_RE =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 /**
  * @param {unknown} raw
- * @returns {string | null} trimmed UUID or null
+ * @returns {number | null} integer id or null
  */
 export function parseRideRequestIdParam(raw) {
     if (raw == null) return null;
-    const s = String(raw).trim();
-    if (!s || !UUID_RE.test(s)) return null;
-    return s;
+    const n = parseInt(String(raw).trim(), 10);
+    if (isNaN(n) || n <= 0) return null;
+    return n;
 }
 
 /**
@@ -26,16 +23,17 @@ export function isValidRideRequestId(raw) {
 }
 
 /**
- * PaySky MerchantReference: plain UUID, or RIDE:<uuid> / RIDE_<uuid>.
+ * PaySky MerchantReference: plain integer, or RIDE:<id> / RIDE_<id>.
  * @param {unknown} ref
- * @returns {string | null}
+ * @returns {number | null}
  */
 export function parseRideRequestIdFromMerchantReference(ref) {
     if (ref == null) return null;
     const s = String(ref).trim();
     if (!s) return null;
-    if (UUID_RE.test(s)) return s;
-    const prefixed = s.match(/RIDE[:_\s-]+([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i);
-    if (prefixed) return prefixed[1];
+    const intMatch = s.match(/^RIDE[:_\s-]+(\d+)$/i);
+    if (intMatch) return parseInt(intMatch[1], 10);
+    const n = parseInt(s, 10);
+    if (!isNaN(n) && n > 0) return n;
     return null;
 }

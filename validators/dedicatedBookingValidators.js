@@ -25,23 +25,23 @@ export const createDedicatedBookingSchema = z.object({
 });
 
 export const assignDriverSchema = z.object({
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.number().int().positive() }),
   body: z.object({ driverId: z.number().int().positive() }),
 });
 
 export const updateStatusSchema = z.object({
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.number().int().positive() }),
   body: z.object({
     status: z.enum(['PENDING', 'APPROVED', 'DRIVER_ASSIGNED', 'ON_THE_WAY', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'EXPIRED']),
   }),
 });
 
 export const idParamSchema = z.object({
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.number().int().positive() }),
 });
 
 export const locationUpdateSchema = z.object({
-  bookingId: z.string().uuid(),
+  bookingId: z.number().int().positive(),
   lat: coordinateSchema,
   lng: lngSchema,
 });

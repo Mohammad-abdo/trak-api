@@ -57,7 +57,7 @@ export const bulkDeleteRideRequests = async (req, res) => {
         if (rideIds.length !== ids.length) {
             return res.status(400).json({
                 success: false,
-                message: "Each ride id must be a valid UUID",
+                message: "Each ride id must be a valid integer",
             });
         }
 

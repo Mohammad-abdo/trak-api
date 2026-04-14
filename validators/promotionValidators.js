@@ -31,7 +31,7 @@ export const createPromotionSchema = z.object({
 });
 
 export const updatePromotionSchema = z.object({
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.number().int().positive() }),
   body: z.object({
     code: z.string().min(1).max(50).transform((s) => s?.trim().toUpperCase()).optional(),
     discountType: z.enum(['PERCENTAGE', 'FIXED']).optional(),
@@ -52,7 +52,7 @@ export const updatePromotionSchema = z.object({
 });
 
 export const idParamSchema = z.object({
-  params: z.object({ id: z.string().uuid() }),
+  params: z.object({ id: z.number().int().positive() }),
 });
 
 export const validatePromotionSchema = z.object({
