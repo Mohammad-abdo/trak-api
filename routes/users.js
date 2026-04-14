@@ -38,7 +38,7 @@ const driverStorage = multer.diskStorage({
 });
 const driverUpload = multer({
     storage: driverStorage,
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const allowed = /jpeg|jpg|png|gif|webp|pdf/;
         const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);

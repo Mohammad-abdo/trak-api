@@ -11,7 +11,7 @@ import { authenticate, authorize } from "../middleware/auth.js";
 import multer from "multer";
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 router.get("/", authenticate, authorize("admin"), getLanguageWithKeywordList);
 router.post("/", authenticate, authorize("admin"), createLanguageWithKeyword);

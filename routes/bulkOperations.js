@@ -12,7 +12,7 @@ import multer from "multer";
 const router = express.Router();
 
 // Configure multer for file uploads (for future bulk import features)
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // All routes require authentication and admin role
 router.post("/users/delete", authenticate, authorize("admin"), bulkDeleteUsers);
