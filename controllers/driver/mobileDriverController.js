@@ -174,14 +174,7 @@ export const registerDriver = asyncHandler(async (req, res) => {
     const fileList = Array.isArray(docFiles) ? docFiles : [docFiles];
 
     // Get or create a default "General" document type
-    let generalDoc = await prisma.document.findFirst({
-        where: { 
-            name: { contains: 'general' } 
-        }
-    });
-    if (!generalDoc) {
-        generalDoc = await prisma.document.findFirst();
-    }
+    let generalDoc = await prisma.document.findFirst();
     if (!generalDoc) {
         generalDoc = await prisma.document.create({
             data: { name: 'General', isActive: true }
@@ -194,7 +187,7 @@ export const registerDriver = asyncHandler(async (req, res) => {
         await prisma.driverDocument.create({
             data: {
                 driver: { connect: { id: driver.id } },
-                documentId: generalDoc.id,
+                document: { connect: { id: generalDoc.id } },
                 documentImage: filePath,
                 isVerified: false,
             },

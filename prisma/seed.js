@@ -850,7 +850,7 @@ async function main() {
   await prisma.driverDocument.create({
     data: {
       driver: { connect: { id: driver1.id } },
-      documentId: doc1.id,
+      document: { connect: { id: doc1.id } },
       isVerified: true,
       expireDate: new Date('2025-12-31')
     }
@@ -859,7 +859,7 @@ async function main() {
   await prisma.driverDocument.create({
     data: {
       driver: { connect: { id: driver1.id } },
-      documentId: doc2.id,
+      document: { connect: { id: doc2.id } },
       isVerified: true,
       expireDate: new Date('2025-06-30')
     }
@@ -868,7 +868,7 @@ async function main() {
   await prisma.driverDocument.create({
     data: {
       driver: { connect: { id: driver1.id } },
-      documentId: doc3.id,
+      document: { connect: { id: doc3.id } },
       isVerified: true,
       expireDate: new Date('2025-03-31')
     }
@@ -877,7 +877,7 @@ async function main() {
   await prisma.driverDocument.create({
     data: {
       driver: { connect: { id: driver2.id } },
-      documentId: doc1.id,
+      document: { connect: { id: doc1.id } },
       isVerified: true,
       expireDate: new Date('2026-01-31')
     }
@@ -886,7 +886,7 @@ async function main() {
   await prisma.driverDocument.create({
     data: {
       driver: { connect: { id: driver2.id } },
-      documentId: doc2.id,
+      document: { connect: { id: doc2.id } },
       isVerified: true,
       expireDate: new Date('2025-08-31')
     }

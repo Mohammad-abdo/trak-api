@@ -812,7 +812,7 @@ export const createDriver = async (req, res) => {
             await prisma.driverDocument.create({
                 data: { 
                     driver: { connect: { id: driver.id } }, 
-                    documentId: docId, 
+                    document: { connect: { id: docId } }, 
                     isVerified: false, 
                     documentImage: filePath, 
                     expireDate: expDate 
@@ -936,7 +936,7 @@ export const updateDriver = async (req, res) => {
                 await prisma.driverDocument.create({
                     data: { 
                         driver: { connect: { id: driverId } }, 
-                        documentId: docId, 
+                        document: { connect: { id: docId } }, 
                         isVerified: false, 
                         documentImage: filePath, 
                         expireDate: expDate 

@@ -60,7 +60,7 @@ export const saveDriverDocument = async (req, res) => {
         const document = await prisma.driverDocument.create({
             data: {
                 driver: { connect: { id: driverId } },
-                documentId: parseInt(documentId),
+                document: { connect: { id: parseInt(documentId) } },
                 expireDate: expireDate ? new Date(expireDate) : null,
                 isVerified: false,
             },
