@@ -175,7 +175,9 @@ export const registerDriver = asyncHandler(async (req, res) => {
 
     // Get or create a default "General" document type
     let generalDoc = await prisma.document.findFirst({
-        where: { name: { contains: 'general', mode: 'insensitive' } }
+        where: { 
+            name: { contains: 'general' } 
+        }
     });
     if (!generalDoc) {
         generalDoc = await prisma.document.findFirst();
