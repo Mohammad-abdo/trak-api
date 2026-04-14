@@ -113,22 +113,38 @@ export const savePayment = async (req, res) => {
             });
         }
 
+        if (paymentType !== "cash" && paymentType !== "wallet" && !String(transactionId || "").trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "A real gateway transactionId is required for non-cash payments",
+            });
+        }
+
+        const effectiveAmount = getEffectiveRidePaymentTotal(rideRequest);
+
         // If wallet payment, deduct from rider wallet before marking paid
         if (paymentType === "wallet") {
-            await debitWalletForRideIfSufficient(prisma, {
+            const { debited } = await debitWalletForRideIfSufficient(prisma, {
                 userId: rideRequest.riderId,
-                amount: rideRequest.totalAmount,
+                amount: effectiveAmount,
                 rideRequestId: rideRequest.id,
                 description: "Ride payment",
                 transactionType: "ride_payment",
             });
+
+            if (!debited) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Insufficient wallet balance",
+                });
+            }
         }
 
         const payment = await completePaidGatewayPayment(prisma, rideRequest, {
             paymentType,
             transactionId,
             paymentGateway: null,
-            amount: getEffectiveRidePaymentTotal(rideRequest),
+            amount: effectiveAmount,
         });
 
         res.json({

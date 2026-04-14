@@ -6,10 +6,11 @@ import {
 } from "../services/ridePaymentCompletionService.js";
 import { notifyPayskyWebhookAdmin } from "../utils/payskyWebhookAdminNotify.js";
 import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
+import { isPayskyProductionMode } from "../utils/payskyApi.js";
 
 /** Exported for webhook-info / UI. */
 export function payskyTripSimulationAllowed() {
-    return process.env.NODE_ENV !== "production" || String(process.env.PAYSKY_SIMULATE_TRIP_PAYMENT || "").trim() === "1";
+    return String(process.env.PAYSKY_SIMULATE_TRIP_PAYMENT || "").trim() === "1" && !isPayskyProductionMode();
 }
 
 /**
@@ -25,7 +26,7 @@ export const payskySimulateTripPayment = async (req, res) => {
         return res.status(403).json({
             success: false,
             message:
-                "Trip payment simulation is off in production. Set PAYSKY_SIMULATE_TRIP_PAYMENT=1 in backend .env, or run with NODE_ENV=development.",
+                "Trip payment simulation is disabled. Enable it only for test mode with PAYSKY_SIMULATE_TRIP_PAYMENT=1.",
         });
     }
 

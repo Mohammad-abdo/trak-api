@@ -11,8 +11,29 @@ export const PAYSKY_ENV = {
     },
 };
 
+export function isPayskyProductionMode() {
+    const explicitMode = String(
+        process.env.PAYSKY_ENVIRONMENT ||
+            process.env.PAYSKY_MODE ||
+            process.env.PAYSKY_GATEWAY_ENV ||
+            ""
+    )
+        .trim()
+        .toLowerCase();
+
+    if (["production", "prod", "live"].includes(explicitMode)) {
+        return true;
+    }
+
+    if (["test", "testing", "sandbox", "dev", "development", "grey"].includes(explicitMode)) {
+        return false;
+    }
+
+    return process.env.NODE_ENV === "production";
+}
+
 export function getPayskyEnv() {
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = isPayskyProductionMode();
     return isProduction ? PAYSKY_ENV.PRODUCTION : PAYSKY_ENV.TEST;
 }
 
