@@ -409,7 +409,8 @@ router.post("/auth/logout", authenticate, logout);
  *     summary: Get all document types (for registration form)
  *     security: []
  *     responses:
- *       200: { description: List of document types with isRequired flag }
+ *       200:
+ *         description: List of active document types
  */
 router.get("/documents/required", getRequiredDocuments);
 
@@ -523,7 +524,8 @@ router.put("/vehicle/update", authenticate, vehicleUpload, updateVehicle);
  *     summary: Get my uploaded documents
  *     security: [{ bearerAuth: [] }]
  *     responses:
- *       200: { description: Documents with verification status }
+ *       200:
+ *         description: List of driver's uploaded documents with verification status
  */
 router.get("/documents", authenticate, getMyDocuments);
 
@@ -550,19 +552,6 @@ router.get("/documents", authenticate, getMyDocuments);
  *     responses:
  *       200:
  *         description: Documents uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                 message:
- *                   type: string
  */
 router.post("/documents/upload", authenticate, docUpload, uploadDocuments);
 
