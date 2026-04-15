@@ -709,7 +709,6 @@ router.get("/rides", authenticate, getMyRides);
  *       200: { description: Ride details }
  *       404: { description: Not found }
  */
-router.get("/rides/:id", authenticate, getRideDetail);
 
 /** @swagger
  * /apimobile/driver/rides/available:
@@ -762,6 +761,7 @@ router.get("/rides/:id", authenticate, getRideDetail);
  *                     searchRadius: { type: number }
  */
 router.get("/rides/available", authenticate, getAvailableRides);
+router.get("/rides/:id", authenticate, getRideDetail);
 
 /** @swagger
  * /apimobile/driver/rides/respond:
