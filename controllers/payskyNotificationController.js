@@ -34,11 +34,12 @@ async function handleWalletTopup(req, res, body, merchantRef, systemRef) {
     }
 
     const walletId = parseInt(parts[1]);
+    // Amount from Paysky is in minor units, convert to major (e.g., halalas to EGP)
     const divisor = parseInt(process.env.PAYSKY_AMOUNT_MINOR_DIVISOR || "100", 10) || 100;
-    const amountMajor = parseFloat(body.Amount) / divisor;
+    const topupAmount = parseFloat(body.Amount) / divisor;
 
-    if (isNaN(walletId) || isNaN(amountMajor)) {
-        console.error("PaySky wallet topup webhook: invalid wallet ID or amount", { walletId, amountMajor });
+    if (isNaN(walletId) || isNaN(topupAmount)) {
+        console.error("PaySky wallet topup webhook: invalid wallet ID or amount", { walletId, topupAmount });
         return payskyJson(res, 200, "Invalid wallet ID or amount", false);
     }
 
@@ -67,7 +68,7 @@ async function handleWalletTopup(req, res, body, merchantRef, systemRef) {
     }
 
     try {
-        const newBalance = wallet.balance + amountMajor;
+        const newBalance = wallet.balance + topupAmount;
 
         const [updatedWallet, history] = await prisma.$transaction([
             prisma.wallet.update({
@@ -79,7 +80,7 @@ async function handleWalletTopup(req, res, body, merchantRef, systemRef) {
                     walletId,
                     userId: wallet.userId,
                     type: "credit",
-                    amount: amountMajor,
+                    amount: topupAmount,
                     balance: newBalance,
                     description: merchantRef,
                     transactionType: "topup",
@@ -87,7 +88,7 @@ async function handleWalletTopup(req, res, body, merchantRef, systemRef) {
             }),
         ]);
 
-        console.log(`PaySky wallet topup webhook: topup successful. Wallet #${walletId}, amount: ${amountMajor}, new balance: ${newBalance}`);
+        console.log(`PaySky wallet topup webhook: topup successful. Wallet #${walletId}, amount: ${topupAmount}, new balance: ${newBalance}`);
         return payskyJson(res, 200, "Topup processed successfully", true);
     } catch (error) {
         console.error("PaySky wallet topup webhook: error processing topup:", error);

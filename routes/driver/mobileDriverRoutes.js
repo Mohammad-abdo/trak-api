@@ -47,7 +47,7 @@ import {
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 import { getWalletDetail, getWalletList } from "../../controllers/wallet/balanceAndHistory.js";
 import { lastUserOperations, filterOperations } from "../../controllers/user/mobileWalletController.js";
-import { initWalletTopup, confirmWalletTopup, getWalletBalance } from "../../controllers/wallet/walletTopupController.js";
+import { initWalletTopup, confirmWalletTopup, simulateWalletTopup, getWalletBalance, payWalletTopupWithCard } from "../../controllers/wallet/walletTopupController.js";
 
 // ─── Withdraw requests ───────────────────────────────────────────────────────
 import { getWithdrawRequestList, saveWithdrawRequest } from "../../controllers/withdrawRequestController.js";
@@ -1071,7 +1071,7 @@ router.get("/wallet/earnings", authenticate, getEarningsSummary);
  *             properties:
  *               amount:
  *                 type: number
- *                 description: Amount to top up
+ *                 description: Amount to top up (in main currency, e.g., EGP)
  *     responses:
  *       200:
  *         description: Payment config for Paysky Lightbox
@@ -1120,6 +1120,65 @@ router.post("/wallet/topup/confirm", authenticate, confirmWalletTopup);
  *         description: Current wallet balance
  */
 router.get("/wallet/balance", authenticate, getWalletBalance);
+
+/** @swagger
+ * /apimobile/driver/wallet/topup/simulate:
+ *   post:
+ *     tags: [Driver Wallet]
+ *     summary: SIMULATE wallet top-up (for testing without real Paysky)
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Amount to top up
+ *     responses:
+ *       200:
+ *         description: Top-up simulated successfully
+ */
+router.post("/wallet/topup/simulate", authenticate, simulateWalletTopup);
+
+/** @swagger
+ * /apimobile/driver/wallet/topup/pay:
+ *   post:
+ *     tags: [Driver Wallet]
+ *     summary: Pay wallet top-up with card details (direct Paysky API)
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Amount to top up (in EGP)
+ *               cardNumber:
+ *                 type: string
+ *                 description: Card number
+ *               expiryMonth:
+ *                 type: string
+ *                 description: Expiry month (MM)
+ *               expiryYear:
+ *                 type: string
+ *                 description: Expiry year (YYYY)
+ *               cvv:
+ *                 type: string
+ *                 description: CVV
+ *               cardHolderName:
+ *                 type: string
+ *                 description: Card holder name
+ *     responses:
+ *       200:
+ *         description: Payment result
+ */
+router.post("/wallet/topup/pay", authenticate, payWalletTopupWithCard);
 
 // =============================================================================
 //  11 — WITHDRAW REQUESTS
