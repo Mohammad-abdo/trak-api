@@ -72,3 +72,23 @@ export async function getDriverAndSystemShare(rideTotal) {
     if (pct <= 0) pct = 15;
     return getDriverAndSystemShareWithPct(total, pct);
 }
+
+/**
+ * Get driver search radius from settings (in kilometers).
+ * Default is 5 km if not set.
+ */
+export async function getDriverSearchRadius() {
+    let row = await prisma.setting.findUnique({
+        where: { key: "driver_search_radius" },
+    });
+    if (!row || row.value == null || String(row.value).trim() === "") {
+        await prisma.setting.upsert({
+            where: { key: "driver_search_radius" },
+            update: { value: "5" },
+            create: { key: "driver_search_radius", value: "5" },
+        });
+        return 5;
+    }
+    const radius = parseFloat(row.value);
+    return Number.isNaN(radius) || radius <= 0 ? 5 : Math.min(50, radius); // Max 50km, min 1km
+}

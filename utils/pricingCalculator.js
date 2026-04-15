@@ -1,6 +1,4 @@
-import Prisma from '@prisma/client';
-const { PrismaClient } = Prisma;
-const prisma = new PrismaClient();
+import prisma from '../utils/prisma.js';
 
 /**
  * Calculate distance between two coordinates in km
