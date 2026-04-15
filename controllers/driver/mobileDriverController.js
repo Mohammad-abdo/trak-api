@@ -315,6 +315,16 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
         return errorResponse(res, "No files provided", 400);
     }
 
+    // Get or create a default document type
+    let defaultDoc = await prisma.document.findFirst({
+        where: { status: 1 }
+    });
+    if (!defaultDoc) {
+        defaultDoc = await prisma.document.create({
+            data: { name: 'General Document', isActive: true, status: 1 }
+        });
+    }
+
     const uploadedDocs = [];
     const fileList = Array.isArray(files) ? files : [files];
 
@@ -323,7 +333,8 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
 
         const driverDoc = await prisma.driverDocument.create({
             data: {
-                driverId: req.user.id,
+                driver: { connect: { id: req.user.id } },
+                document: { connect: { id: defaultDoc.id } },
                 documentImage: filePath,
                 isVerified: false,
             },
