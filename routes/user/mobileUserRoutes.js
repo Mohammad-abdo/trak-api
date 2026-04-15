@@ -750,11 +750,30 @@ router.get('/booking/shipment-weights', authenticate, getShipmentWeights);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Array [payment_id, name]
+ *         description: Payment methods retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Payment methods retrieved" }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       payment_id: { type: integer, example: 1 }
+ *                       name: { type: string, example: "Cash" }
+ *                       nameAr: { type: string, nullable: true, example: "كاش" }
+ *                       type: { type: string, nullable: true, example: "cash" }
  */
 router.get('/booking/payment-methods', authenticate, getPaymentMethods);
 
-/** Dev/QA: simulate successful PaySky card payment for your ride (same as dashboard test). */
+/**
+ * Route retained for backward compatibility.
+ * Runtime behavior is disabled and returns an error so fake payments cannot be created.
+ */
 router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment);
 
 /**
@@ -797,6 +816,113 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *         description: Missing required fields
  */
 router.post('/booking/create', authenticate, createBooking);
+
+/**
+ * @swagger
+ * /api/payments/paysky/init:
+ *   post:
+ *     tags: [Booking]
+ *     summary: Initialize a real PaySky card payment for an existing ride
+ *     description: |
+ *       Returns the signed PaySky Lightbox configuration used to start a **real**
+ *       gateway payment. This endpoint does not mark the ride as paid by itself.
+ *       Payment is recorded only after a valid PaySky callback / confirmation flow.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId]
+ *             properties:
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 42
+ *                 description: Existing ride request ID
+ *     responses:
+ *       200:
+ *         description: PaySky payment config generated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     paymentConfig:
+ *                       type: object
+ *                       properties:
+ *                         mid: { type: string, example: "3709723182-wedata" }
+ *                         tid: { type: string, example: "71274357" }
+ *                         amountTrxn: { type: integer, example: 15000 }
+ *                         merchantReference: { type: string, example: "RIDE:42" }
+ *                         trxDateTime: { type: string, example: "20260415183045" }
+ *                         secureHash: { type: string, example: "ABCDEF0123456789" }
+ *                         currency: { type: string, example: "818" }
+ *                         expiresAt: { type: string, format: date-time }
+ *                     environment: { type: string, example: "development" }
+ *                     payskyEnvironment: { type: string, example: "production" }
+ *                     lightboxJsUrl: { type: string, example: "https://cube.paysky.io:6006/js/LightBox.js" }
+ *                     callbackUrl: { type: string, example: "https://example.com/api/payments/paysky/notification" }
+ *       400:
+ *         description: Invalid rideRequestId, no driver assigned, or ride already paid
+ *       403:
+ *         description: Only the rider or admin can initiate payment for the ride
+ *       404:
+ *         description: Ride request not found
+ *       503:
+ *         description: PaySky is not configured on the server
+ */
+
+/**
+ * @swagger
+ * /api/payments/paysky/confirm:
+ *   post:
+ *     tags: [Booking]
+ *     summary: Confirm a real PaySky payment callback for a ride
+ *     description: |
+ *       Finalizes payment only when the request contains a valid signed PaySky
+ *       payload matching the ride, amount, merchant, terminal, and currency.
+ *       This endpoint is part of the real gateway payment flow.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               [rideRequestId, systemReference, amount, paidThrough, secureHash, merchantId, terminalId, merchantReference, dateTimeLocalTrxn]
+ *             properties:
+ *               rideRequestId: { type: integer, example: 42 }
+ *               systemReference: { type: string, example: "1234567890" }
+ *               amount: { type: number, example: 150.0 }
+ *               paidThrough: { type: string, example: "Card" }
+ *               secureHash: { type: string, example: "ABCDEF0123456789" }
+ *               merchantId: { type: string, example: "3709723182-wedata" }
+ *               terminalId: { type: string, example: "71274357" }
+ *               merchantReference: { type: string, example: "RIDE:42" }
+ *               dateTimeLocalTrxn: { type: string, example: "20260415183045" }
+ *               currency: { type: string, example: "818" }
+ *               actionCode: { type: string, example: "00" }
+ *               txnType: { type: string, example: "1" }
+ *     responses:
+ *       200:
+ *         description: Payment confirmed successfully or already recorded
+ *       400:
+ *         description: Invalid ride, amount mismatch, invalid MerchantReference, or PaySky did not approve payment
+ *       401:
+ *         description: Invalid signature, merchant mismatch, or terminal mismatch
+ *       403:
+ *         description: Only the rider or admin can confirm payment for the ride
+ *       404:
+ *         description: Ride request not found
+ */
 
 // =============================================
 // OFFERS SCREEN (Near Drivers & Trip)
@@ -1488,10 +1614,9 @@ router.get('/negotiation/settings', getNegotiationSettings);
  *             required: [rideRequestId, proposedFare]
  *             properties:
  *               rideRequestId:
- *                 type: string
- *                 format: uuid
- *                 example: "123e4567-e89b-12d3-a456-426614174000"
- *                 description: ID of the ride request (UUID)
+ *                 type: integer
+ *                 example: 42
+ *                 description: Ride request ID
  *               proposedFare:
  *                 type: number
  *                 example: 85.0
@@ -1509,7 +1634,7 @@ router.get('/negotiation/settings', getNegotiationSettings);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: string, format: uuid }
+ *                     rideRequestId: { type: integer, example: 42 }
  *                     baseFare: { type: number }
  *                     proposedFare: { type: number }
  *                     percentChange: { type: number, example: -15 }
@@ -1547,9 +1672,8 @@ router.post('/negotiation/start', authenticate, startNegotiation);
  *             required: [rideRequestId, proposedFare]
  *             properties:
  *               rideRequestId:
- *                 type: string
- *                 format: uuid
- *                 example: "123e4567-e89b-12d3-a456-426614174000"
+ *                 type: integer
+ *                 example: 42
  *               proposedFare:
  *                 type: number
  *                 example: 90.0
@@ -1566,7 +1690,7 @@ router.post('/negotiation/start', authenticate, startNegotiation);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: string, format: uuid }
+ *                     rideRequestId: { type: integer, example: 42 }
  *                     baseFare: { type: number }
  *                     proposedFare: { type: number }
  *                     percentChange: { type: number }
@@ -1604,9 +1728,8 @@ router.post('/negotiation/counter', authenticate, counterOffer);
  *             required: [rideRequestId]
  *             properties:
  *               rideRequestId:
- *                 type: string
- *                 format: uuid
- *                 example: "123e4567-e89b-12d3-a456-426614174000"
+ *                 type: integer
+ *                 example: 42
  *     responses:
  *       200:
  *         description: Negotiation accepted — fare locked
@@ -1620,7 +1743,7 @@ router.post('/negotiation/counter', authenticate, counterOffer);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: string, format: uuid }
+ *                     rideRequestId: { type: integer, example: 42 }
  *                     baseFare: { type: number }
  *                     negotiatedFare: { type: number }
  *                     percentChange: { type: number }
@@ -1654,9 +1777,8 @@ router.post('/negotiation/accept', authenticate, acceptNegotiation);
  *             required: [rideRequestId]
  *             properties:
  *               rideRequestId:
- *                 type: string
- *                 format: uuid
- *                 example: "123e4567-e89b-12d3-a456-426614174000"
+ *                 type: integer
+ *                 example: 42
  *     responses:
  *       200:
  *         description: Negotiation rejected — baseFare restored
@@ -1670,7 +1792,7 @@ router.post('/negotiation/accept', authenticate, acceptNegotiation);
  *                 data:
  *                   type: object
  *                   properties:
- *                     rideRequestId: { type: string, format: uuid }
+ *                     rideRequestId: { type: integer, example: 42 }
  *                     baseFare: { type: number }
  *                     negotiatedFare: { type: number, nullable: true, example: null }
  *                     negotiationStatus: { type: string, example: "rejected" }
@@ -1699,9 +1821,8 @@ router.post('/negotiation/reject', authenticate, rejectNegotiation);
  *         name: rideRequestId
  *         required: true
  *         schema:
- *           type: string
- *           format: uuid
- *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *           type: integer
+ *         example: 42
  *     responses:
  *       200:
  *         description: Negotiation history
@@ -1717,7 +1838,7 @@ router.post('/negotiation/reject', authenticate, rejectNegotiation);
  *                     ride:
  *                       type: object
  *                       properties:
- *                         id: { type: string, format: uuid }
+ *                         id: { type: integer, example: 42 }
  *                         baseFare: { type: number }
  *                         negotiatedFare: { type: number, nullable: true }
  *                         negotiationStatus: { type: string }
