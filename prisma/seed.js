@@ -63,6 +63,7 @@ async function main() {
   await prisma.setting.upsert({ where: { key: 'currency' }, update: { value: 'EGP' }, create: { key: 'currency', value: 'EGP' } })
   await prisma.setting.upsert({ where: { key: 'distanceUnit' }, update: { value: 'km' }, create: { key: 'distanceUnit', value: 'km' } })
   await prisma.setting.upsert({ where: { key: 'system_commission_percentage' }, update: { value: '15' }, create: { key: 'system_commission_percentage', value: '15' } })
+  await prisma.setting.upsert({ where: { key: 'driver_search_radius' }, update: { value: '5' }, create: { key: 'driver_search_radius', value: '5' } })
 
   // Payment methods (طرق الدفع)
   console.log('Creating payment methods...')

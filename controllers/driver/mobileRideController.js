@@ -4,6 +4,7 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
+import { getDriverSearchRadius } from "../../utils/settingsHelper.js";
 
 // Driver's ride history with pagination and filters
 export const getMyRides = asyncHandler(async (req, res) => {
@@ -179,7 +180,7 @@ export const respondToRide = asyncHandler(async (req, res) => {
 // Get available ride requests for driver
 export const getAvailableRides = asyncHandler(async (req, res) => {
     const driverId = req.user.id;
-    const { latitude, longitude, radius = 5 } = req.query;
+    const { latitude, longitude } = req.query;
 
     // Validate required parameters
     if (!latitude || !longitude) {
@@ -188,7 +189,7 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
 
     const driverLat = parseFloat(latitude);
     const driverLng = parseFloat(longitude);
-    const searchRadius = parseFloat(radius);
+    const searchRadius = await getDriverSearchRadius();
 
     // Get pending ride requests
     const pendingRides = await prisma.rideRequest.findMany({
