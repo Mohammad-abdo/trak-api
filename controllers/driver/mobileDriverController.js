@@ -503,6 +503,7 @@ export const getRegistrationStatus = asyncHandler(async (req, res) => {
             status: true,
             isVerified: true,
             isVerifiedDriver: true,
+            rejectionReason: true,
             driverDocuments: {
                 include: { document: { select: { id: true, name: true, nameAr: true, isRequired: true } } },
             },
@@ -519,10 +520,30 @@ export const getRegistrationStatus = asyncHandler(async (req, res) => {
         status: driver.status,
         isVerified: driver.isVerified,
         isVerifiedDriver: driver.isVerifiedDriver,
+        rejectionReason: driver.status === 'inactive' ? driver.rejectionReason : null,
         documents: driver.driverDocuments,
         missingRequiredDocuments: missingDocs,
         unverifiedDocuments: unverifiedDocs,
         canDrive: driver.status === "active" && driver.isVerifiedDriver && missingDocs.length === 0,
+    });
+});
+
+// ─── Get Rejection Status (Dedicated Endpoint) ───────────────────────────────
+export const getRejectionStatus = asyncHandler(async (req, res) => {
+    const driver = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+            id: true,
+            status: true,
+            rejectionReason: true,
+        },
+    });
+    if (!driver) return errorResponse(res, "Driver not found", 404);
+
+    return successResponse(res, {
+        isRejected: driver.status === 'inactive',
+        rejectionReason: driver.rejectionReason || null,
+        canReapply: driver.status === 'inactive',
     });
 });
 

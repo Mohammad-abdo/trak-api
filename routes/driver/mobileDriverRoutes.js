@@ -23,6 +23,7 @@ import {
     updateBankAccount,
     updateDriverStatus,
     getRegistrationStatus,
+    getRejectionStatus,
     getMyStatus,
     goOnlineOffline,
 } from "../../controllers/driver/mobileDriverController.js";
@@ -460,6 +461,30 @@ router.put("/profile/update", authenticate, profileUpload, updateMyProfile);
  *       200: { description: Status with canDrive flag }
  */
 router.get("/profile/status", authenticate, getRegistrationStatus);
+
+/** @swagger
+ * /apimobile/driver/profile/rejection-status:
+ *   get:
+ *     tags: [Driver Auth]
+ *     summary: Get rejection status and reason if driver was rejected
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Rejection status info
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     isRejected: { type: boolean }
+ *                     rejectionReason: { type: string, nullable: true }
+ *                     canReapply: { type: boolean }
+ */
+router.get("/profile/rejection-status", authenticate, getRejectionStatus);
 
 // =============================================================================
 //  4 — VEHICLE (protected)
