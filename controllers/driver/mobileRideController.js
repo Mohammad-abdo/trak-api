@@ -69,38 +69,252 @@ export const getRideDetail = asyncHandler(async (req, res) => {
     return successResponse(res, ride);
 });
 
-// Accept or reject incoming ride request
+// Accept or reject incoming ride request with optional price negotiation
 export const respondToRide = asyncHandler(async (req, res) => {
-    const { rideRequestId, accept } = req.body;
+    const { rideRequestId, accept, proposedFare, rejectReason } = req.body;
     if (!rideRequestId) return errorResponse(res, "rideRequestId is required", 400);
     const rideId = parseRideRequestIdParam(rideRequestId);
     if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
 
-    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
+    const ride = await prisma.rideRequest.findUnique({
+        where: { id: rideId },
+        include: { rider: { select: { id: true, firstName: true, lastName: true } } }
+    });
     if (!ride) return errorResponse(res, "Ride request not found", 404);
 
     if (accept) {
-        await prisma.rideRequest.update({
-            where: { id: ride.id },
-            data: { driverId: req.user.id, status: "accepted" },
-        });
-        try {
-            const { emitToRide } = await import("../../utils/socketService.js");
-            const io = req.app.get("io") || global.io;
-            if (io) emitToRide(io, ride.id, "ride-request-accepted", { driverId: req.user.id, rideRequestId: ride.id });
-        } catch (_) {}
+        // Check if driver proposed a different fare (negotiation)
+        if (proposedFare && parseFloat(proposedFare) !== parseFloat(ride.totalAmount)) {
+            // Create negotiation record
+            await prisma.negotiation.create({
+                data: {
+                    rideRequestId: ride.id,
+                    driverId: req.user.id,
+                    riderId: ride.riderId,
+                    originalFare: ride.totalAmount,
+                    proposedFare: parseFloat(proposedFare),
+                    status: "pending",
+                    type: "driver_offer"
+                }
+            });
+
+            // Update ride status to show negotiation is in progress
+            await prisma.rideRequest.update({
+                where: { id: ride.id },
+                data: {
+                    driverId: req.user.id,
+                    status: "negotiating",
+                    negotiationStatus: "pending"
+                },
+            });
+
+            // Notify rider about the counter offer
+            try {
+                const { emitToUser } = await import("../../utils/socketService.js");
+                const io = req.app.get("io") || global.io;
+                if (io) emitToUser(io, ride.riderId, "ride-negotiation-offer", {
+                    rideRequestId: ride.id,
+                    driverId: req.user.id,
+                    proposedFare: parseFloat(proposedFare),
+                    originalFare: ride.totalAmount
+                });
+            } catch (_) {}
+
+            return successResponse(res, {
+                rideRequestId: ride.id,
+                status: "negotiating",
+                proposedFare: parseFloat(proposedFare)
+            }, "Counter offer sent to rider");
+        } else {
+            // Direct acceptance without negotiation
+            await prisma.rideRequest.update({
+                where: { id: ride.id },
+                data: { driverId: req.user.id, status: "accepted" },
+            });
+
+            try {
+                const { emitToRide } = await import("../../utils/socketService.js");
+                const io = req.app.get("io") || global.io;
+                if (io) emitToRide(io, ride.id, "ride-request-accepted", { driverId: req.user.id, rideRequestId: ride.id });
+            } catch (_) {}
+
+            return successResponse(res, {
+                rideRequestId: ride.id,
+                status: "accepted"
+            }, "Ride accepted successfully");
+        }
     } else {
+        // Reject the ride
         const cancelledIds = ride.cancelledDriverIds ? JSON.parse(ride.cancelledDriverIds) : [];
         cancelledIds.push(req.user.id);
+
         await prisma.rideRequest.update({
             where: { id: ride.id },
-            data: { cancelledDriverIds: JSON.stringify(cancelledIds) },
+            data: {
+                cancelledDriverIds: JSON.stringify(cancelledIds),
+                driverNote: rejectReason || null
+            },
         });
+
+        // Notify rider about rejection
+        try {
+            const { emitToUser } = await import("../../utils/socketService.js");
+            const io = req.app.get("io") || global.io;
+            if (io) emitToUser(io, ride.riderId, "ride-negotiation-rejected", {
+                rideRequestId: ride.id,
+                driverId: req.user.id,
+                reason: rejectReason
+            });
+        } catch (_) {}
+
+        return successResponse(res, {
+            rideRequestId: ride.id,
+            status: "rejected",
+            reason: rejectReason
+        }, "Ride rejected");
+    }
+});
+
+// Get available ride requests for driver
+export const getAvailableRides = asyncHandler(async (req, res) => {
+    const driverId = req.user.id;
+    const { latitude, longitude, radius = 5 } = req.query;
+
+    // Validate required parameters
+    if (!latitude || !longitude) {
+        return errorResponse(res, "Driver latitude and longitude are required", 400);
     }
 
-    const updated = await prisma.rideRequest.findUnique({ where: { id: ride.id } });
-    return successResponse(res, updated, accept ? "Ride accepted" : "Ride rejected");
+    const driverLat = parseFloat(latitude);
+    const driverLng = parseFloat(longitude);
+    const searchRadius = parseFloat(radius);
+
+    // Get pending ride requests
+    const pendingRides = await prisma.rideRequest.findMany({
+        where: {
+            status: "pending",
+            driverId: null, // Not yet assigned to any driver
+            startLatitude: { not: null },
+            startLongitude: { not: null },
+        },
+        include: {
+            rider: {
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    contactNumber: true,
+                    avatar: true,
+                    rating: true
+                }
+            },
+            service: {
+                select: {
+                    id: true,
+                    name: true,
+                    nameAr: true
+                }
+            },
+            vehicleCategory: {
+                select: {
+                    id: true,
+                    name: true,
+                    nameAr: true,
+                    capacity: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: "desc"
+        },
+        take: 50 // Limit results to prevent overload
+    });
+
+    // Filter rides by distance and exclude previously rejected ones
+    const availableRides = pendingRides
+        .map(ride => {
+            const pickupLat = parseFloat(ride.startLatitude);
+            const pickupLng = parseFloat(ride.startLongitude);
+
+            // Calculate distance using Haversine formula
+            const distance = calculateDistance(driverLat, driverLng, pickupLat, pickupLng);
+
+            // Check if driver previously rejected this ride
+            const cancelledDriverIds = ride.cancelledDriverIds ? JSON.parse(ride.cancelledDriverIds) : [];
+            const wasRejected = cancelledDriverIds.includes(driverId);
+
+            return {
+                ...ride,
+                distance: Math.round(distance * 100) / 100, // Round to 2 decimal places
+                wasRejected
+            };
+        })
+        .filter(ride => ride.distance <= searchRadius && !ride.wasRejected)
+        .sort((a, b) => a.distance - b.distance) // Sort by distance (closest first)
+        .slice(0, 20); // Return top 20 closest rides
+
+    // Format response data
+    const formattedRides = availableRides.map(ride => ({
+        id: ride.id,
+        rider: {
+            id: ride.rider.id,
+            name: `${ride.rider.firstName || ''} ${ride.rider.lastName || ''}`.trim(),
+            avatar: ride.rider.avatar,
+            phone: ride.rider.contactNumber,
+            rating: ride.rider.rating || 0
+        },
+        pickup: {
+            latitude: ride.startLatitude,
+            longitude: ride.startLongitude,
+            address: ride.startAddress
+        },
+        dropoff: {
+            latitude: ride.endLatitude,
+            longitude: ride.endLongitude,
+            address: ride.endAddress
+        },
+        service: ride.service ? {
+            id: ride.service.id,
+            name: ride.service.name,
+            nameAr: ride.service.nameAr
+        } : null,
+        vehicleCategory: ride.vehicleCategory ? {
+            id: ride.vehicleCategory.id,
+            name: ride.vehicleCategory.name,
+            nameAr: ride.vehicleCategory.nameAr,
+            capacity: ride.vehicleCategory.capacity
+        } : null,
+        pricing: {
+            totalAmount: ride.totalAmount,
+            baseFare: ride.baseFare,
+            distance: ride.distance,
+            duration: ride.duration,
+            paymentType: ride.paymentType
+        },
+        distance: ride.distance, // Distance from driver to pickup
+        createdAt: ride.createdAt,
+        isScheduled: ride.isSchedule,
+        scheduledTime: ride.scheduleDatetime
+    }));
+
+    return successResponse(res, {
+        rides: formattedRides,
+        total: formattedRides.length,
+        searchRadius,
+        driverLocation: { latitude: driverLat, longitude: driverLng }
+    });
 });
+
+// Helper function to calculate distance between two coordinates
+const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 // Update ride status (arrived, started)
 export const updateRideStatus = asyncHandler(async (req, res) => {

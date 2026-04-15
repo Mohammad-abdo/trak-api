@@ -40,6 +40,7 @@ import {
     getEarningsSummary,
     applyBid,
     updateLocation,
+    getAvailableRides,
 } from "../../controllers/driver/mobileRideController.js";
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────
@@ -711,13 +712,65 @@ router.get("/rides", authenticate, getMyRides);
 router.get("/rides/:id", authenticate, getRideDetail);
 
 /** @swagger
+ * /apimobile/driver/rides/available:
+ *   get:
+ *     tags: [Driver Rides]
+ *     summary: Get available ride requests near driver location
+ *     description: |
+ *       Returns a list of pending ride requests within the specified radius
+ *       that the driver can accept. Excludes rides previously rejected by this driver.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: latitude
+ *         required: true
+ *         schema: { type: number, format: float }
+ *         description: Driver's current latitude
+ *       - in: query
+ *         name: longitude
+ *         required: true
+ *         schema: { type: number, format: float }
+ *         description: Driver's current longitude
+ *       - in: query
+ *         name: radius
+ *         schema: { type: number, format: float, default: 5 }
+ *         description: Search radius in kilometers (default 5km)
+ *     responses:
+ *       200:
+ *         description: List of available rides
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rides:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: integer }
+ *                           rider: { type: object }
+ *                           pickup: { type: object }
+ *                           dropoff: { type: object }
+ *                           pricing: { type: object }
+ *                           distance: { type: number }
+ *                     total: { type: integer }
+ *                     searchRadius: { type: number }
+ */
+router.get("/rides/available", authenticate, getAvailableRides);
+
+/** @swagger
  * /apimobile/driver/rides/respond:
  *   post:
  *     tags: [Driver Rides]
- *     summary: Accept or reject an incoming ride request
+ *     summary: Accept, reject, or negotiate ride request price
  *     description: |
- *       When a ride request comes in (via Socket.IO / push notification),
- *       the driver calls this to accept or reject.
+ *       Driver can accept ride directly, reject with reason, or propose different fare.
+ *       If proposing different fare, creates negotiation record and notifies rider.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -728,9 +781,26 @@ router.get("/rides/:id", authenticate, getRideDetail);
  *             required: [rideRequestId, accept]
  *             properties:
  *               rideRequestId: { type: string, format: uuid, example: "123e4567-e89b-12d3-a456-426614174000" }
- *               accept: { type: boolean, example: true }
+ *               accept: { type: boolean, example: true, description: "Whether to accept the ride" }
+ *               proposedFare: { type: number, format: float, example: 25.50, description: "Optional: proposed fare if different from original" }
+ *               rejectReason: { type: string, example: "Too far from my location", description: "Required if accept=false: reason for rejection" }
  *     responses:
- *       200: { description: Accepted or rejected }
+ *       200:
+ *         description: Response based on action taken
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     status: { type: string, enum: [accepted, rejected, negotiating] }
+ *                     proposedFare: { type: number, format: float }
+ *                     reason: { type: string }
+ *                 message: { type: string }
  */
 router.post("/rides/respond", authenticate, respondToRide);
 
