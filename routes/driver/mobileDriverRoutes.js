@@ -47,6 +47,7 @@ import {
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 import { getWalletDetail, getWalletList } from "../../controllers/wallet/balanceAndHistory.js";
 import { lastUserOperations, filterOperations } from "../../controllers/user/mobileWalletController.js";
+import { initWalletTopup, confirmWalletTopup, getWalletBalance } from "../../controllers/wallet/walletTopupController.js";
 
 // ─── Withdraw requests ───────────────────────────────────────────────────────
 import { getWithdrawRequestList, saveWithdrawRequest } from "../../controllers/withdrawRequestController.js";
@@ -1054,6 +1055,71 @@ router.get("/wallet/operations/filter", authenticate, filterOperations);
  *                     todayRides: { type: integer }
  */
 router.get("/wallet/earnings", authenticate, getEarningsSummary);
+
+/** @swagger
+ * /apimobile/driver/wallet/topup/init:
+ *   post:
+ *     tags: [Driver Wallet]
+ *     summary: Initialize wallet top-up payment via Paysky
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Amount to top up
+ *     responses:
+ *       200:
+ *         description: Payment config for Paysky Lightbox
+ */
+router.post("/wallet/topup/init", authenticate, initWalletTopup);
+
+/** @swagger
+ * /apimobile/driver/wallet/topup/confirm:
+ *   post:
+ *     tags: [Driver Wallet]
+ *     summary: Confirm wallet top-up after successful Paysky payment
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               merchantReference:
+ *                 type: string
+ *                 description: Merchant reference from Paysky
+ *               systemReference:
+ *                 type: string
+ *                 description: System reference from Paysky
+ *               amount:
+ *                 type: number
+ *                 description: Amount paid in minor units (e.g., halalas)
+ *               paidThrough:
+ *                 type: string
+ *                 description: Payment method (card, wallet, etc.)
+ *     responses:
+ *       200:
+ *         description: Top-up confirmed and balance updated
+ */
+router.post("/wallet/topup/confirm", authenticate, confirmWalletTopup);
+
+/** @swagger
+ * /apimobile/driver/wallet/balance:
+ *   get:
+ *     tags: [Driver Wallet]
+ *     summary: Get wallet balance
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Current wallet balance
+ */
+router.get("/wallet/balance", authenticate, getWalletBalance);
 
 // =============================================================================
 //  11 — WITHDRAW REQUESTS
