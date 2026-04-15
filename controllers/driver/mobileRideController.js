@@ -3,6 +3,7 @@ import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
+import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 
 // Driver's ride history with pagination and filters
 export const getMyRides = asyncHandler(async (req, res) => {
@@ -269,47 +270,53 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
         .slice(0, 20); // Return top 20 closest rides
 
     // Format response data
-    const formattedRides = availableRides.map(ride => ({
-        id: ride.id,
-        rider: {
-            id: ride.rider.id,
-            name: `${ride.rider.firstName || ''} ${ride.rider.lastName || ''}`.trim(),
-            avatar: ride.rider.avatar,
-            phone: ride.rider.contactNumber,
-            rating: ratingMap.get(ride.rider.id) || 0
-        },
-        pickup: {
-            latitude: ride.startLatitude,
-            longitude: ride.startLongitude,
-            address: ride.startAddress
-        },
-        dropoff: {
-            latitude: ride.endLatitude,
-            longitude: ride.endLongitude,
-            address: ride.endAddress
-        },
-        service: ride.service ? {
-            id: ride.service.id,
-            name: ride.service.name,
-            nameAr: ride.service.nameAr
-        } : null,
-        vehicleCategory: ride.service?.vehicleCategory ? {
-            id: ride.service.vehicleCategory.id,
-            name: ride.service.vehicleCategory.name,
-            nameAr: ride.service.vehicleCategory.nameAr,
-            capacity: ride.service.vehicleCategory.capacity
-        } : null,
-        pricing: {
-            totalAmount: ride.totalAmount,
-            baseFare: ride.baseFare,
-            distance: ride.distance,
-            duration: ride.duration,
-            paymentType: ride.paymentType
-        },
-        distance: ride.distance, // Distance from driver to pickup
-        createdAt: ride.createdAt,
-        isScheduled: ride.isSchedule,
-        scheduledTime: ride.scheduleDatetime
+    const formattedRides = await Promise.all(availableRides.map(async (ride) => {
+        // Calculate estimated price
+        const estimatedPrice = await calculateEstimatedPrice(ride);
+
+        return {
+            id: ride.id,
+            rider: {
+                id: ride.rider.id,
+                name: `${ride.rider.firstName || ''} ${ride.rider.lastName || ''}`.trim(),
+                avatar: ride.rider.avatar,
+                phone: ride.rider.contactNumber,
+                rating: ratingMap.get(ride.rider.id) || 0
+            },
+            pickup: {
+                latitude: ride.startLatitude,
+                longitude: ride.startLongitude,
+                address: ride.startAddress
+            },
+            dropoff: {
+                latitude: ride.endLatitude,
+                longitude: ride.endLongitude,
+                address: ride.endAddress
+            },
+            service: ride.service ? {
+                id: ride.service.id,
+                name: ride.service.name,
+                nameAr: ride.service.nameAr
+            } : null,
+            vehicleCategory: ride.service?.vehicleCategory ? {
+                id: ride.service.vehicleCategory.id,
+                name: ride.service.vehicleCategory.name,
+                nameAr: ride.service.vehicleCategory.nameAr,
+                capacity: ride.service.vehicleCategory.capacity
+            } : null,
+            pricing: {
+                totalAmount: ride.totalAmount,
+                estimatedPrice: estimatedPrice,
+                baseFare: ride.baseFare,
+                distance: ride.distance,
+                duration: ride.duration,
+                paymentType: ride.paymentType
+            },
+            distance: ride.distance, // Distance from driver to pickup
+            createdAt: ride.createdAt,
+            isScheduled: ride.isSchedule,
+            scheduledTime: ride.scheduleDatetime
+        };
     }));
 
     return successResponse(res, {
@@ -329,6 +336,51 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
         Math.sin(dLat / 2) ** 2 +
         Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+// Calculate estimated price for a ride
+const calculateEstimatedPrice = async (ride) => {
+    try {
+        if (!ride.startLatitude || !ride.startLongitude || !ride.endLatitude || !ride.endLongitude) {
+            return null;
+        }
+
+        // Calculate distance between pickup and dropoff
+        const distance = calculateDistance(
+            parseFloat(ride.startLatitude),
+            parseFloat(ride.startLongitude),
+            parseFloat(ride.endLatitude),
+            parseFloat(ride.endLongitude)
+        );
+
+        // Get vehicle category ID
+        const vehicleCategoryId = ride.service?.vehicleCategory?.id || ride.vehicleCategoryId;
+
+        if (!vehicleCategoryId) {
+            return null;
+        }
+
+        // Calculate price using pricing rules
+        const priceResult = await calculateTripPrice(
+            vehicleCategoryId,
+            distance,
+            ride.duration || 0, // Use duration if available
+            0 // No waiting time for estimation
+        );
+
+        if (priceResult.success) {
+            return {
+                estimatedTotal: priceResult.totalAmount,
+                breakdown: priceResult.breakdown,
+                currency: priceResult.currency
+            };
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error calculating estimated price:', error);
+        return null;
+    }
 };
 
 // Update ride status (arrived, started)
