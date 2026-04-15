@@ -92,3 +92,24 @@ export async function getDriverSearchRadius() {
     const radius = parseFloat(row.value);
     return Number.isNaN(radius) || radius <= 0 ? 5 : Math.min(50, radius); // Max 50km, min 1km
 }
+
+/**
+ * Get driver rejection cooldown duration from settings (in hours).
+ * Default is 24 hours if not set.
+ * This is the time a driver is blocked after rejection before they can apply again.
+ */
+export async function getDriverRejectionCooldownDuration() {
+    let row = await prisma.setting.findUnique({
+        where: { key: "driver_rejection_cooldown_duration" },
+    });
+    if (!row || row.value == null || String(row.value).trim() === "") {
+        await prisma.setting.upsert({
+            where: { key: "driver_rejection_cooldown_duration" },
+            update: { value: "24" },
+            create: { key: "driver_rejection_cooldown_duration", value: "24" },
+        });
+        return 24;
+    }
+    const duration = parseFloat(row.value);
+    return Number.isNaN(duration) || duration <= 0 ? 24 : Math.min(720, duration); // Max 30 days (720 hours), min 1 hour
+}
