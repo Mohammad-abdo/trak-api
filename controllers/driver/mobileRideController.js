@@ -204,23 +204,19 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
                     firstName: true,
                     lastName: true,
                     contactNumber: true,
-                    avatar: true,
-                    rating: true
+                    avatar: true
                 }
             },
             service: {
-                select: {
-                    id: true,
-                    name: true,
-                    nameAr: true
-                }
-            },
-            vehicleCategory: {
-                select: {
-                    id: true,
-                    name: true,
-                    nameAr: true,
-                    capacity: true
+                include: {
+                    vehicleCategory: {
+                        select: {
+                            id: true,
+                            name: true,
+                            nameAr: true,
+                            capacity: true
+                        }
+                    }
                 }
             }
         },
@@ -228,6 +224,25 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
             createdAt: "desc"
         },
         take: 50 // Limit results to prevent overload
+    });
+
+    // Get rider ratings
+    const riderIds = [...new Set(pendingRides.map(ride => ride.riderId))];
+    const riderRatings = await prisma.rideRequestRating.groupBy({
+        by: ['riderId'],
+        where: {
+            riderId: { in: riderIds },
+            ratingBy: 'driver' // Ratings given by drivers to riders
+        },
+        _avg: {
+            rating: true
+        }
+    });
+
+    // Create a map of riderId to average rating
+    const ratingMap = new Map();
+    riderRatings.forEach(rating => {
+        ratingMap.set(rating.riderId, Math.round(rating._avg.rating * 10) / 10); // Round to 1 decimal
     });
 
     // Filter rides by distance and exclude previously rejected ones
@@ -261,7 +276,7 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
             name: `${ride.rider.firstName || ''} ${ride.rider.lastName || ''}`.trim(),
             avatar: ride.rider.avatar,
             phone: ride.rider.contactNumber,
-            rating: ride.rider.rating || 0
+            rating: ratingMap.get(ride.rider.id) || 0
         },
         pickup: {
             latitude: ride.startLatitude,
@@ -278,11 +293,11 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
             name: ride.service.name,
             nameAr: ride.service.nameAr
         } : null,
-        vehicleCategory: ride.vehicleCategory ? {
-            id: ride.vehicleCategory.id,
-            name: ride.vehicleCategory.name,
-            nameAr: ride.vehicleCategory.nameAr,
-            capacity: ride.vehicleCategory.capacity
+        vehicleCategory: ride.service?.vehicleCategory ? {
+            id: ride.service.vehicleCategory.id,
+            name: ride.service.vehicleCategory.name,
+            nameAr: ride.service.vehicleCategory.nameAr,
+            capacity: ride.service.vehicleCategory.capacity
         } : null,
         pricing: {
             totalAmount: ride.totalAmount,
