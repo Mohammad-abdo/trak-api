@@ -4,7 +4,34 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
-import { getDriverSearchRadius } from "../../utils/settingsHelper.js";
+import { getDriverSearchRadius, getDriverRejectionCooldownDuration } from "../../utils/settingsHelper.js";
+
+/**
+ * Check if driver is currently blocked from rejecting rides
+ * Returns { isBlocked: boolean, remainingMinutes: number }
+ */
+async function checkDriverRejectionBlock(driverId) {
+    const driver = await prisma.user.findUnique({
+        where: { id: driverId },
+        select: { lastRejectionAt: true }
+    });
+
+    if (!driver?.lastRejectionAt) {
+        return { isBlocked: false, remainingMinutes: 0 };
+    }
+
+    const cooldownHours = await getDriverRejectionCooldownDuration();
+    const cooldownMs = cooldownHours * 60 * 60 * 1000; // Convert hours to milliseconds
+    const timeSinceLastRejection = Date.now() - new Date(driver.lastRejectionAt).getTime();
+
+    if (timeSinceLastRejection < cooldownMs) {
+        const remainingMs = cooldownMs - timeSinceLastRejection;
+        const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+        return { isBlocked: true, remainingMinutes };
+    }
+
+    return { isBlocked: false, remainingMinutes: 0 };
+}
 
 // Driver's ride history with pagination and filters
 export const getMyRides = asyncHandler(async (req, res) => {
@@ -147,8 +174,25 @@ export const respondToRide = asyncHandler(async (req, res) => {
         }
     } else {
         // Reject the ride
+        // Check if driver is currently blocked from rejecting
+        const blockStatus = await checkDriverRejectionBlock(req.user.id);
+        if (blockStatus.isBlocked) {
+            return errorResponse(res, `You are blocked from rejecting rides. Try again in ${blockStatus.remainingMinutes} minutes.`, 429);
+        }
+
         const cancelledIds = ride.cancelledDriverIds ? JSON.parse(ride.cancelledDriverIds) : [];
         cancelledIds.push(req.user.id);
+
+        // Update rejection tracking
+        await prisma.user.update({
+            where: { id: req.user.id },
+            data: {
+                lastRejectionAt: new Date(),
+                driverRejectionCount: {
+                    increment: 1
+                }
+            }
+        });
 
         await prisma.rideRequest.update({
             where: { id: ride.id },
@@ -185,6 +229,17 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
     // Validate required parameters
     if (!latitude || !longitude) {
         return errorResponse(res, "Driver latitude and longitude are required", 400);
+    }
+
+    // Check if driver is blocked from rejecting (and thus cannot see new rides)
+    const blockStatus = await checkDriverRejectionBlock(driverId);
+    if (blockStatus.isBlocked) {
+        return successResponse(res, {
+            availableRides: [],
+            isDriverBlocked: true,
+            blockMessage: `You are blocked from viewing new rides. Try again in ${blockStatus.remainingMinutes} minutes.`,
+            remainingMinutes: blockStatus.remainingMinutes
+        });
     }
 
     const driverLat = parseFloat(latitude);

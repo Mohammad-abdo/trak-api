@@ -51,6 +51,8 @@ model User {
   otpExpiresAt         DateTime? @map("otp_expires_at") @db.Timestamp
   isVerified           Boolean   @default(false) @map("is_verified")
   rejectionReason      String?   @map("rejection_reason") @db.Text
+  lastRejectionAt      DateTime? @map("last_rejection_at") @db.Timestamp
+  driverRejectionCount Int       @default(0) @map("driver_rejection_count")
   createdAt            DateTime  @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
