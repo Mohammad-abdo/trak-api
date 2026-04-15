@@ -309,7 +309,7 @@ async function main() {
       address: 'Cairo, Egypt',
       latitude: '30.0444',
       longitude: '31.2357',
-      isOnline: false,
+      isOnline: true,
       isAvailable: false,
       isVerified: true
     }
