@@ -24,6 +24,78 @@ function payskyJson(res, statusCode, message, success) {
 }
 
 /**
+ * Handle wallet top-up payment webhook
+ */
+async function handleWalletTopup(req, res, body, merchantRef, systemRef) {
+    const parts = merchantRef.split(":");
+    if (parts.length < 3) {
+        console.error("PaySky wallet topup webhook: invalid TOPUP reference format:", merchantRef);
+        return payskyJson(res, 200, "Invalid reference format", false);
+    }
+
+    const walletId = parseInt(parts[1]);
+    const divisor = parseInt(process.env.PAYSKY_AMOUNT_MINOR_DIVISOR || "100", 10) || 100;
+    const amountMajor = parseFloat(body.Amount) / divisor;
+
+    if (isNaN(walletId) || isNaN(amountMajor)) {
+        console.error("PaySky wallet topup webhook: invalid wallet ID or amount", { walletId, amountMajor });
+        return payskyJson(res, 200, "Invalid wallet ID or amount", false);
+    }
+
+    // Check if already processed (idempotency)
+    const existingTopup = await prisma.walletHistory.findFirst({
+        where: {
+            walletId,
+            transactionType: "topup",
+            description: merchantRef,
+        },
+    });
+
+    if (existingTopup) {
+        console.log("PaySky wallet topup webhook: topup already processed for", merchantRef);
+        return payskyJson(res, 200, "Topup already processed", true);
+    }
+
+    // Get wallet
+    const wallet = await prisma.wallet.findUnique({
+        where: { id: walletId },
+    });
+
+    if (!wallet) {
+        console.error("PaySky wallet topup webhook: wallet not found:", walletId);
+        return payskyJson(res, 200, "Wallet not found", false);
+    }
+
+    try {
+        const newBalance = wallet.balance + amountMajor;
+
+        const [updatedWallet, history] = await prisma.$transaction([
+            prisma.wallet.update({
+                where: { id: walletId },
+                data: { balance: newBalance },
+            }),
+            prisma.walletHistory.create({
+                data: {
+                    walletId,
+                    userId: wallet.userId,
+                    type: "credit",
+                    amount: amountMajor,
+                    balance: newBalance,
+                    description: merchantRef,
+                    transactionType: "topup",
+                },
+            }),
+        ]);
+
+        console.log(`PaySky wallet topup webhook: topup successful. Wallet #${walletId}, amount: ${amountMajor}, new balance: ${newBalance}`);
+        return payskyJson(res, 200, "Topup processed successfully", true);
+    } catch (error) {
+        console.error("PaySky wallet topup webhook: error processing topup:", error);
+        return payskyJson(res, 200, "Error processing topup", false);
+    }
+}
+
+/**
  * Browsers use GET when you paste the webhook URL — PaySky uses POST with JSON.
  * @route GET /api/payments/paysky/notification
  */
@@ -98,6 +170,12 @@ export const payskyNotification = async (req, res) => {
     const txnType = parseInt(body.TxnType, 10);
     const systemRef = String(body.SystemReference ?? "").trim();
     const actionCode = body.ActionCode != null ? String(body.ActionCode).trim() : "";
+    const merchantRef = String(body.MerchantReference ?? "").trim();
+
+    // Handle wallet top-up (txnType 1 = sale, actionCode 00 = success)
+    if (txnType === 1 && actionCode === "00" && merchantRef.startsWith("TOPUP:")) {
+        return await handleWalletTopup(req, res, body, merchantRef, systemRef);
+    }
 
     if (txnType === 1 && actionCode === "00") {
         const rideId = parseRideRequestIdFromMerchantReference(body.MerchantReference);

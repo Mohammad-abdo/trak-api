@@ -321,7 +321,7 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
     });
     if (!defaultDoc) {
         defaultDoc = await prisma.document.create({
-            data: { name: 'General Document', isActive: true, status: 1 }
+            data: { name: 'General Document', status: 1 }
         });
     }
 
