@@ -1,10 +1,23 @@
 import prisma from "../../utils/prisma.js";
+import { userHasAnyPermission } from "../../utils/staffPermissions.js";
 
 // @desc    Save wallet (add money)
 // @route   POST /api/wallets/save-wallet
 // @access  Private
 export const saveWallet = async (req, res) => {
     try {
+        const isAdmin = req.user?.userType === "admin";
+        const isSubAdminWithWalletManage =
+            req.user?.userType === "sub_admin" &&
+            (await userHasAnyPermission(req.user.id, req.user.userType, ["wallets.manage"]));
+
+        if (!isAdmin && !isSubAdminWithWalletManage) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Insufficient permissions for this resource.",
+            });
+        }
+
         const { amount } = req.body;
 
         let wallet = await prisma.wallet.findUnique({

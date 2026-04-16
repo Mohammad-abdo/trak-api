@@ -1,6 +1,14 @@
 import prisma from "../utils/prisma.js";
 import bcrypt from "bcryptjs";
 
+const SUPPORTED_DASHBOARD_STAFF_TYPES = new Set(["sub_admin"]);
+
+function normalizeStaffUserType(userType) {
+    const normalized = String(userType || "").trim().toLowerCase();
+    if (SUPPORTED_DASHBOARD_STAFF_TYPES.has(normalized)) return normalized;
+    return "sub_admin";
+}
+
 const staffSelect = {
     id: true,
     firstName: true,
@@ -106,6 +114,8 @@ export const createSubAdmin = async (req, res) => {
         const username =
             req.body.username || `${email.split("@")[0]}${Math.floor(Math.random() * 1000)}`;
 
+        const normalizedUserType = normalizeStaffUserType(userType);
+
         const subAdmin = await prisma.user.create({
             data: {
                 firstName,
@@ -115,7 +125,7 @@ export const createSubAdmin = async (req, res) => {
                 password: hashedPassword,
                 contactNumber,
                 countryCode: countryCode || "+1",
-                userType: userType || "sub_admin",
+                userType: normalizedUserType,
                 displayName: `${firstName} ${lastName}`,
                 status: "active",
                 ...(roleId && {
@@ -163,13 +173,15 @@ export const updateSubAdmin = async (req, res) => {
             return res.status(404).json({ success: false, message: "Staff member not found" });
         }
 
+        const normalizedUserType = normalizeStaffUserType(userType ?? subAdmin.userType);
+
         const updateData = {
             firstName,
             lastName,
             email: email?.toLowerCase(),
             contactNumber,
             countryCode,
-            userType,
+            userType: normalizedUserType,
             displayName: `${firstName} ${lastName}`,
         };
 

@@ -69,7 +69,13 @@ router.post(
 
 // User routes
 router.get("/wallet-detail", authenticate, getWalletDetail);
-router.post("/save-wallet", authenticate, saveWallet);
+router.post(
+    "/save-wallet",
+    authenticate,
+    authorize("admin", "sub_admin"),
+    authorizeAnyPermission("wallets.manage"),
+    saveWallet
+);
 router.get("/wallet-list", authenticate, getWalletList);
 router.get("/reward-list", authenticate, getRewardList);
 

@@ -2,6 +2,7 @@ import prisma from "../../utils/prisma.js";
 import crypto from "crypto";
 import { isPayskyConfigured, getPayskyEnv } from "../../utils/payskyApi.js";
 import { processPayskyCardPayment } from "../../utils/payskyCardPayment.js";
+import { verifyPayskySecureHash } from "../../utils/payskySecureHash.js";
 
 // @desc    Get wallet top-up config (for Paysky VPOS)
 // @route   POST /apimobile/driver/wallet/topup/init
@@ -215,7 +216,7 @@ export const payWalletTopupWithCard = async (req, res) => {
 // @access  Private (Driver)
 export const confirmWalletTopup = async (req, res) => {
     try {
-        const { merchantReference, systemReference, amount, paidThrough } = req.body;
+        const { merchantReference, systemReference, amount } = req.body;
 
         // Parse merchantReference: TOPUP:{walletId}:{timestamp}
         if (!merchantReference || !merchantReference.startsWith("TOPUP:")) {
@@ -234,12 +235,93 @@ export const confirmWalletTopup = async (req, res) => {
         }
 
         const walletId = parseInt(parts[1]);
-        const topupAmount = parseFloat(amount);
-
-        if (!topupAmount || isNaN(topupAmount) || topupAmount <= 0) {
+        const expectedTopupAmount = parseFloat(amount);
+        if (!expectedTopupAmount || isNaN(expectedTopupAmount) || expectedTopupAmount <= 0) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid amount",
+            });
+        }
+
+        const secureHash = String(req.body.SecureHash ?? req.body.secureHash ?? "").trim();
+        const merchantId = String(req.body.MerchantId ?? req.body.merchantId ?? "").trim();
+        const terminalId = String(req.body.TerminalId ?? req.body.terminalId ?? "").trim();
+        const dateTimeLocalTrxn = String(
+            req.body.DateTimeLocalTrxn ?? req.body.dateTimeLocalTrxn ?? ""
+        ).trim();
+        const currency = String(req.body.Currency ?? req.body.currency ?? "").trim();
+        const gatewayAmountMinorRaw = String(req.body.Amount ?? req.body.amountMinor ?? "").trim();
+
+        if (
+            !secureHash ||
+            !merchantId ||
+            !terminalId ||
+            !dateTimeLocalTrxn ||
+            !currency ||
+            !gatewayAmountMinorRaw
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Signed PaySky confirmation fields are required",
+            });
+        }
+
+        const gatewayAmountMinor = parseInt(gatewayAmountMinorRaw, 10);
+        if (Number.isNaN(gatewayAmountMinor) || gatewayAmountMinor <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid signed amount",
+            });
+        }
+
+        const signedPayload = {
+            Amount: String(gatewayAmountMinor),
+            Currency: currency,
+            DateTimeLocalTrxn: dateTimeLocalTrxn,
+            MerchantId: merchantId,
+            TerminalId: terminalId,
+            SecureHash: secureHash,
+        };
+
+        const secretHex = String(process.env.PAYSKY_SECRET_KEY_HEX || "").trim();
+        if (!secretHex || !verifyPayskySecureHash(signedPayload, secretHex)) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid PaySky signature",
+            });
+        }
+
+        const expectedMerchant = String(process.env.PAYSKY_MERCHANT_ID || "").trim();
+        if (expectedMerchant && merchantId !== expectedMerchant) {
+            return res.status(401).json({
+                success: false,
+                message: "Merchant ID mismatch",
+            });
+        }
+
+        const expectedTerminal = String(process.env.PAYSKY_TERMINAL_ID || "").trim();
+        if (expectedTerminal && terminalId !== expectedTerminal) {
+            return res.status(401).json({
+                success: false,
+                message: "Terminal ID mismatch",
+            });
+        }
+
+        const configuredCurrency = String(process.env.PAYSKY_MERCHANT_CURRENCY_NUMERIC || "").trim();
+        if (configuredCurrency && currency !== configuredCurrency) {
+            return res.status(400).json({
+                success: false,
+                message: "Currency mismatch",
+            });
+        }
+
+        const divisor = parseInt(process.env.PAYSKY_AMOUNT_MINOR_DIVISOR || "100", 10) || 100;
+        const topupAmount = gatewayAmountMinor / divisor;
+        const tolerance = 0.02;
+        if (Math.abs(topupAmount - expectedTopupAmount) > tolerance) {
+            return res.status(400).json({
+                success: false,
+                message: "Signed amount does not match requested amount",
             });
         }
 
