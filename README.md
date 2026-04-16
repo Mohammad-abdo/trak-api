@@ -2,6 +2,17 @@
 
 Node.js + Express backend API for Tovo taxi/ride-hailing management system with Prisma ORM and MySQL.
 
+## Engineering Docs (Start Here)
+
+- [Developer Onboarding](docs/DEVELOPER_ONBOARDING.md)
+- [Backend Modernization Guide](docs/BACKEND_MODERNIZATION_GUIDE.md)
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
+- [Response Contract Policy](docs/RESPONSE_CONTRACT_POLICY.md)
+- [Refactor Playbook](docs/REFACTOR_PLAYBOOK.md)
+- [Module Ownership Map](docs/MODULE_OWNERSHIP_MAP.md)
+- [Where To Edit By Task](docs/WHERE_TO_EDIT_BY_TASK.md)
+- [API Contract Baseline](docs/api-contract-baseline.md)
+
 ## Features
 
 - RESTful API
