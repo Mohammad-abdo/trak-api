@@ -2,6 +2,19 @@ import prisma from '../../utils/prisma.js';
 import { parseRideRequestIdParam } from '../../utils/rideRequestId.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
 
+const parseServiceData = (value) => {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (_) {
+            return null;
+        }
+    }
+    return null;
+};
+
 // @desc    Get all user bookings with status
 // @route   GET /apimobile/user/my-bookings
 // @access  Private
@@ -22,6 +35,11 @@ export const getMyBookings = async (req, res) => {
                 id: true,
                 status: true,
                 totalAmount: true,
+                baseFare: true,
+                minimumFare: true,
+                perDistance: true,
+                perMinuteDrive: true,
+                vehicleCategoryId: true,
                 paymentType: true,
                 startAddress: true,
                 endAddress: true,
@@ -31,6 +49,7 @@ export const getMyBookings = async (req, res) => {
                 endLongitude: true,
                 otp: true,
                 isDriverRated: true,
+                serviceData: true,
                 createdAt: true,
                 driver: {
                     select: {
@@ -80,6 +99,8 @@ export const getMyBookings = async (req, res) => {
                     book_id: b.id,
                     status: b.status,
                     totalAmount: b.totalAmount,
+                    baseFare: b.baseFare,
+                    minimumFare: b.minimumFare,
                     paymentType: b.paymentType,
                     tripOtp: b.otp,
                     isDriverRated: b.isDriverRated,
@@ -100,6 +121,21 @@ export const getMyBookings = async (req, res) => {
                         vehicleImage: fullImageUrl(req, b.driver.userDetail?.carImage),
                     } : null,
                     service: b.service,
+                    vehicleCategory: (() => {
+                        const serviceData = parseServiceData(b.serviceData);
+                        if (!serviceData) return null;
+                        return {
+                            id: serviceData.vehicleCategoryId ?? b.vehicleCategoryId ?? null,
+                            name: serviceData.vehicleCategoryName ?? null,
+                        };
+                    })(),
+                    pricing: {
+                        totalAmount: b.totalAmount,
+                        baseFare: b.baseFare,
+                        minimumFare: b.minimumFare,
+                        perDistance: b.perDistance,
+                        perMinuteDrive: b.perMinuteDrive,
+                    },
                     review: b.ratings[0]?.comment ?? null,
                     reviewRating: b.ratings[0]?.rating ?? null,
                 })),
@@ -139,6 +175,11 @@ export const filterBookings = async (req, res) => {
                 id: true,
                 status: true,
                 totalAmount: true,
+                baseFare: true,
+                minimumFare: true,
+                perDistance: true,
+                perMinuteDrive: true,
+                vehicleCategoryId: true,
                 paymentType: true,
                 startAddress: true,
                 endAddress: true,
@@ -148,6 +189,7 @@ export const filterBookings = async (req, res) => {
                 endLongitude: true,
                 otp: true,
                 isDriverRated: true,
+                serviceData: true,
                 createdAt: true,
                 driver: {
                     select: {
@@ -196,6 +238,8 @@ export const filterBookings = async (req, res) => {
                     book_id: b.id,
                     status: b.status,
                     totalAmount: b.totalAmount,
+                    baseFare: b.baseFare,
+                    minimumFare: b.minimumFare,
                     paymentType: b.paymentType,
                     tripOtp: b.otp,
                     isDriverRated: b.isDriverRated,
@@ -216,6 +260,21 @@ export const filterBookings = async (req, res) => {
                         vehicleImage: fullImageUrl(req, b.driver.userDetail?.carImage),
                     } : null,
                     service: b.service,
+                    vehicleCategory: (() => {
+                        const serviceData = parseServiceData(b.serviceData);
+                        if (!serviceData) return null;
+                        return {
+                            id: serviceData.vehicleCategoryId ?? b.vehicleCategoryId ?? null,
+                            name: serviceData.vehicleCategoryName ?? null,
+                        };
+                    })(),
+                    pricing: {
+                        totalAmount: b.totalAmount,
+                        baseFare: b.baseFare,
+                        minimumFare: b.minimumFare,
+                        perDistance: b.perDistance,
+                        perMinuteDrive: b.perMinuteDrive,
+                    },
                     review: b.ratings[0]?.comment ?? null,
                     reviewRating: b.ratings[0]?.rating ?? null,
                 })),

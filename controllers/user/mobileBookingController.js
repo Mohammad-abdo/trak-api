@@ -24,6 +24,7 @@ export const serviceVehicleTypes = async (req, res) => {
                 maxLoad: true,
                 pricingRules: {
                     where: { status: 1 },
+                    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
                     select: {
                         id: true,
                         baseFare: true,
@@ -163,16 +164,19 @@ export const createBooking = async (req, res) => {
             paymentMethod,
             from,
             to,
-            totalPrice,
         } = req.body;
 
         if (!vehicle_id || !from || !to) {
             return res.status(400).json({ success: false, message: 'vehicle_id, from and to are required' });
         }
+        const vehicleId = parseInt(vehicle_id, 10);
+        if (Number.isNaN(vehicleId)) {
+            return res.status(400).json({ success: false, message: 'Invalid vehicle_id' });
+        }
 
         // Get vehicle category to find a linked service
         const vehicleCategory = await prisma.vehicleCategory.findUnique({
-            where: { id: parseInt(vehicle_id) },
+            where: { id: vehicleId },
             include: { serviceCategory: true },
         });
 
@@ -182,8 +186,15 @@ export const createBooking = async (req, res) => {
 
         // Get pricing rule for this vehicle
         const pricingRule = await prisma.pricingRule.findFirst({
-            where: { vehicleCategoryId: parseInt(vehicle_id), status: 1 },
+            where: { vehicleCategoryId: vehicleId, status: 1 },
+            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         });
+        const resolvedPricingRule = pricingRule || {
+            baseFare: 0,
+            minimumFare: 0,
+            perDistanceAfterBase: 0,
+            perMinuteDrive: 0,
+        };
 
         const tripOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -192,20 +203,39 @@ export const createBooking = async (req, res) => {
         let weightModifier = 0;
 
         if (shipmentSize_id) {
-            const size = await prisma.shipmentSize.findUnique({ where: { id: parseInt(shipmentSize_id) } });
+            const sizeId = parseInt(shipmentSize_id, 10);
+            if (Number.isNaN(sizeId)) {
+                return res.status(400).json({ success: false, message: 'Invalid shipmentSize_id' });
+            }
+            const size = await prisma.shipmentSize.findFirst({
+                where: { id: sizeId, vehicleCategoryId: vehicleId, status: 1 },
+            });
+            if (!size) {
+                return res.status(400).json({ success: false, message: 'Invalid shipment size for selected vehicle category' });
+            }
             sizeModifier = size?.priceModifier ?? 0;
         }
         if (shipmentWeight_id) {
-            const weight = await prisma.shipmentWeight.findUnique({ where: { id: parseInt(shipmentWeight_id) } });
+            const weightId = parseInt(shipmentWeight_id, 10);
+            if (Number.isNaN(weightId)) {
+                return res.status(400).json({ success: false, message: 'Invalid shipmentWeight_id' });
+            }
+            const weight = await prisma.shipmentWeight.findFirst({
+                where: { id: weightId, vehicleCategoryId: vehicleId, status: 1 },
+            });
+            if (!weight) {
+                return res.status(400).json({ success: false, message: 'Invalid shipment weight for selected vehicle category' });
+            }
             weightModifier = weight?.priceModifier ?? 0;
         }
 
-        const calculatedTotal = totalPrice ?? ((pricingRule?.baseFare ?? 0) + sizeModifier + weightModifier);
+        const calculatedTotal = (resolvedPricingRule.baseFare ?? 0) + sizeModifier + weightModifier;
 
         const booking = await prisma.rideRequest.create({
             data: {
                 riderId: userId,
-                vehicleCategoryId: parseInt(vehicle_id),
+                vehicleCategoryId: vehicleId,
+                serviceId: vehicleCategory.serviceCategoryId,
                 startLatitude: String(from.lat),
                 startLongitude: String(from.lng),
                 startAddress: from.address || '',
@@ -215,15 +245,17 @@ export const createBooking = async (req, res) => {
                 paymentType: paymentMethod === 0 || paymentMethod === 'cash' ? 'cash' : `gateway_${paymentMethod}`,
                 totalAmount: calculatedTotal,
                 subtotal: calculatedTotal,
-                baseFare: pricingRule?.baseFare ?? 0,
-                minimumFare: pricingRule?.minimumFare ?? 0,
-                perDistance: pricingRule?.perDistanceAfterBase ?? 0,
-                perMinuteDrive: pricingRule?.perMinuteDrive ?? 0,
+                baseFare: resolvedPricingRule.baseFare ?? 0,
+                minimumFare: resolvedPricingRule.minimumFare ?? 0,
+                perDistance: resolvedPricingRule.perDistanceAfterBase ?? 0,
+                perMinuteDrive: resolvedPricingRule.perMinuteDrive ?? 0,
                 status: 'pending',
                 otp: tripOtp,
                 serviceData: {
-                    vehicleCategoryId: vehicle_id,
+                    vehicleCategoryId: vehicleId,
                     vehicleCategoryName: vehicleCategory.name,
+                    serviceCategoryId: vehicleCategory.serviceCategoryId,
+                    serviceCategoryName: vehicleCategory.serviceCategory?.name || null,
                     shipmentSizeId: shipmentSize_id ?? null,
                     shipmentWeightId: shipmentWeight_id ?? null,
                 },
@@ -232,6 +264,12 @@ export const createBooking = async (req, res) => {
                 id: true,
                 status: true,
                 totalAmount: true,
+                baseFare: true,
+                minimumFare: true,
+                perDistance: true,
+                perMinuteDrive: true,
+                vehicleCategoryId: true,
+                serviceId: true,
                 paymentType: true,
                 otp: true,
                 startLatitude: true,
@@ -256,6 +294,25 @@ export const createBooking = async (req, res) => {
                 from: { lat: booking.startLatitude, lng: booking.startLongitude, address: booking.startAddress },
                 to: { lat: booking.endLatitude, lng: booking.endLongitude, address: booking.endAddress },
                 createdAt: booking.createdAt,
+                vehicleCategory: {
+                    id: booking.vehicleCategoryId,
+                    name: vehicleCategory.name,
+                    nameAr: vehicleCategory.nameAr,
+                },
+                service: {
+                    id: booking.serviceId,
+                    name: vehicleCategory.serviceCategory?.name || null,
+                    nameAr: vehicleCategory.serviceCategory?.nameAr || null,
+                },
+                pricing: {
+                    baseFare: booking.baseFare,
+                    minimumFare: booking.minimumFare,
+                    perDistance: booking.perDistance,
+                    perMinuteDrive: booking.perMinuteDrive,
+                    shipmentSizeModifier: sizeModifier,
+                    shipmentWeightModifier: weightModifier,
+                    totalAmount: booking.totalAmount,
+                },
             },
         });
     } catch (error) {

@@ -75,6 +75,7 @@ export const chooseService = async (req, res) => {
                         maxLoad: true,
                         pricingRules: {
                             where: { status: 1 },
+                            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
                             select: {
                                 id: true,
                                 baseFare: true,
