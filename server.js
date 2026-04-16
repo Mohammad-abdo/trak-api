@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import prisma from './utils/prisma.js';
 import { initializeMQTT } from './utils/mqttService.js';
 
@@ -80,6 +81,7 @@ import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 import { requestContextMiddleware } from './middleware/requestContext.js';
 import { securityAuditMiddleware } from './middleware/securityAuditMiddleware.js';
+import { createIpRateLimiter, getHardeningConfigFromEnv, securityHeaders } from './middleware/securityHardening.js';
 
 dotenv.config();
 
@@ -87,14 +89,70 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
+app.disable('x-powered-by');
+
+function parseAllowedOrigins() {
+  const envOrigins = String(process.env.FRONTEND_URL || '').trim();
+  if (!envOrigins) return '*';
+  if (envOrigins === '*') return '*';
+  const origins = envOrigins
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return origins.length ? origins : '*';
+}
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || "*",
+    origin: parseAllowedOrigins(),
     methods: ["GET", "POST"],
   },
 });
 const PORT = process.env.PORT || 5000;
+const hardeningConfig = getHardeningConfigFromEnv();
+const socketAuthEnforced = process.env.SOCKET_ENFORCE_AUTH === '1';
+const authRateLimiter = createIpRateLimiter({
+  enabled: hardeningConfig.authLimiterEnabled,
+  windowMs: hardeningConfig.authRateWindowMs,
+  maxRequests: hardeningConfig.authRateMax,
+});
+
+function extractSocketToken(socket) {
+  const authToken = socket.handshake?.auth?.token;
+  if (typeof authToken === 'string' && authToken.trim()) {
+    return authToken.replace(/^Bearer\s+/i, '').trim();
+  }
+  const headerToken = socket.handshake?.headers?.authorization;
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.replace(/^Bearer\s+/i, '').trim();
+  }
+  const queryToken = socket.handshake?.query?.token;
+  if (typeof queryToken === 'string' && queryToken.trim()) {
+    return queryToken.replace(/^Bearer\s+/i, '').trim();
+  }
+  return null;
+}
+
+async function resolveSocketUser(socket) {
+  const token = extractSocketToken(socket);
+  if (!token) return null;
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        userType: true,
+        status: true,
+      },
+    });
+    return user || null;
+  } catch (_) {
+    return null;
+  }
+}
 
 function parseTrustProxy() {
   const v = process.env.TRUST_PROXY;
@@ -110,9 +168,14 @@ app.set('trust proxy', parseTrustProxy());
 // Middleware
 app.use(requestContextMiddleware);
 app.use(cors());
+app.use(securityHeaders);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(securityAuditMiddleware);
+
+// Conservative limiter for auth/otp/password endpoints.
+// Does not change normal API responses unless an IP is abusive.
+app.use(['/api/auth', '/apimobile/user/auth', '/apimobile/driver/auth'], authRateLimiter);
 
 // Static files
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
@@ -197,6 +260,21 @@ app.use('/api/negotiations', negotiationRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
+});
+
+// Liveness probe: process is up
+app.get('/api/health/live', (req, res) => {
+  res.json({ status: 'OK', message: 'Server is live' });
+});
+
+// Readiness probe: dependencies are reachable
+app.get('/api/health/ready', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: 'OK', message: 'Server is ready' });
+  } catch (error) {
+    return res.status(503).json({ status: 'NOT_READY', message: 'Database not reachable' });
+  }
 });
 
 // Mobile User API Routes
@@ -353,23 +431,75 @@ try {
 }
 
 // Socket.IO connection handling
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('Client connected:', socket.id);
+
+  const socketUser = await resolveSocketUser(socket);
+  if (socketUser) {
+    socket.data.user = socketUser;
+  } else if (socketAuthEnforced) {
+    socket.emit('socket-auth-error', { success: false, message: 'Socket authentication required' });
+    socket.disconnect(true);
+    return;
+  }
 
   // Join user-specific room
   socket.on('join-user-room', (userId) => {
+    if (socketAuthEnforced) {
+      const currentUser = socket.data.user;
+      if (!currentUser || Number(userId) !== Number(currentUser.id)) {
+        socket.emit('socket-auth-error', { success: false, message: 'Not authorized for user room' });
+        return;
+      }
+    }
     socket.join(`user-${userId}`);
     console.log(`User ${userId} joined their room`);
   });
 
   // Join driver room
   socket.on('join-driver-room', (driverId) => {
+    if (socketAuthEnforced) {
+      const currentUser = socket.data.user;
+      if (!currentUser || currentUser.userType !== 'driver' || Number(driverId) !== Number(currentUser.id)) {
+        socket.emit('socket-auth-error', { success: false, message: 'Not authorized for driver room' });
+        return;
+      }
+    }
     socket.join(`driver-${driverId}`);
     console.log(`Driver ${driverId} joined their room`);
   });
 
   // Handle ride request updates
-  socket.on('subscribe-ride', (rideId) => {
+  socket.on('subscribe-ride', async (rideId) => {
+    if (socketAuthEnforced) {
+      const currentUser = socket.data.user;
+      if (!currentUser) {
+        socket.emit('socket-auth-error', { success: false, message: 'Authentication required' });
+        return;
+      }
+
+      const rideIdInt = parseInt(String(rideId), 10);
+      if (Number.isNaN(rideIdInt)) {
+        socket.emit('socket-auth-error', { success: false, message: 'Invalid ride id' });
+        return;
+      }
+
+      // Admin/staff can subscribe to any ride; riders/drivers only to their own rides.
+      const isPrivileged = !['rider', 'driver'].includes(currentUser.userType);
+      if (!isPrivileged) {
+        const ride = await prisma.rideRequest.findUnique({
+          where: { id: rideIdInt },
+          select: { riderId: true, driverId: true },
+        });
+        const allowed =
+          !!ride &&
+          (Number(ride.riderId) === Number(currentUser.id) || Number(ride.driverId) === Number(currentUser.id));
+        if (!allowed) {
+          socket.emit('socket-auth-error', { success: false, message: 'Not authorized for ride room' });
+          return;
+        }
+      }
+    }
     socket.join(`ride-${rideId}`);
     console.log(`Subscribed to ride ${rideId}`);
   });
@@ -425,12 +555,44 @@ cron.schedule('* * * * *', async () => {
 console.log('Scheduled ride activation and dedicated booking auto-complete running (every minute)');
 
 // Start server
-httpServer.listen(PORT, () => {
+const serverInstance = httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Socket.IO server is ready`);
   if (process.env.MQTT_HOST) {
     console.log(`MQTT service initialized`);
   }
   console.log(`Scheduled ride activation service is running`);
+});
+
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down gracefully...`);
+
+  serverInstance.close(async () => {
+    try {
+      await prisma.$disconnect();
+      console.log('Database disconnected');
+    } catch (err) {
+      console.error('Error during Prisma disconnect:', err);
+    } finally {
+      process.exit(0);
+    }
+  });
+
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 15000).unref();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
 });
 

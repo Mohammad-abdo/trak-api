@@ -13,6 +13,19 @@ const haversineKm = (lat1, lng1, lat2, lng2) => {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+const parseDriverId = (value) => {
+    const parsed = parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const parseLatLng = (lat, lng) => {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return null;
+    if (latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) return null;
+    return { lat: latNum, lng: lngNum };
+};
+
 // @desc    Get near drivers for a booking
 // @route   POST /apimobile/user/offers/near-drivers
 // @access  Private
@@ -20,7 +33,16 @@ export const getNearDrivers = async (req, res) => {
     try {
         const { booking_location, booking_id } = req.body;
 
-        if (!booking_location || !booking_location.lat || !booking_location.lng || !booking_id) {
+        if (
+            !booking_location ||
+            booking_location.lat === undefined ||
+            booking_location.lng === undefined ||
+            !booking_id
+        ) {
+            return res.status(400).json({ success: false, message: 'booking_location (lat/lng) and booking_id are required' });
+        }
+        const bookingCoords = parseLatLng(booking_location.lat, booking_location.lng);
+        if (!bookingCoords) {
             return res.status(400).json({ success: false, message: 'booking_location (lat/lng) and booking_id are required' });
         }
         const rideId = parseRideRequestIdParam(booking_id);
@@ -60,8 +82,8 @@ export const getNearDrivers = async (req, res) => {
             },
         });
 
-        const bLat = parseFloat(booking_location.lat);
-        const bLng = parseFloat(booking_location.lng);
+        const bLat = bookingCoords.lat;
+        const bLng = bookingCoords.lng;
 
         // Progressive search: 1km, 2km, 3km, 4km, 5km
         const radii = [1, 2, 3, 4, 5];
@@ -71,6 +93,7 @@ export const getNearDrivers = async (req, res) => {
             nearDrivers = drivers.filter(d => {
                 const dLat = parseFloat(d.latitude);
                 const dLng = parseFloat(d.longitude);
+                if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) return false;
                 return haversineKm(bLat, bLng, dLat, dLng) <= radius;
             });
 
@@ -114,6 +137,10 @@ export const acceptDriver = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const driverId = parseDriverId(driver_id);
+        if (!driverId) {
+            return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
+        }
         const rideId = parseRideRequestIdParam(booking_id);
         if (!rideId) {
             return res.status(400).json({ success: false, message: 'Invalid booking_id' });
@@ -132,7 +159,7 @@ export const acceptDriver = async (req, res) => {
         const updated = await prisma.rideRequest.update({
             where: { id: rideId },
             data: {
-                driverId: parseInt(driver_id),
+                driverId,
                 status: 'accepted',
                 otp: tripCode.slice(-6),
             },
@@ -167,7 +194,7 @@ export const acceptDriver = async (req, res) => {
         // Notify driver via Socket.IO
         const io = req.app.get('io');
         if (io) {
-            io.to(`driver-${driver_id}`).emit('ride-request-accepted', {
+            io.to(`driver-${driverId}`).emit('ride-request-accepted', {
                 booking_id: rideId,
                 rider_id: riderId,
             });
@@ -210,6 +237,10 @@ export const cancelDriverOffer = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const driverId = parseDriverId(driver_id);
+        if (!driverId) {
+            return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
+        }
         const rideId = parseRideRequestIdParam(booking_id);
         if (!rideId) {
             return res.status(400).json({ success: false, message: 'Invalid booking_id' });
@@ -231,7 +262,7 @@ export const cancelDriverOffer = async (req, res) => {
             });
         }
 
-        if (booking.driverId !== parseInt(driver_id)) {
+        if (booking.driverId !== driverId) {
             return res.status(400).json({ success: false, message: 'Driver does not match this booking' });
         }
 
@@ -247,7 +278,7 @@ export const cancelDriverOffer = async (req, res) => {
 
         const io = req.app.get('io');
         if (io) {
-            io.to(`driver-${driver_id}`).emit('driver-offer-cancelled', {
+            io.to(`driver-${driverId}`).emit('driver-offer-cancelled', {
                 booking_id: rideId,
                 rider_id: riderId,
             });
@@ -274,13 +305,17 @@ export const trackDriver = async (req, res) => {
         if (!driver_id || !booking_id) {
             return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
         }
+        const driverId = parseDriverId(driver_id);
+        if (!driverId) {
+            return res.status(400).json({ success: false, message: 'driver_id and booking_id are required' });
+        }
         const rideId = parseRideRequestIdParam(booking_id);
         if (!rideId) {
             return res.status(400).json({ success: false, message: 'Invalid booking_id' });
         }
 
         const driver = await prisma.user.findUnique({
-            where: { id: parseInt(driver_id) },
+            where: { id: driverId },
             select: { id: true, latitude: true, longitude: true, lastLocationUpdateAt: true },
         });
 
@@ -293,7 +328,7 @@ export const trackDriver = async (req, res) => {
         if (io) {
             io.to(`user-${req.user.id}`).emit('trip-tracking-started', {
                 booking_id: rideId,
-                driver_id: parseInt(driver_id),
+                driver_id: driverId,
             });
         }
 
@@ -302,7 +337,7 @@ export const trackDriver = async (req, res) => {
             message: 'Tracking started. Connect to WebSocket room: ride-' + rideId,
             data: {
                 booking_id: rideId,
-                driver_id: parseInt(driver_id),
+                driver_id: driverId,
                 driverCurrentLocation: { lat: driver.latitude, lng: driver.longitude },
                 lastUpdated: driver.lastLocationUpdateAt,
                 webSocket: { event: 'subscribe-ride', room: `ride-${rideId}` },
@@ -383,6 +418,10 @@ export const cancelTrip = async (req, res) => {
     try {
         const riderId = req.user.id;
         const { driver_id, booking_id } = req.body;
+        const driverId = driver_id ? parseDriverId(driver_id) : null;
+        if (driver_id && !driverId) {
+            return res.status(400).json({ success: false, message: 'Invalid driver_id' });
+        }
 
         if (!booking_id) {
             return res.status(400).json({ success: false, message: 'booking_id is required' });
@@ -411,8 +450,8 @@ export const cancelTrip = async (req, res) => {
 
         // Notify driver
         const io = req.app.get('io');
-        if (io && driver_id) {
-            io.to(`driver-${driver_id}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider' });
+        if (io && driverId) {
+            io.to(`driver-${driverId}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider' });
         }
 
         return res.json({ success: true, message: 'Trip cancelled successfully' });
@@ -429,6 +468,10 @@ export const tripEnd = async (req, res) => {
     try {
         const riderId = req.user.id;
         const { driver_id, booking_id } = req.body;
+        const driverId = driver_id ? parseDriverId(driver_id) : null;
+        if (driver_id && !driverId) {
+            return res.status(400).json({ success: false, message: 'Invalid driver_id' });
+        }
 
         if (!booking_id) {
             return res.status(400).json({ success: false, message: 'booking_id is required' });
@@ -453,8 +496,8 @@ export const tripEnd = async (req, res) => {
 
         // Notify driver
         const io = req.app.get('io');
-        if (io && driver_id) {
-            io.to(`driver-${driver_id}`).emit('trip-completed', { booking_id: rideId });
+        if (io && driverId) {
+            io.to(`driver-${driverId}`).emit('trip-completed', { booking_id: rideId });
         }
 
         return res.json({ success: true, message: 'Trip ended successfully. Please rate your driver.' });
@@ -475,8 +518,16 @@ export const rateDriver = async (req, res) => {
         if (!driver_id || !booking_id || !rate) {
             return res.status(400).json({ success: false, message: 'driver_id, booking_id, and rate are required' });
         }
+        const driverId = parseDriverId(driver_id);
+        if (!driverId) {
+            return res.status(400).json({ success: false, message: 'driver_id, booking_id, and rate are required' });
+        }
+        const numericRate = parseFloat(rate);
+        if (!Number.isFinite(numericRate)) {
+            return res.status(400).json({ success: false, message: 'Rate must be between 1 and 5' });
+        }
 
-        if (rate < 1 || rate > 5) {
+        if (numericRate < 1 || numericRate > 5) {
             return res.status(400).json({ success: false, message: 'Rate must be between 1 and 5' });
         }
         const rideId = parseRideRequestIdParam(booking_id);
@@ -500,8 +551,8 @@ export const rateDriver = async (req, res) => {
             data: {
                 rideRequestId: rideId,
                 riderId,
-                driverId: parseInt(driver_id),
-                rating: parseFloat(rate),
+                driverId,
+                rating: numericRate,
                 comment: text || null,
                 ratingBy: 'rider',
             },
