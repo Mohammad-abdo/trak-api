@@ -5,6 +5,7 @@ import { normalizeOtpInput, validateOtpAgainstUser } from '../../services/otpVer
 import { sendOtpSms } from '../../utils/smsService.js';
 import { generateToken } from '../../utils/jwtHelper.js';
 import { fullUserSelect } from '../../utils/prismaSelects.js';
+import { contactNumberLookupVariants } from '../../utils/phoneLookup.js';
 
 // @desc    Login with phone + password
 // @route   POST /apimobile/user/auth/login
@@ -17,8 +18,16 @@ export const login = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Phone and password are required' });
         }
 
+        const variants = contactNumberLookupVariants(phone);
+        if (variants.length === 0) {
+            return res.status(401).json({ success: false, message: 'Invalid phone or password' });
+        }
+
         const user = await prisma.user.findFirst({
-            where: { contactNumber: phone.trim() },
+            where: {
+                contactNumber: { in: variants },
+                userType: 'rider',
+            },
         });
 
         if (!user) {

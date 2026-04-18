@@ -4,6 +4,7 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { generateToken } from "../../utils/jwtHelper.js";
 import { fullUserSelect } from "../../utils/prismaSelects.js";
+import { contactNumberLookupVariants } from "../../utils/phoneLookup.js";
 
 export const login = asyncHandler(async (req, res) => {
     const { phone, password } = req.body;
@@ -11,8 +12,16 @@ export const login = asyncHandler(async (req, res) => {
         return errorResponse(res, "Phone and password are required", 400);
     }
 
+    const variants = contactNumberLookupVariants(phone);
+    if (variants.length === 0) {
+        return errorResponse(res, "Invalid phone or password", 401);
+    }
+
     const user = await prisma.user.findFirst({
-        where: { contactNumber: phone.trim() },
+        where: {
+            contactNumber: { in: variants },
+            userType: "driver",
+        },
     });
     if (!user) {
         return errorResponse(res, "Invalid phone or password", 401);
