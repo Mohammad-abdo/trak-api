@@ -187,7 +187,7 @@ model Service {
 }
 
 model RideRequest {
-  id                                 Int    @id @default(autoincrement()) 
+  id                                 Int       @id @default(autoincrement())
   riderId                            Int       @map("rider_id")
   serviceId                          Int?      @map("service_id")
   vehicleCategoryId                  Int?      @map("vehicle_category_id")
@@ -267,15 +267,15 @@ model RideRequest {
   zoneDropoff                        Boolean   @default(false) @map("zone_dropoff")
 
   // Negotiation fields
-  negotiatedFare                     Float?    @map("negotiated_fare") @db.Double
-  negotiationStatus                  String    @default("none") @map("negotiation_status") @db.VarChar(30)
-  negotiationMaxPercent              Float?    @map("negotiation_max_percent") @db.Double
-  lastNegotiationBy                  String?   @map("last_negotiation_by") @db.VarChar(10)
-  negotiationRounds                  Int       @default(0) @map("negotiation_rounds")
-  negotiationExpiresAt               DateTime? @map("negotiation_expires_at") @db.Timestamp
+  negotiatedFare        Float?    @map("negotiated_fare") @db.Double
+  negotiationStatus     String    @default("none") @map("negotiation_status") @db.VarChar(30)
+  negotiationMaxPercent Float?    @map("negotiation_max_percent") @db.Double
+  lastNegotiationBy     String?   @map("last_negotiation_by") @db.VarChar(10)
+  negotiationRounds     Int       @default(0) @map("negotiation_rounds")
+  negotiationExpiresAt  DateTime? @map("negotiation_expires_at") @db.Timestamp
 
-  createdAt                          DateTime  @default(now()) @map("created_at") @db.DateTime(6)
-  updatedAt                          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
   // Relations
   rider    User      @relation("RiderRideRequests", fields: [riderId], references: [id])
@@ -290,6 +290,7 @@ model RideRequest {
   walletHistories WalletHistory[]
   complaints      Complaint[]
   negotiations    RideNegotiation[]
+  chatMessages    RideChatMessage[]
 
   @@index([riderId, status])
   @@index([driverId, status])
@@ -299,10 +300,9 @@ model RideRequest {
   @@map("ride_requests")
 }
 
-
 model Payment {
   id             Int      @id @default(autoincrement())
-  rideRequestId  Int   @map("ride_request_id")
+  rideRequestId  Int      @map("ride_request_id")
   userId         Int      @map("user_id")
   driverId       Int      @map("driver_id")
   amount         Float    @db.Double
@@ -347,7 +347,7 @@ model WalletHistory {
   balance         Float    @db.Double
   description     String?  @db.Text
   transactionType String   @map("transaction_type")
-  rideRequestId   Int?  @map("ride_request_id")
+  rideRequestId   Int?     @map("ride_request_id")
   createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
@@ -424,9 +424,9 @@ model Promotion {
 }
 
 model PromotionCategory {
-  id                Int    @id @default(autoincrement())
+  id                Int @id @default(autoincrement())
   promotionId       Int @map("promotion_id")
-  vehicleCategoryId Int    @map("vehicle_category_id")
+  vehicleCategoryId Int @map("vehicle_category_id")
 
   promotion       Promotion       @relation(fields: [promotionId], references: [id], onDelete: Cascade)
   vehicleCategory VehicleCategory @relation(fields: [vehicleCategoryId], references: [id], onDelete: Cascade)
@@ -439,7 +439,7 @@ model PromotionCategory {
 
 model PromotionUsage {
   id          Int      @id @default(autoincrement())
-  promotionId Int   @map("promotion_id")
+  promotionId Int      @map("promotion_id")
   userId      Int      @map("user_id")
   bookingId   String?  @map("booking_id") @db.VarChar(191)
   usedAt      DateTime @default(now()) @map("used_at") @db.DateTime(6)
@@ -493,7 +493,7 @@ model Complaint {
   complaintBy   String?  @map("complaint_by")
   subject       String?
   description   String?  @db.Text
-  rideRequestId Int?  @map("ride_request_id")
+  rideRequestId Int?     @map("ride_request_id")
   status        String?  @default("pending") @db.VarChar(20)
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
@@ -520,7 +520,7 @@ model ComplaintComment {
 
 model RideRequestBid {
   id            Int      @id @default(autoincrement())
-  rideRequestId Int   @map("ride_request_id")
+  rideRequestId Int      @map("ride_request_id")
   driverId      Int      @map("driver_id")
   bidAmount     Float?   @map("bid_amount") @db.Double
   isBidAccept   Boolean  @default(false) @map("is_bid_accept")
@@ -538,7 +538,7 @@ model RideRequestBid {
 
 model RideRequestRating {
   id            Int      @id @default(autoincrement())
-  rideRequestId Int   @map("ride_request_id")
+  rideRequestId Int      @map("ride_request_id")
   riderId       Int      @map("rider_id")
   driverId      Int      @map("driver_id")
   rating        Float    @db.Double
@@ -559,7 +559,7 @@ model RideRequestRating {
 
 model RideRequestHistory {
   id            Int       @id @default(autoincrement())
-  rideRequestId   Int    @map("ride_request_id")
+  rideRequestId Int       @map("ride_request_id")
   historyType   String?   @map("history_type")
   datetime      DateTime? @db.Timestamp
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
@@ -572,14 +572,14 @@ model RideRequestHistory {
 }
 
 model RideNegotiation {
-  id              Int      @id @default(autoincrement())
-  rideRequestId   Int   @map("ride_request_id")
-  proposedBy      String   @map("proposed_by") @db.VarChar(10)
-  proposedFare    Float    @map("proposed_fare") @db.Double
-  percentChange   Float    @map("percent_change") @db.Double
-  action          String   @db.VarChar(20)
-  round           Int      @default(1)
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  id            Int      @id @default(autoincrement())
+  rideRequestId Int      @map("ride_request_id")
+  proposedBy    String   @map("proposed_by") @db.VarChar(10)
+  proposedFare  Float    @map("proposed_fare") @db.Double
+  percentChange Float    @map("percent_change") @db.Double
+  action        String   @db.VarChar(20)
+  round         Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
 
   rideRequest RideRequest @relation(fields: [rideRequestId], references: [id])
 
@@ -645,7 +645,7 @@ model UserBankAccount {
 }
 
 model Notification {
-  id             Int    @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   type           String
   notifiableType String    @map("notifiable_type")
   notifiableId   Int       @map("notifiable_id")
@@ -781,22 +781,22 @@ model AdditionalFees {
 }
 
 model SurgePrice {
-  id                 Int       @id @default(autoincrement())
-  serviceId          Int?      @map("service_id")
-  vehicleCategoryId  Int?      @map("vehicle_category_id")
-  regionId           Int?      @map("region_id")
-  day                Json?
-  type               String?
-  value              Float?    @db.Double
-  fromTime           Json?     @map("from_time")
-  toTime             Json?     @map("to_time")
-  deletedAt          DateTime? @map("deleted_at") @db.Timestamp
-  createdAt          DateTime  @default(now()) @map("created_at") @db.DateTime(6)
-  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+  id                Int       @id @default(autoincrement())
+  serviceId         Int?      @map("service_id")
+  vehicleCategoryId Int?      @map("vehicle_category_id")
+  regionId          Int?      @map("region_id")
+  day               Json?
+  type              String?
+  value             Float?    @db.Double
+  fromTime          Json?     @map("from_time")
+  toTime            Json?     @map("to_time")
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamp
+  createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
-  service         Service?        @relation(fields: [serviceId], references: [id])
+  service         Service?         @relation(fields: [serviceId], references: [id])
   vehicleCategory VehicleCategory? @relation(fields: [vehicleCategoryId], references: [id], onDelete: SetNull)
-  region          Region?         @relation(fields: [regionId], references: [id])
+  region          Region?          @relation(fields: [regionId], references: [id])
 
   @@index([regionId])
   @@index([vehicleCategoryId])
@@ -857,7 +857,7 @@ model Review {
   id            Int      @id @default(autoincrement())
   driverId      Int      @map("driver_id")
   riderId       Int      @map("rider_id")
-  rideRequestId Int   @map("ride_request_id")
+  rideRequestId Int      @map("ride_request_id")
   driverRating  Float?   @map("driver_rating") @db.Double
   riderRating   Float?   @map("rider_rating") @db.Double
   driverReview  String?  @map("driver_review") @db.Text
@@ -1381,10 +1381,10 @@ enum PaymentStatus {
 }
 
 model DedicatedBooking {
-  id                Int @id @default(autoincrement())
-  userId            Int    @map("user_id")
-  driverId          Int?   @map("driver_id")
-  vehicleCategoryId Int    @map("vehicle_category_id")
+  id                Int  @id @default(autoincrement())
+  userId            Int  @map("user_id")
+  driverId          Int? @map("driver_id")
+  vehicleCategoryId Int  @map("vehicle_category_id")
 
   pickupAddress String @map("pickup_address") @db.VarChar(500)
   pickupLat     Float  @map("pickup_lat") @db.Double
@@ -1436,7 +1436,7 @@ model DedicatedBooking {
 
 model BookingInvoice {
   id        Int       @id @default(autoincrement())
-  bookingId Int    @unique @map("booking_id")
+  bookingId Int       @unique @map("booking_id")
   subtotal  Float     @db.Double
   tax       Float     @default(0) @db.Double
   discount  Float     @default(0) @db.Double
@@ -1451,7 +1451,7 @@ model BookingInvoice {
 
 model BookingLocationUpdate {
   id        Int      @id @default(autoincrement())
-  bookingId Int   @map("booking_id")
+  bookingId Int      @map("booking_id")
   lat       Float    @db.Double
   lng       Float    @db.Double
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
@@ -1562,4 +1562,26 @@ model SecurityAuditLog {
   @@index([category, createdAt])
   @@index([userId])
   @@map("security_audit_logs")
+}
+
+// Chat between rider (client) and assigned driver for a RideRequest.
+// Only usable once the ride has been accepted by the driver.
+model RideChatMessage {
+  id            Int       @id @default(autoincrement())
+  rideRequestId Int       @map("ride_request_id")
+  senderId      Int       @map("sender_id")
+  senderType    String    @map("sender_type") @db.VarChar(10)
+  message       String    @db.Text
+  attachmentUrl String?   @map("attachment_url") @db.Text
+  isRead        Boolean   @default(false) @map("is_read")
+  readAt        DateTime? @map("read_at") @db.Timestamp
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
+
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id], onDelete: Cascade)
+
+  @@index([rideRequestId, createdAt])
+  @@index([rideRequestId, isRead])
+  @@index([senderId])
+  @@map("ride_chat_messages")
 }

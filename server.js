@@ -75,9 +75,11 @@ import categoryFeatureRoutes from './routes/categoryFeatureRoutes.js';
 import categoryZoneRoutes from './routes/categoryZoneRoutes.js';
 import dedicatedBookingRoutes from './routes/dedicatedBookings.js';
 import negotiationRoutes from './routes/negotiations.js';
+import rideChatRoutes from './routes/rideChat.js';
 import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
 import mobileDriverRoutes from './routes/driver/mobileDriverRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
+import { registerRideChatHandlers } from './utils/rideChatSocket.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 import { requestContextMiddleware } from './middleware/requestContext.js';
 import { securityAuditMiddleware } from './middleware/securityAuditMiddleware.js';
@@ -257,6 +259,9 @@ app.use('/api/category-zones', categoryZoneRoutes);
 app.use('/api/dedicated-bookings', dedicatedBookingRoutes);
 app.use('/api/negotiations', negotiationRoutes);
 
+// Ride chat (rider <-> driver, available after ride acceptance)
+app.use('/apimobile/chat', rideChatRoutes);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
@@ -309,6 +314,20 @@ try {
       components: {
         securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
         schemas: {
+          RideChatMessage: {
+            type: 'object',
+            properties: {
+              id:            { type: 'integer', example: 184 },
+              rideRequestId: { type: 'integer', example: 921 },
+              senderId:      { type: 'integer', example: 12 },
+              senderType:    { type: 'string',  enum: ['rider', 'driver'], example: 'rider' },
+              message:       { type: 'string',  example: 'I am waiting at the main gate, blue shirt.' },
+              attachmentUrl: { type: 'string',  nullable: true, example: null },
+              isRead:        { type: 'boolean', example: false },
+              readAt:        { type: 'string',  format: 'date-time', nullable: true, example: null },
+              createdAt:     { type: 'string',  format: 'date-time', example: '2026-04-18T12:45:03.512Z' },
+            },
+          },
           UserFull: {
             type: 'object',
             properties: {
@@ -347,9 +366,10 @@ try {
         { name: 'Cards', description: 'Saved payment cards (add, list, delete)' },
         { name: 'Static', description: 'Static pages & notifications' },
         { name: 'Negotiation', description: 'Ride fare negotiation between rider & driver (up to ±20%). Feature must be enabled in Settings.' },
+        { name: 'Ride Chat', description: '1-to-1 chat between rider and the assigned driver. Enabled after the driver accepts the trip (status = accepted/arrived/started/ongoing/in_progress). History stays readable after the trip ends.' },
       ],
     },
-    apis: ['./routes/user/mobileUserRoutes.js'],
+    apis: ['./routes/user/mobileUserRoutes.js', './routes/rideChat.js'],
   };
 
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -390,6 +410,22 @@ try {
       servers: [{ url: '/' }],
       components: {
         securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+        schemas: {
+          RideChatMessage: {
+            type: 'object',
+            properties: {
+              id:            { type: 'integer', example: 185 },
+              rideRequestId: { type: 'integer', example: 921 },
+              senderId:      { type: 'integer', example: 47 },
+              senderType:    { type: 'string',  enum: ['rider', 'driver'], example: 'driver' },
+              message:       { type: 'string',  example: 'On my way, 3 minutes.' },
+              attachmentUrl: { type: 'string',  nullable: true, example: null },
+              isRead:        { type: 'boolean', example: false },
+              readAt:        { type: 'string',  format: 'date-time', nullable: true, example: null },
+              createdAt:     { type: 'string',  format: 'date-time', example: '2026-04-18T12:45:17.004Z' },
+            },
+          },
+        },
       },
       security: [{ bearerAuth: [] }],
       tags: [
@@ -405,9 +441,10 @@ try {
         { name: 'Driver Negotiation', description: 'Fare negotiation: counter-offer, accept, reject, history' },
         { name: 'Driver Notifications', description: 'Push notifications: list, mark read' },
         { name: 'Driver Static', description: 'Privacy policy, terms, help center' },
+        { name: 'Ride Chat', description: '1-to-1 chat with the assigned rider. Enabled once you accept the trip (status = accepted/arrived/started/ongoing/in_progress). History stays readable after the trip ends.' },
       ],
     },
-    apis: ['./routes/driver/mobileDriverRoutes.js'],
+    apis: ['./routes/driver/mobileDriverRoutes.js', './routes/rideChat.js'],
   };
 
   const driverSwaggerSpec = swaggerJsdoc(driverSwaggerOptions);
@@ -505,6 +542,7 @@ io.on('connection', async (socket) => {
   });
 
   registerDedicatedBookingHandlers(socket, io);
+  registerRideChatHandlers(socket, io);
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
