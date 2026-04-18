@@ -104,12 +104,24 @@ export const bulkUpdateUserStatus = async (req, res) => {
             });
         }
 
+        const idInts = ids.map((id) => parseInt(id));
         const updated = await prisma.user.updateMany({
-            where: {
-                id: { in: ids.map(id => parseInt(id)) },
-            },
+            where: { id: { in: idInts } },
             data: { status },
         });
+
+        // Match PUT /users/:id + driver review: activating drivers must set verification flags for mobile /profile/status
+        if (status === "active") {
+            await prisma.user.updateMany({
+                where: { id: { in: idInts }, userType: "driver" },
+                data: { isVerifiedDriver: true, isVerified: true, rejectionReason: null },
+            });
+        } else if (status === "inactive") {
+            await prisma.user.updateMany({
+                where: { id: { in: idInts }, userType: "driver" },
+                data: { isVerifiedDriver: false },
+            });
+        }
 
         res.json({
             success: true,

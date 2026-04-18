@@ -18,6 +18,7 @@
     "seed:all": "node prisma/seed-all.js",
     "backfill:ride-service-id": "node scripts/backfill-ride-service-id.js",
     "backfill:ride-service-id:apply": "node scripts/backfill-ride-service-id.js --apply",
+    "backfill:role-permissions": "node scripts/backfillRolePermissions.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:seed-e2e": "node scripts/seedE2ETest.js",

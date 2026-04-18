@@ -1997,6 +1997,38 @@ async function main() {
     data: { name: 'settings', guardName: 'web' }
   })
 
+  // Link roles ↔ permissions (RBAC). Without this, /roles shows empty permission chips.
+  console.log('Linking roles to permissions...')
+  const seededPermRows = await prisma.permission.findMany({ select: { id: true, name: true } })
+  const permIdByName = Object.fromEntries(seededPermRows.map((p) => [p.name, p.id]))
+  const allSeededPermNames = seededPermRows.map((p) => p.name)
+  const seededRoleRows = await prisma.role.findMany({ where: { guardName: 'web' } })
+  const roleIdByName = Object.fromEntries(seededRoleRows.map((r) => [r.name, r.id]))
+  const linkSets = {
+    admin: allSeededPermNames,
+    manager: allSeededPermNames,
+    fleet: ['rides', 'rides.view', 'rides.manage', 'users', 'users.view'],
+    support: ['users', 'users.view', 'rides', 'rides.view', 'rides.manage', 'roles', 'roles.view']
+  }
+  const rpRows = []
+  const seenPair = new Set()
+  for (const [roleName, permNames] of Object.entries(linkSets)) {
+    const roleId = roleIdByName[roleName]
+    if (!roleId) continue
+    for (const name of permNames) {
+      const permissionId = permIdByName[name]
+      if (!permissionId) continue
+      const key = `${roleId}:${permissionId}`
+      if (seenPair.has(key)) continue
+      seenPair.add(key)
+      rpRows.push({ roleId, permissionId })
+    }
+  }
+  if (rpRows.length) {
+    await prisma.rolePermission.createMany({ data: rpRows, skipDuplicates: true })
+    console.log(`✅ role_permissions: ${rpRows.length} links`)
+  }
+
   // ===================================
   // Multi-Service Platform Data
   // ===================================

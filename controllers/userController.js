@@ -648,6 +648,17 @@ export const updateUser = async (req, res) => {
 
         const oldUser = await prisma.user.findUnique({ where: { id: parseInt(id) }, select: { status: true, userType: true } });
 
+        // Drivers list uses PUT /users/:id with status=active — must match POST .../review (isVerifiedDriver / isVerified)
+        if (oldUser?.userType === "driver" && status !== undefined && status !== null && status !== "") {
+            if (status === "active") {
+                updateData.isVerifiedDriver = true;
+                updateData.isVerified = true;
+                updateData.rejectionReason = null;
+            } else if (status === "inactive") {
+                updateData.isVerifiedDriver = false;
+            }
+        }
+
         const user = await prisma.user.update({
             where: { id: parseInt(id) },
             data: updateData,
@@ -865,6 +876,8 @@ export const updateDriver = async (req, res) => {
         const avatarPath = req.files?.avatar?.[0] ? `/uploads/drivers/${req.files.avatar[0].filename}` : undefined;
         const carImagePath = req.files?.carImage?.[0] ? `/uploads/drivers/${req.files.carImage[0].filename}` : undefined;
 
+        const newStatus = status !== undefined && status !== null && status !== "" ? status : existing.status;
+        const statusExplicit = status !== undefined && status !== null && status !== "";
         const userData = {
             firstName: firstName || existing.firstName,
             lastName: lastName || existing.lastName,
@@ -873,9 +886,18 @@ export const updateDriver = async (req, res) => {
             countryCode: countryCode !== undefined ? countryCode : existing.countryCode,
             gender: gender !== undefined ? gender : existing.gender,
             address: address !== undefined ? address : existing.address,
-            status: status || existing.status,
+            status: newStatus,
             displayName: `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim(),
         };
+        if (statusExplicit) {
+            if (status === "active") {
+                userData.isVerifiedDriver = true;
+                userData.isVerified = true;
+                userData.rejectionReason = null;
+            } else if (status === "inactive") {
+                userData.isVerifiedDriver = false;
+            }
+        }
         if (avatarPath) userData.avatar = avatarPath;
         if (password) userData.password = await bcrypt.hash(password, 10);
 
@@ -992,6 +1014,7 @@ export const reviewDriver = async (req, res) => {
                 data: {
                     status: 'active',
                     isVerifiedDriver: true,
+                    isVerified: true,
                     rejectionReason: null,
                 },
             });
