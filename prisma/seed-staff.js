@@ -1,29 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { PERMISSION_TREE, flattenAllPermissionNames, ROLE_PRESETS } from './permissionCatalog.js'
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log('🔧 Seeding staff employees with roles & permissions...\n')
 
-  // ─── 1. Ensure permissions exist ──────────────────────────────────────────
-  const permissionDefs = [
-    { name: 'users', children: ['users.view', 'users.create', 'users.update', 'users.delete'] },
-    { name: 'drivers', children: ['drivers.view', 'drivers.create', 'drivers.update', 'drivers.delete', 'drivers.approve'] },
-    { name: 'riders', children: ['riders.view', 'riders.create', 'riders.update', 'riders.delete'] },
-    { name: 'roles', children: ['roles.view', 'roles.create', 'roles.update', 'roles.delete'] },
-    { name: 'rides', children: ['rides.view', 'rides.manage', 'rides.cancel', 'rides.assign'] },
-    { name: 'settings', children: ['settings.view', 'settings.update'] },
-    { name: 'wallets', children: ['wallets.view', 'wallets.manage', 'wallets.withdraw'] },
-    { name: 'reports', children: ['reports.view', 'reports.export'] },
-    { name: 'complaints', children: ['complaints.view', 'complaints.manage'] },
-    { name: 'services', children: ['services.view', 'services.create', 'services.update', 'services.delete'] },
-    { name: 'coupons', children: ['coupons.view', 'coupons.create', 'coupons.update', 'coupons.delete'] },
-    { name: 'documents', children: ['documents.view', 'documents.manage'] },
-    { name: 'notifications', children: ['notifications.view', 'notifications.send'] },
-  ]
-
-  for (const def of permissionDefs) {
+  // ─── 1. Ensure all permissions exist (full dashboard catalog) ───────────
+  for (const def of PERMISSION_TREE) {
     const parent = await prisma.permission.upsert({
       where: { name_guardName: { name: def.name, guardName: 'web' } },
       update: {},
@@ -39,63 +24,16 @@ async function main() {
   }
 
   const allPerms = await prisma.permission.findMany()
-  const permMap = Object.fromEntries(allPerms.map(p => [p.name, p.id]))
-  console.log(`✅ ${allPerms.length} permissions ready`)
+  const permMap = Object.fromEntries(allPerms.map((p) => [p.name, p.id]))
+  console.log(`✅ ${allPerms.length} permissions in catalog`)
 
-  // ─── 2. Ensure roles exist ────────────────────────────────────────────────
+  // ─── 2. Ensure roles exist with preset permission sets ────────────────────
+  const allNames = flattenAllPermissionNames()
   const roleDefs = [
-    {
-      name: 'manager',
-      permissions: [
-        'users', 'users.view', 'users.create', 'users.update',
-        'drivers', 'drivers.view', 'drivers.create', 'drivers.update', 'drivers.approve',
-        'riders', 'riders.view', 'riders.update',
-        'rides', 'rides.view', 'rides.manage', 'rides.cancel', 'rides.assign',
-        'roles', 'roles.view',
-        'wallets', 'wallets.view', 'wallets.manage', 'wallets.withdraw',
-        'reports', 'reports.view', 'reports.export',
-        'complaints', 'complaints.view', 'complaints.manage',
-        'services', 'services.view', 'services.create', 'services.update',
-        'coupons', 'coupons.view', 'coupons.create', 'coupons.update',
-        'documents', 'documents.view', 'documents.manage',
-        'notifications', 'notifications.view', 'notifications.send',
-        'settings', 'settings.view',
-      ],
-    },
-    {
-      name: 'support',
-      permissions: [
-        'users', 'users.view',
-        'drivers', 'drivers.view',
-        'riders', 'riders.view',
-        'rides', 'rides.view', 'rides.manage',
-        'wallets', 'wallets.view',
-        'complaints', 'complaints.view', 'complaints.manage',
-        'documents', 'documents.view', 'documents.manage',
-        'notifications', 'notifications.view', 'notifications.send',
-      ],
-    },
-    {
-      name: 'operations',
-      permissions: [
-        'drivers', 'drivers.view', 'drivers.update', 'drivers.approve',
-        'rides', 'rides.view', 'rides.manage', 'rides.cancel', 'rides.assign',
-        'wallets', 'wallets.view',
-        'reports', 'reports.view',
-        'complaints', 'complaints.view',
-        'documents', 'documents.view', 'documents.manage',
-      ],
-    },
-    {
-      name: 'accountant',
-      permissions: [
-        'wallets', 'wallets.view', 'wallets.manage', 'wallets.withdraw',
-        'reports', 'reports.view', 'reports.export',
-        'rides', 'rides.view',
-        'users', 'users.view',
-        'drivers', 'drivers.view',
-      ],
-    },
+    { name: 'manager', permissions: allNames.filter((n) => permMap[n]) },
+    { name: 'support', permissions: ROLE_PRESETS.support.filter((n) => permMap[n]) },
+    { name: 'operations', permissions: ROLE_PRESETS.operations.filter((n) => permMap[n]) },
+    { name: 'accountant', permissions: ROLE_PRESETS.accountant.filter((n) => permMap[n]) },
   ]
 
   for (const roleDef of roleDefs) {
