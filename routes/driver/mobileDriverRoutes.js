@@ -91,7 +91,12 @@ const upload = multer({
 const registerUpload = upload.fields([{ name: "avatar", maxCount: 1 }, { name: "carImage", maxCount: 1 }, { name: "documents", maxCount: 10 }]);
 const profileUpload = upload.fields([{ name: "avatar", maxCount: 1 }]);
 const vehicleUpload = upload.fields([{ name: "carImage", maxCount: 1 }]);
-const docUpload = upload.fields([{ name: "files", maxCount: 20 }]);
+// Accept common mobile field names so multer receives files (Flutter often uses "documents")
+const docUpload = upload.fields([
+    { name: "files", maxCount: 20 },
+    { name: "documents", maxCount: 20 },
+    { name: "document", maxCount: 20 },
+]);
 
 // =============================================================================
 //  SWAGGER SCHEMAS
@@ -547,9 +552,20 @@ router.get("/documents", authenticate, getMyDocuments);
  *             properties:
  *               files:
  *                 type: array
- *                 items:
- *                   type: string
- *                   format: binary
+ *                 items: { type: string, format: binary }
+ *               documents:
+ *                 description: Same as files (alternate field name)
+ *                 type: array
+ *                 items: { type: string, format: binary }
+ *               documentIds:
+ *                 description: JSON array of document type IDs, one per file (e.g. [13,14]) — required to update existing row instead of duplicating
+ *                 type: string
+ *               documentId:
+ *                 description: Single document type ID when uploading one file
+ *                 type: integer
+ *               expireDates:
+ *                 description: Optional JSON array of ISO dates aligned with files
+ *                 type: string
  *     responses:
  *       200:
  *         description: Documents uploaded successfully

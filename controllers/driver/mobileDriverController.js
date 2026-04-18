@@ -308,38 +308,151 @@ export const updateVehicle = asyncHandler(async (req, res) => {
     }, "Vehicle updated");
 });
 
+function collectDriverUploadFiles(req) {
+    const f = req.files;
+    if (!f) return [];
+    const raw = f.files || f.documents || f.document;
+    if (!raw) return [];
+    return Array.isArray(raw) ? raw : [raw];
+}
+
+/** Parse document type IDs from multipart body (JSON string or comma-separated). */
+function parseDocumentIdList(body) {
+    const { documentIds, documentId, document_id } = body;
+    if (documentIds != null) {
+        if (Array.isArray(documentIds)) {
+            return documentIds.map((x) => parseInt(String(x), 10)).filter((n) => !Number.isNaN(n));
+        }
+        if (typeof documentIds === "string") {
+            const s = documentIds.trim();
+            if (s.startsWith("[")) {
+                try {
+                    const arr = JSON.parse(s);
+                    if (Array.isArray(arr)) {
+                        return arr.map((x) => parseInt(String(x), 10)).filter((n) => !Number.isNaN(n));
+                    }
+                } catch {
+                    /* fall through */
+                }
+            }
+            return s.split(/[,;]/).map((x) => parseInt(x.trim(), 10)).filter((n) => !Number.isNaN(n));
+        }
+    }
+    const one = parseInt(String(documentId ?? document_id ?? ""), 10);
+    return Number.isNaN(one) ? [] : [one];
+}
+
+function parseExpireDateList(body, len) {
+    const out = new Array(len).fill(null);
+    const { expireDates, expireDate } = body;
+    if (Array.isArray(expireDates)) {
+        for (let i = 0; i < len && i < expireDates.length; i++) {
+            if (expireDates[i]) out[i] = new Date(expireDates[i]);
+        }
+        return out;
+    }
+    if (typeof expireDates === "string" && expireDates.trim()) {
+        try {
+            const arr = JSON.parse(expireDates);
+            if (Array.isArray(arr)) {
+                for (let i = 0; i < len && i < arr.length; i++) {
+                    if (arr[i]) out[i] = new Date(arr[i]);
+                }
+                return out;
+            }
+        } catch {
+            /* ignore */
+        }
+    }
+    if (expireDate && len > 0) out[0] = new Date(expireDate);
+    return out;
+}
+
+const driverDocInclude = {
+    document: { select: { id: true, name: true, nameAr: true, type: true, isRequired: true, hasExpiryDate: true } },
+};
+
 // ─── Upload Multiple Documents ───────────────────────────────────────────────
 export const uploadDocuments = asyncHandler(async (req, res) => {
-    const files = req.files?.files;
-    if (!files || files.length === 0) {
-        return errorResponse(res, "No files provided", 400);
+    const fileList = collectDriverUploadFiles(req);
+    if (fileList.length === 0) {
+        return errorResponse(
+            res,
+            "No files provided. Use multipart field name: files, documents, or document",
+            400
+        );
     }
 
-    // Get or create a default document type
-    let defaultDoc = await prisma.document.findFirst({
-        where: { status: 1 }
-    });
-    if (!defaultDoc) {
-        defaultDoc = await prisma.document.create({
-            data: { name: 'General Document', status: 1 }
-        });
+    let idList = parseDocumentIdList(req.body);
+    if (idList.length === 0 && fileList.length === 1) {
+        const fb = await prisma.document.findFirst({ where: { status: 1 }, orderBy: { id: "asc" } });
+        if (fb) idList = [fb.id];
+    }
+    if (idList.length === 0) {
+        return errorResponse(
+            res,
+            "documentId or documentIds is required (IDs from GET /apimobile/driver/documents/required). Required when uploading more than one file.",
+            400
+        );
     }
 
+    const expireList = parseExpireDateList(req.body, fileList.length);
+    const driverId = req.user.id;
     const uploadedDocs = [];
-    const fileList = Array.isArray(files) ? files : [files];
 
-    for (const file of fileList) {
-        const filePath = `/uploads/driver-documents/${file.filename}`;
+    for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const docTypeId = idList[i] ?? idList[idList.length - 1] ?? idList[0];
+        if (!docTypeId || Number.isNaN(docTypeId)) {
+            return errorResponse(res, `Invalid documentId for file at index ${i}`, 400);
+        }
 
-        const driverDoc = await prisma.driverDocument.create({
-            data: {
-                driver: { connect: { id: req.user.id } },
-                document: { connect: { id: defaultDoc.id } },
-                documentImage: filePath,
-                isVerified: false,
-            },
-            include: { document: true },
+        const docType = await prisma.document.findFirst({
+            where: { id: docTypeId, status: 1 },
         });
+        if (!docType) {
+            return errorResponse(res, `Unknown or inactive document type id: ${docTypeId}`, 400);
+        }
+
+        const filePath = `/uploads/driver-documents/${file.filename}`;
+        const exp = expireList[i] ?? null;
+
+        const existing = await prisma.driverDocument.findFirst({
+            where: { driverId, documentId: docTypeId },
+            orderBy: { id: "asc" },
+        });
+
+        if (existing) {
+            await prisma.driverDocument.deleteMany({
+                where: { driverId, documentId: docTypeId, id: { not: existing.id } },
+            });
+        }
+
+        const updatePayload = {
+            documentImage: filePath,
+            isVerified: false,
+        };
+        if (exp) updatePayload.expireDate = exp;
+
+        let driverDoc;
+        if (existing) {
+            driverDoc = await prisma.driverDocument.update({
+                where: { id: existing.id },
+                data: updatePayload,
+                include: driverDocInclude,
+            });
+        } else {
+            driverDoc = await prisma.driverDocument.create({
+                data: {
+                    driver: { connect: { id: driverId } },
+                    document: { connect: { id: docTypeId } },
+                    documentImage: filePath,
+                    isVerified: false,
+                    expireDate: exp,
+                },
+                include: driverDocInclude,
+            });
+        }
 
         uploadedDocs.push({
             ...driverDoc,

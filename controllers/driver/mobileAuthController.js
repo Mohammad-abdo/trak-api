@@ -17,12 +17,12 @@ export const login = asyncHandler(async (req, res) => {
         return errorResponse(res, "Invalid phone or password", 401);
     }
 
-    const user = await prisma.user.findFirst({
-        where: {
-            contactNumber: { in: variants },
-            userType: "driver",
-        },
+    const matches = await prisma.user.findMany({
+        where: { contactNumber: { in: variants } },
+        take: 20,
     });
+    const user =
+        matches.find((u) => String(u.userType || "").toLowerCase() === "driver") || null;
     if (!user) {
         return errorResponse(res, "Invalid phone or password", 401);
     }
