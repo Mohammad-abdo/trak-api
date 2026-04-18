@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:seed-e2e": "node scripts/seedE2ETest.js",
     "test:user-api": "node scripts/testUserEndpoints.js",
+    "test:user-api:lenient": "node scripts/runUserApiLenient.mjs",
     "test:e2e": "node scripts/seedE2ETest.js && node scripts/testUserEndpoints.js"
   },
   "prisma": {
