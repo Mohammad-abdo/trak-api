@@ -105,12 +105,41 @@ function parseAllowedOrigins() {
 }
 
 const httpServer = createServer(app);
+
+// ─── Socket.IO server config (env-driven for production) ────────────────────
+// - Set SOCKET_PATH if your reverse proxy mounts the socket under a subpath.
+// - Set SOCKET_TRANSPORTS to "polling,websocket" to force-start with polling
+//   behind proxies that struggle with the upgrade (not recommended unless
+//   needed; defaults to allowing both).
+// - FRONTEND_URL is a comma-separated allow-list (no trailing slashes).
+const SOCKET_PATH = process.env.SOCKET_PATH && process.env.SOCKET_PATH.trim()
+  ? process.env.SOCKET_PATH.trim()
+  : '/socket.io';
+const SOCKET_TRANSPORTS = (process.env.SOCKET_TRANSPORTS || 'websocket,polling')
+  .split(',')
+  .map((t) => t.trim())
+  .filter(Boolean);
+const SOCKET_PING_INTERVAL = parseInt(process.env.SOCKET_PING_INTERVAL || '25000', 10);
+const SOCKET_PING_TIMEOUT = parseInt(process.env.SOCKET_PING_TIMEOUT || '60000', 10);
+
+const allowedOrigins = parseAllowedOrigins();
 const io = new Server(httpServer, {
   cors: {
-    origin: parseAllowedOrigins(),
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: allowedOrigins !== '*',
   },
+  path: SOCKET_PATH,
+  transports: SOCKET_TRANSPORTS,
+  pingInterval: SOCKET_PING_INTERVAL,
+  pingTimeout: SOCKET_PING_TIMEOUT,
+  allowEIO3: true,
 });
+
+console.log(
+  `📡 Socket.IO ready: path=${SOCKET_PATH} transports=${SOCKET_TRANSPORTS.join(',')} ` +
+  `origin=${Array.isArray(allowedOrigins) ? allowedOrigins.join(',') : allowedOrigins}`
+);
 const PORT = process.env.PORT || 5000;
 const hardeningConfig = getHardeningConfigFromEnv();
 const socketAuthEnforced = process.env.SOCKET_ENFORCE_AUTH === '1';
@@ -265,6 +294,19 @@ app.use('/apimobile/chat', rideChatRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
+});
+
+// Socket.IO reachability probe — helps verify the reverse proxy forwards
+// requests to Socket.IO correctly. If this returns 200, HTTP routing is OK
+// and only the WebSocket upgrade still needs to be validated from the client.
+app.get('/api/health/socket', (req, res) => {
+  res.json({
+    status: 'OK',
+    path: SOCKET_PATH,
+    transports: SOCKET_TRANSPORTS,
+    allowedOrigins,
+    handshakeProbe: `${SOCKET_PATH}/?EIO=4&transport=polling`,
+  });
 });
 
 // Liveness probe: process is up
