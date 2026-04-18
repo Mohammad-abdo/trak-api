@@ -17,7 +17,7 @@
  * Requires: `npm run test:seed-e2e` run first.
  *
  * Env:
- *   BASE_URL   (default http://localhost:5000) — **required on a server**: set to your
+ *   BASE_URL   (default http://localhost:6015) — **required on a server**: set to your
  *              public API origin, e.g. https://your-domain.com  (same URL the app uses).
  *              Using localhost on a remote machine will fail with ECONNREFUSED unless the
  *              API process listens on that host.
@@ -27,7 +27,7 @@
 import prisma from "../utils/prisma.js";
 import { generateToken } from "../utils/jwtHelper.js";
 
-const BASE_URL = (process.env.BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+const BASE_URL = (process.env.BASE_URL || "http://localhost:6015").replace(/\/$/, "");
 const RIDER_PHONE = "0100000E2E1";
 const RIDER_PASSWORD = "E2ERider@123";
 const DRIVER_PHONE = "0100000E2E2";
@@ -102,7 +102,7 @@ function printConnectionHelp() {
     console.error(Y(`   BASE_URL = ${BASE_URL}`));
     console.error("\n  Common causes:");
     console.error("    • ECONNREFUSED — no process is listening at that URL (wrong port, or server not started).");
-    console.error("    • On a VPS, localhost:5000 only works if Node binds to 0.0.0.0 and you run the script on the same machine.");
+    console.error("    • On a VPS, localhost:6015 only works if Node binds to 0.0.0.0 and you run the script on the same machine.");
     console.error("\n  Fix:");
     console.error("    1. Start the API (pm2, systemd, or node server.js).");
     console.error("    2. Point tests at the same base URL your app uses, e.g.:");
