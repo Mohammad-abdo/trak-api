@@ -17,14 +17,17 @@
  * Requires: `npm run test:seed-e2e` run first.
  *
  * Env:
- *   BASE_URL   (default http://localhost:5000)
+ *   BASE_URL   (default http://localhost:5000) — **required on a server**: set to your
+ *              public API origin, e.g. https://your-domain.com  (same URL the app uses).
+ *              Using localhost on a remote machine will fail with ECONNREFUSED unless the
+ *              API process listens on that host.
  *   JWT_SECRET (same value the server uses; falls back to the project default)
  */
 
 import prisma from "../utils/prisma.js";
 import { generateToken } from "../utils/jwtHelper.js";
 
-const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
+const BASE_URL = (process.env.BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 const RIDER_PHONE = "0100000E2E1";
 const RIDER_PASSWORD = "E2ERider@123";
 const DRIVER_PHONE = "0100000E2E2";
@@ -42,19 +45,44 @@ async function req(method, path, { token, body, query } = {}) {
     if (query) Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    let json = null;
     try {
-        json = await res.json();
-    } catch (_) {}
-    return { status: res.status, body: json };
+        const res = await fetch(url, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        let json = null;
+        try {
+            json = await res.json();
+        } catch (_) {}
+        return { status: res.status, body: json };
+    } catch (err) {
+        const code = err.cause?.code || err.code || "";
+        const msg = err.cause?.message || err.message || String(err);
+        return {
+            status: 0,
+            body: null,
+            connectionError: true,
+            connectionCode: code,
+            connectionMessage: msg,
+        };
+    }
 }
 
 function record(name, method, path, res, { allow = [200, 201], note = "" } = {}) {
+    if (res.connectionError) {
+        const detail = res.connectionCode ? `${res.connectionCode}: ${res.connectionMessage}` : res.connectionMessage;
+        results.push({
+            name,
+            method,
+            path,
+            status: 0,
+            ok: false,
+            note: detail,
+        });
+        console.log(`  ${R("FAIL")} ${method.padEnd(6)} ${path}  → ${R("no response")}  (${detail})`);
+        return false;
+    }
     const ok = allow.includes(res.status);
     results.push({
         name,
@@ -69,8 +97,36 @@ function record(name, method, path, res, { allow = [200, 201], note = "" } = {})
     return ok;
 }
 
+function printConnectionHelp() {
+    console.error(R("\n✗ Cannot reach the API."));
+    console.error(Y(`   BASE_URL = ${BASE_URL}`));
+    console.error("\n  Common causes:");
+    console.error("    • ECONNREFUSED — no process is listening at that URL (wrong port, or server not started).");
+    console.error("    • On a VPS, localhost:5000 only works if Node binds to 0.0.0.0 and you run the script on the same machine.");
+    console.error("\n  Fix:");
+    console.error("    1. Start the API (pm2, systemd, or node server.js).");
+    console.error("    2. Point tests at the same base URL your app uses, e.g.:");
+    console.error(Y("       export BASE_URL=https://qeema-track.developteam.site"));
+    console.error(Y("       npm run test:user-api"));
+    console.error("    3. If nginx terminates TLS, use https://your-domain (not http://127.0.0.1).\n");
+}
+
+async function assertApiReachable() {
+    const probe = await req("GET", "/api/health");
+    if (probe.connectionError) {
+        printConnectionHelp();
+        process.exit(1);
+    }
+    if (probe.status !== 200) {
+        console.error(R(`\n✗ /api/health returned ${probe.status} — check BASE_URL and reverse proxy.\n`));
+        process.exit(1);
+    }
+}
+
 async function main() {
     console.log(B(`\n▶ Testing ${BASE_URL}\n`));
+
+    await assertApiReachable();
 
     // ── 0. Sanity: server + DB are up ────────────────────────────────────
     console.log(Y("[0] Health"));
