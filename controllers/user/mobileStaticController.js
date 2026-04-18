@@ -1,4 +1,6 @@
 import prisma from '../../utils/prisma.js';
+import asyncHandler from '../../utils/asyncHandler.js';
+import { successResponse, errorResponse } from '../../utils/serverResponse.js';
 
 // @desc    Get Privacy Policy page
 // @route   GET /apimobile/user/static/privacy-policy
@@ -136,3 +138,50 @@ export const getNotifications = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message || 'Failed to get notifications' });
     }
 };
+
+// @desc    Get the unread notifications count for the current user
+// @route   GET /apimobile/user/notifications/unread-count
+// @access  Private
+export const getUnreadNotificationCount = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const count = await prisma.notification.count({
+        where: { notifiableType: 'user', notifiableId: userId, isRead: false },
+    });
+    return successResponse(res, { unreadCount: count }, 'Unread notifications count retrieved');
+});
+
+// @desc    Mark a single notification as read
+// @route   POST /apimobile/user/notifications/:id/read
+// @access  Private
+export const markNotificationRead = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const id = parseInt(req.params.id, 10);
+    if (!id) return errorResponse(res, 'Invalid notification id', 400);
+
+    const notif = await prisma.notification.findFirst({
+        where: { id, notifiableType: 'user', notifiableId: userId },
+        select: { id: true, isRead: true },
+    });
+    if (!notif) return errorResponse(res, 'Notification not found', 404);
+
+    if (!notif.isRead) {
+        await prisma.notification.update({
+            where: { id },
+            data: { isRead: true, readAt: new Date() },
+        });
+    }
+
+    return successResponse(res, { id, isRead: true }, 'Notification marked as read');
+});
+
+// @desc    Mark all notifications as read for the current user
+// @route   POST /apimobile/user/notifications/read-all
+// @access  Private
+export const markAllNotificationsRead = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const result = await prisma.notification.updateMany({
+        where: { notifiableType: 'user', notifiableId: userId, isRead: false },
+        data: { isRead: true, readAt: new Date() },
+    });
+    return successResponse(res, { updated: result.count }, 'All notifications marked as read');
+});

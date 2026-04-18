@@ -347,3 +347,86 @@ export const addReview = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message || 'Failed to add review' });
     }
 };
+
+// @desc    Get a single booking (ride request) details for the current rider
+// @route   GET /apimobile/user/my-bookings/:id
+// @access  Private
+export const getBookingById = async (req, res) => {
+    try {
+        const riderId = req.user.id;
+        const id = parseRideRequestIdParam(req.params.id);
+        if (!id) return res.status(400).json({ success: false, message: 'Invalid booking id' });
+
+        const booking = await prisma.rideRequest.findFirst({
+            where: { id, riderId },
+            select: {
+                id: true,
+                status: true,
+                totalAmount: true,
+                subtotal: true,
+                baseFare: true,
+                minimumFare: true,
+                perDistance: true,
+                perMinuteDrive: true,
+                distance: true,
+                duration: true,
+                couponDiscount: true,
+                tips: true,
+                surcharge: true,
+                discount: true,
+                extraChargesAmount: true,
+                vehicleCategoryId: true,
+                serviceId: true,
+                paymentType: true,
+                startAddress: true,
+                endAddress: true,
+                startLatitude: true,
+                startLongitude: true,
+                endLatitude: true,
+                endLongitude: true,
+                otp: true,
+                reason: true,
+                cancelBy: true,
+                isDriverRated: true,
+                serviceData: true,
+                createdAt: true,
+                updatedAt: true,
+                driver: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true,
+                        contactNumber: true,
+                    },
+                },
+            },
+        });
+
+        if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+        const serviceData = parseServiceData(booking.serviceData) || {};
+        const responseDriver = booking.driver ? {
+            ...booking.driver,
+            avatar: fullImageUrl(req, booking.driver.avatar),
+        } : null;
+
+        return res.json({
+            success: true,
+            message: 'Booking retrieved',
+            data: {
+                ...booking,
+                driver: responseDriver,
+                shipment: {
+                    shipmentSize_id: serviceData.shipmentSizeId ?? null,
+                    shipmentWeight_id: serviceData.shipmentWeightId ?? null,
+                    vehicleCategoryName: serviceData.vehicleCategoryName ?? null,
+                    serviceCategoryName: serviceData.serviceCategoryName ?? null,
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Get booking details error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to get booking' });
+    }
+};

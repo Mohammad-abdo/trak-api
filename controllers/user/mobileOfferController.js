@@ -1,6 +1,9 @@
 import prisma from '../../utils/prisma.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
 import { parseRideRequestIdParam } from '../../utils/rideRequestId.js';
+import asyncHandler from '../../utils/asyncHandler.js';
+import { successResponse, errorResponse } from '../../utils/serverResponse.js';
+import { emitToDriver, emitToRide } from '../../utils/socketService.js';
 
 // Helper: Calculate distance between two coordinates (Haversine formula)
 const haversineKm = (lat1, lng1, lat2, lng2) => {
@@ -569,3 +572,136 @@ export const rateDriver = async (req, res) => {
         return res.status(500).json({ success: false, message: error.message || 'Failed to rate driver' });
     }
 };
+
+const ACTIVE_RIDE_STATUSES = ['pending', 'accepted', 'arrived', 'arrived_at_pickup', 'in_progress', 'ongoing', 'started'];
+
+// @desc    Get the rider's currently active (ongoing) ride, if any
+// @route   GET /apimobile/user/offers/active-ride
+// @access  Private
+export const getActiveRide = asyncHandler(async (req, res) => {
+    const riderId = req.user.id;
+
+    const ride = await prisma.rideRequest.findFirst({
+        where: { riderId, status: { in: ACTIVE_RIDE_STATUSES } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+            id: true,
+            status: true,
+            totalAmount: true,
+            paymentType: true,
+            startAddress: true,
+            endAddress: true,
+            startLatitude: true,
+            startLongitude: true,
+            endLatitude: true,
+            endLongitude: true,
+            otp: true,
+            createdAt: true,
+            driver: {
+                select: {
+                    id: true, firstName: true, lastName: true,
+                    avatar: true, contactNumber: true, latitude: true, longitude: true,
+                },
+            },
+        },
+    });
+
+    if (!ride) return successResponse(res, null, 'No active ride');
+
+    return successResponse(res, {
+        ...ride,
+        driver: ride.driver ? { ...ride.driver, avatar: fullImageUrl(req, ride.driver.avatar) } : null,
+    }, 'Active ride retrieved');
+});
+
+// @desc    Trigger an SOS alert during a ride
+// @route   POST /apimobile/user/offers/sos
+// @access  Private
+export const triggerSosAlert = asyncHandler(async (req, res) => {
+    const riderId = req.user.id;
+    const { rideRequestId, latitude, longitude, note } = req.body || {};
+
+    if (!rideRequestId) return errorResponse(res, 'rideRequestId is required', 400);
+
+    const rid = parseRideRequestIdParam(rideRequestId);
+    if (!rid) return errorResponse(res, 'Invalid rideRequestId', 400);
+
+    const ride = await prisma.rideRequest.findFirst({
+        where: { id: rid, riderId },
+        select: { id: true, driverId: true, status: true },
+    });
+    if (!ride) return errorResponse(res, 'Ride not found or not yours', 404);
+
+    const payload = {
+        rideRequestId: ride.id,
+        riderId,
+        driverId: ride.driverId,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        note: note ? String(note).slice(0, 500) : null,
+        triggeredAt: new Date(),
+    };
+
+    // Log as a notification record for admin/ops.
+    await prisma.notification.create({
+        data: {
+            type: 'sos_alert',
+            notifiableType: 'admin',
+            notifiableId: 0,
+            data: payload,
+        },
+    });
+
+    // Broadcast to ride participants + driver explicitly
+    const io = req.app.get('io');
+    if (io) {
+        emitToRide(io, ride.id, 'sos:alert', payload);
+        if (ride.driverId) emitToDriver(io, ride.driverId, 'sos:alert', payload);
+    }
+
+    return successResponse(res, payload, 'SOS alert sent', 201);
+});
+
+// @desc    Tip the driver after or during a ride
+// @route   POST /apimobile/user/offers/tip
+// @access  Private
+export const tipDriver = asyncHandler(async (req, res) => {
+    const riderId = req.user.id;
+    const { rideRequestId, amount } = req.body || {};
+
+    if (!rideRequestId || amount === undefined) {
+        return errorResponse(res, 'rideRequestId and amount are required', 400);
+    }
+    const rid = parseRideRequestIdParam(rideRequestId);
+    const numericAmount = parseFloat(amount);
+    if (!rid) return errorResponse(res, 'Invalid rideRequestId', 400);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return errorResponse(res, 'amount must be a positive number', 400);
+    }
+
+    const ride = await prisma.rideRequest.findFirst({
+        where: { id: rid, riderId },
+        select: { id: true, driverId: true, tips: true, totalAmount: true, status: true },
+    });
+    if (!ride) return errorResponse(res, 'Ride not found or not yours', 404);
+
+    const newTip = (ride.tips || 0) + numericAmount;
+    const newTotal = (ride.totalAmount || 0) + numericAmount;
+
+    const updated = await prisma.rideRequest.update({
+        where: { id: ride.id },
+        data: { tips: newTip, totalAmount: newTotal },
+        select: { id: true, tips: true, totalAmount: true, status: true },
+    });
+
+    const io = req.app.get('io');
+    if (io && ride.driverId) {
+        emitToDriver(io, ride.driverId, 'ride:tip', {
+            rideRequestId: ride.id,
+            amount: numericAmount,
+            totalTips: newTip,
+        });
+    }
+
+    return successResponse(res, updated, 'Tip added successfully', 201);
+});

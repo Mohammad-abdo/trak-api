@@ -19,7 +19,10 @@
     "backfill:ride-service-id": "node scripts/backfill-ride-service-id.js",
     "backfill:ride-service-id:apply": "node scripts/backfill-ride-service-id.js --apply",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:seed-e2e": "node scripts/seedE2ETest.js",
+    "test:user-api": "node scripts/testUserEndpoints.js",
+    "test:e2e": "node scripts/seedE2ETest.js && node scripts/testUserEndpoints.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

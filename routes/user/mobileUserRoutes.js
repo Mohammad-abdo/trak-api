@@ -14,19 +14,33 @@ import { getAllServices, chooseService } from '../../controllers/user/mobileServ
 import { serviceVehicleTypes, getShipmentSizes, getShipmentWeights, getPaymentMethods, createBooking } from '../../controllers/user/mobileBookingController.js';
 // Offers
 import { getNearDrivers, acceptDriver, cancelDriverOffer, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
+// Offers (extended: active ride / SOS / tip)
+import { getActiveRide, triggerSosAlert, tipDriver } from '../../controllers/user/mobileOfferController.js';
 // User Bookings
-import { getMyBookings, filterBookings, addReview } from '../../controllers/user/mobileUserBookingController.js';
+import { getMyBookings, filterBookings, addReview, getBookingById } from '../../controllers/user/mobileUserBookingController.js';
 // Wallet
 import { lastUserOperations, filterOperations } from '../../controllers/user/mobileWalletController.js';
 // Profile
 import { myProfile, updateProfile, deleteAccount, getUserAddresses, addAddress, deleteAddress } from '../../controllers/user/mobileProfileController.js';
 // Cards (payment cards)
 import { addBankCard, getBankCards, deleteBankCard } from '../../controllers/user/mobileCardController.js';
-// Static
-import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications } from '../../controllers/user/mobileStaticController.js';
+// Static (+ notification helpers)
+import { getPrivacyPolicy, getHelpCenter, getTerms, getNotifications, getUnreadNotificationCount, markNotificationRead, markAllNotificationsRead } from '../../controllers/user/mobileStaticController.js';
 import { payskySimulateTripPayment } from '../../controllers/payskyRealPaymentsOnlyController.js';
 // Negotiation
 import { getSettings as getNegotiationSettings, startNegotiation, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from '../../controllers/negotiationController.js';
+// User extras (device token, change password, complaints, coupons, referral, SOS contacts)
+import {
+    registerDeviceToken,
+    changePassword,
+    createComplaint,
+    listMyComplaints,
+    validateCoupon,
+    getMyReferral,
+    listSosContacts,
+    addSosContact,
+    deleteSosContact,
+} from '../../controllers/user/mobileUserExtrasController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1863,5 +1877,512 @@ router.post('/negotiation/reject', authenticate, rejectNegotiation);
  *         description: Ride request not found
  */
 router.get('/negotiation/history/:rideRequestId', authenticate, getNegotiationHistory);
+
+// =============================================
+// DEVICE / PUSH TOKEN
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/device-token:
+ *   post:
+ *     tags: [Profile]
+ *     summary: Register / update the user's push notification token
+ *     description: |
+ *       Stores the FCM token (and/or OneSignal playerId) for the authenticated user so the
+ *       backend can send push notifications. Safe to call on every app start.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fcmToken:   { type: string, example: "eY1aVb...:APA91bH" }
+ *               playerId:   { type: string, example: "abc123-def-xyz" }
+ *               appVersion: { type: string, example: "1.4.2" }
+ *               platform:   { type: string, example: "android" }
+ *     responses:
+ *       200:
+ *         description: Device token registered
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Device token registered
+ *               data:
+ *                 id: 42
+ *                 fcmToken: "eY1aVb...:APA91bH"
+ *                 playerId: "abc123-def-xyz"
+ *                 appVersion: "1.4.2"
+ *                 updatedAt: "2026-04-18T10:05:12.000Z"
+ *                 platform: "android"
+ *       400:
+ *         description: fcmToken or playerId is required
+ */
+router.post('/device-token', authenticate, registerDeviceToken);
+
+// =============================================
+// AUTH - CHANGE PASSWORD (logged in)
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/auth/change-password:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Change password while logged in
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword]
+ *             properties:
+ *               currentPassword: { type: string, example: "OldPass@123" }
+ *               newPassword:     { type: string, example: "NewPass@123" }
+ *     responses:
+ *       200:
+ *         description: Password changed
+ *         content:
+ *           application/json:
+ *             example: { success: true, message: "Password changed successfully", data: { changed: true } }
+ *       400: { description: Validation error }
+ *       401: { description: Current password is incorrect }
+ */
+router.post('/auth/change-password', authenticate, changePassword);
+
+// =============================================
+// NOTIFICATIONS - READ / UNREAD COUNT
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/notifications/unread-count:
+ *   get:
+ *     tags: [Static]
+ *     summary: Get unread notifications count (for badge)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Unread count
+ *         content:
+ *           application/json:
+ *             example: { success: true, message: "Unread notifications count retrieved", data: { unreadCount: 3 } }
+ */
+router.get('/notifications/unread-count', authenticate, getUnreadNotificationCount);
+
+/**
+ * @swagger
+ * /apimobile/user/notifications/read-all:
+ *   post:
+ *     tags: [Static]
+ *     summary: Mark all notifications as read
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Updated count
+ *         content:
+ *           application/json:
+ *             example: { success: true, message: "All notifications marked as read", data: { updated: 7 } }
+ */
+router.post('/notifications/read-all', authenticate, markAllNotificationsRead);
+
+/**
+ * @swagger
+ * /apimobile/user/notifications/{id}/read:
+ *   post:
+ *     tags: [Static]
+ *     summary: Mark a single notification as read
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Marked
+ *         content:
+ *           application/json:
+ *             example: { success: true, message: "Notification marked as read", data: { id: 12, isRead: true } }
+ *       404: { description: Notification not found }
+ */
+router.post('/notifications/:id/read', authenticate, markNotificationRead);
+
+// =============================================
+// MY BOOKINGS - SINGLE DETAILS
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/my-bookings/{id}:
+ *   get:
+ *     tags: [My Bookings]
+ *     summary: Get a single booking (ride request) details
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Booking retrieved
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Booking retrieved
+ *               data:
+ *                 id: 101
+ *                 status: "completed"
+ *                 totalAmount: 55.5
+ *                 subtotal: 50
+ *                 baseFare: 10
+ *                 minimumFare: 10
+ *                 perDistance: 2
+ *                 perMinuteDrive: 1
+ *                 distance: 12.3
+ *                 duration: 18
+ *                 couponDiscount: 0
+ *                 tips: 5
+ *                 paymentType: "cash"
+ *                 startAddress: "Cairo"
+ *                 endAddress: "Giza"
+ *                 otp: "1234"
+ *                 driver:
+ *                   id: 22
+ *                   firstName: "Ali"
+ *                   lastName: "Hassan"
+ *                   avatar: "http://host/uploads/a.png"
+ *                   contactNumber: "01000000000"
+ *                 shipment:
+ *                   shipmentSize_id: 1
+ *                   shipmentWeight_id: 1
+ *                   vehicleCategoryName: "Sedan"
+ *                   serviceCategoryName: "Ride"
+ *                 createdAt: "2026-04-18T10:00:00.000Z"
+ *       404: { description: Booking not found }
+ */
+router.get('/my-bookings/:id', authenticate, getBookingById);
+
+// =============================================
+// OFFERS - ACTIVE RIDE / SOS / TIP
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/offers/active-ride:
+ *   get:
+ *     tags: [Offers]
+ *     summary: Get the rider's currently active (ongoing) ride
+ *     description: Returns `null` in `data` when there's no active ride.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Active ride or null
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Active ride retrieved
+ *               data:
+ *                 id: 202
+ *                 status: "in_progress"
+ *                 totalAmount: 60
+ *                 paymentType: "cash"
+ *                 startAddress: "Cairo"
+ *                 endAddress: "Giza"
+ *                 otp: "4321"
+ *                 driver:
+ *                   id: 22
+ *                   firstName: "Ali"
+ *                   lastName: "Hassan"
+ *                   avatar: "http://host/uploads/a.png"
+ *                   contactNumber: "01000000000"
+ *                   latitude: "30.0"
+ *                   longitude: "31.0"
+ *                 createdAt: "2026-04-18T10:00:00.000Z"
+ */
+router.get('/offers/active-ride', authenticate, getActiveRide);
+
+/**
+ * @swagger
+ * /apimobile/user/offers/sos:
+ *   post:
+ *     tags: [Offers]
+ *     summary: Trigger an SOS alert during a ride
+ *     description: |
+ *       Creates an admin-notifiable SOS record and broadcasts a `sos:alert` event on the
+ *       ride room and directly to the driver. Latitude/longitude/note are optional.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId]
+ *             properties:
+ *               rideRequestId: { type: integer, example: 202 }
+ *               latitude:      { type: number, example: 30.0444 }
+ *               longitude:     { type: number, example: 31.2357 }
+ *               note:          { type: string, example: "Driver is not following the route" }
+ *     responses:
+ *       201: { description: SOS alert sent }
+ *       400: { description: Validation error }
+ *       404: { description: Ride not found or not yours }
+ */
+router.post('/offers/sos', authenticate, triggerSosAlert);
+
+/**
+ * @swagger
+ * /apimobile/user/offers/tip:
+ *   post:
+ *     tags: [Offers]
+ *     summary: Add a tip to the driver for a ride
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rideRequestId, amount]
+ *             properties:
+ *               rideRequestId: { type: integer, example: 202 }
+ *               amount:        { type: number, example: 5 }
+ *     responses:
+ *       201:
+ *         description: Tip added
+ *         content:
+ *           application/json:
+ *             example: { success: true, message: "Tip added successfully", data: { id: 202, tips: 5, totalAmount: 65, status: "completed" } }
+ *       400: { description: Validation error }
+ *       404: { description: Ride not found or not yours }
+ */
+router.post('/offers/tip', authenticate, tipDriver);
+
+// =============================================
+// COMPLAINTS (user side)
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/complaints:
+ *   post:
+ *     tags: [Complaints]
+ *     summary: File a complaint
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subject, description]
+ *             properties:
+ *               subject:       { type: string, example: "Driver was rude" }
+ *               description:   { type: string, example: "The driver yelled at me..." }
+ *               rideRequestId: { type: integer, example: 202 }
+ *               driverId:      { type: integer, example: 22 }
+ *     responses:
+ *       201: { description: Complaint submitted }
+ *       400: { description: Validation error }
+ *       404: { description: Ride not found or not yours }
+ *   get:
+ *     tags: [Complaints]
+ *     summary: List my complaints
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Complaints list
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Complaints retrieved
+ *               data:
+ *                 total: 1
+ *                 page: 1
+ *                 limit: 20
+ *                 items:
+ *                   - id: 1
+ *                     subject: "Driver was rude"
+ *                     description: "The driver yelled at me..."
+ *                     status: "pending"
+ *                     rideRequestId: 202
+ *                     driverId: 22
+ *                     createdAt: "2026-04-18T10:10:00.000Z"
+ *                     updatedAt: "2026-04-18T10:10:00.000Z"
+ */
+router.post('/complaints', authenticate, createComplaint);
+router.get('/complaints', authenticate, listMyComplaints);
+
+// =============================================
+// COUPONS - VALIDATE
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/coupons/validate:
+ *   post:
+ *     tags: [Booking]
+ *     summary: Validate (and preview discount for) a coupon code
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [code]
+ *             properties:
+ *               code:   { type: string, example: "E2E10" }
+ *               amount: { type: number, example: 100, description: "Optional order amount for discount calculation" }
+ *     responses:
+ *       200:
+ *         description: Coupon valid
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Coupon valid
+ *               data:
+ *                 coupon:
+ *                   id: 1
+ *                   code: "E2E10"
+ *                   title: "10% off"
+ *                   titleAr: "خصم 10%"
+ *                   discountType: "percentage"
+ *                   discount: 10
+ *                   minimumAmount: 0
+ *                   maximumDiscount: 50
+ *                   endDate: null
+ *                 orderAmount: 100
+ *                 discountValue: 10
+ *                 finalAmount: 90
+ *       404: { description: Invalid or expired coupon }
+ */
+router.post('/coupons/validate', authenticate, validateCoupon);
+
+// =============================================
+// REFERRAL
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/referral:
+ *   get:
+ *     tags: [Profile]
+ *     summary: Get my referral code and stats
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Referral info
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Referral info retrieved
+ *               data:
+ *                 referralCode: "R42L9QZ1"
+ *                 partnerReferralCode: null
+ *                 invitedCount: 3
+ *                 shareMessage: "Join me on OfferGo! Use my code R42L9QZ1 to sign up."
+ */
+router.get('/referral', authenticate, getMyReferral);
+
+// =============================================
+// SOS CONTACTS (saved emergency contacts)
+// =============================================
+
+/**
+ * @swagger
+ * /apimobile/user/sos-contacts:
+ *   get:
+ *     tags: [Profile]
+ *     summary: List my SOS / emergency contacts
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: SOS contacts retrieved
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: SOS contacts retrieved
+ *               data:
+ *                 - id: 1
+ *                   name: "Mom"
+ *                   nameAr: "أمي"
+ *                   contactNumber: "01000000000"
+ *                   createdAt: "2026-04-18T10:00:00.000Z"
+ *   post:
+ *     tags: [Profile]
+ *     summary: Add a new SOS / emergency contact
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, contactNumber]
+ *             properties:
+ *               name:          { type: string, example: "Mom" }
+ *               nameAr:        { type: string, example: "أمي" }
+ *               contactNumber: { type: string, example: "01000000000" }
+ *     responses:
+ *       201: { description: SOS contact added }
+ *       400: { description: Validation error }
+ */
+router.get('/sos-contacts', authenticate, listSosContacts);
+router.post('/sos-contacts', authenticate, addSosContact);
+
+/**
+ * @swagger
+ * /apimobile/user/sos-contacts/{id}:
+ *   delete:
+ *     tags: [Profile]
+ *     summary: Delete an SOS / emergency contact
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Deleted }
+ *       404: { description: SOS contact not found }
+ */
+router.delete('/sos-contacts/:id', authenticate, deleteSosContact);
 
 export default router;

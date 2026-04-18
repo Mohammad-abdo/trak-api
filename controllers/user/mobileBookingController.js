@@ -80,10 +80,13 @@ export const getShipmentSizes = async (req, res) => {
         });
 
         const data = sizes.map(s => ({
-            vehicle_id: s.vehicleCategoryId,
+            shipmentSize_id: s.id,
             id: s.id,
+            vehicle_id: s.vehicleCategoryId,
+            vehicleCategoryId: s.vehicleCategoryId,
             name: s.name,
-            price: s.priceModifier,
+            price: s.priceModifier ?? 0,
+            priceModifier: s.priceModifier ?? 0,
         }));
 
         return res.json({ success: true, message: 'Shipment sizes retrieved', data });
@@ -113,10 +116,13 @@ export const getShipmentWeights = async (req, res) => {
         });
 
         const data = weights.map(w => ({
-            vehicle_id: w.vehicleCategoryId,
+            shipmentWeight_id: w.id,
             id: w.id,
+            vehicle_id: w.vehicleCategoryId,
+            vehicleCategoryId: w.vehicleCategoryId,
             name: w.name,
-            price: w.priceModifier,
+            price: w.priceModifier ?? 0,
+            priceModifier: w.priceModifier ?? 0,
         }));
 
         return res.json({ success: true, message: 'Shipment weights retrieved', data });
@@ -201,6 +207,8 @@ export const createBooking = async (req, res) => {
         // Get size/weight modifiers
         let sizeModifier = 0;
         let weightModifier = 0;
+        let resolvedSize = null;
+        let resolvedWeight = null;
 
         if (shipmentSize_id) {
             const sizeId = parseInt(shipmentSize_id, 10);
@@ -214,6 +222,7 @@ export const createBooking = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Invalid shipment size for selected vehicle category' });
             }
             sizeModifier = size?.priceModifier ?? 0;
+            resolvedSize = size;
         }
         if (shipmentWeight_id) {
             const weightId = parseInt(shipmentWeight_id, 10);
@@ -227,6 +236,7 @@ export const createBooking = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Invalid shipment weight for selected vehicle category' });
             }
             weightModifier = weight?.priceModifier ?? 0;
+            resolvedWeight = weight;
         }
 
         const calculatedTotal = (resolvedPricingRule.baseFare ?? 0) + sizeModifier + weightModifier;
@@ -312,6 +322,14 @@ export const createBooking = async (req, res) => {
                     shipmentSizeModifier: sizeModifier,
                     shipmentWeightModifier: weightModifier,
                     totalAmount: booking.totalAmount,
+                },
+                shipment: {
+                    shipmentSize_id: resolvedSize?.id ?? (shipmentSize_id ? parseInt(shipmentSize_id, 10) : null),
+                    shipmentSizeName: resolvedSize?.name ?? null,
+                    shipmentSizePrice: resolvedSize?.priceModifier ?? 0,
+                    shipmentWeight_id: resolvedWeight?.id ?? (shipmentWeight_id ? parseInt(shipmentWeight_id, 10) : null),
+                    shipmentWeightName: resolvedWeight?.name ?? null,
+                    shipmentWeightPrice: resolvedWeight?.priceModifier ?? 0,
                 },
             },
         });
