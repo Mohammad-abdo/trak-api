@@ -31,9 +31,9 @@ import { generateToken } from "../utils/jwtHelper.js";
 
 const BASE_URL = (process.env.BASE_URL || "http://localhost:6015").replace(/\/$/, "");
 const ALLOW_MISSING_FEATURE_ROUTES = process.env.ALLOW_MISSING_FEATURE_ROUTES === "1";
-const RIDER_PHONE = "0100000E2E1";
+const RIDER_PHONE = "01000000001";
 const RIDER_PASSWORD = "E2ERider@123";
-const DRIVER_PHONE = "0100000E2E2";
+const DRIVER_PHONE = "01000000002";
 
 // ANSI colours (no dependency).
 const G = (s) => `\x1b[32m${s}\x1b[0m`;

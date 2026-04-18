@@ -23,7 +23,7 @@ const RIDER = {
     firstName: "E2E",
     lastName: "Rider",
     email: "e2e.rider@offergo.test",
-    phone: "0100000E2E1", // 11 chars — unique, test-only
+    phone: "01000000001", // digits only — unique, test-only (Egypt local)
     password: "E2ERider@123",
 };
 
@@ -31,7 +31,7 @@ const DRIVER = {
     firstName: "E2E",
     lastName: "Driver",
     email: "e2e.driver@offergo.test",
-    phone: "0100000E2E2",
+    phone: "01000000002",
     password: "E2EDriver@123",
 };
 
