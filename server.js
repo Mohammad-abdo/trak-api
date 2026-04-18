@@ -83,7 +83,7 @@ import { registerRideChatHandlers } from './utils/rideChatSocket.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 import { requestContextMiddleware } from './middleware/requestContext.js';
 import { securityAuditMiddleware } from './middleware/securityAuditMiddleware.js';
-import { createIpRateLimiter, getHardeningConfigFromEnv, securityHeaders } from './middleware/securityHardening.js';
+import { createIpRateLimiter, getHardeningConfigFromEnv, publicUploadsResourcePolicy, securityHeaders } from './middleware/securityHardening.js';
 
 dotenv.config();
 
@@ -208,7 +208,8 @@ app.use(securityAuditMiddleware);
 // Does not change normal API responses unless an IP is abusive.
 app.use(['/api/auth', '/apimobile/user/auth', '/apimobile/driver/auth'], authRateLimiter);
 
-// Static files
+// Static files — CORP must allow cross-origin so dashboard (e.g. Vercel) can load images from API host
+app.use('/uploads', publicUploadsResourcePolicy);
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
 // Test database connection

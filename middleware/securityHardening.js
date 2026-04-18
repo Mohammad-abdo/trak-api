@@ -70,6 +70,17 @@ export function securityHeaders(req, res, next) {
     next();
 }
 
+/**
+ * Use on `/uploads` (before express.static). When the dashboard or app is on a
+ * different origin than the API, global `Cross-Origin-Resource-Policy: same-site`
+ * blocks img tags / fetch to uploaded files (Chrome: ERR_BLOCKED_BY_RESPONSE.NotSameSite).
+ * `cross-origin` allows embedding public static assets cross-origin.
+ */
+export function publicUploadsResourcePolicy(req, res, next) {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+}
+
 export function getHardeningConfigFromEnv() {
     const authLimiterEnabled = process.env.AUTH_RATE_LIMIT_ENABLED !== "0";
     return {

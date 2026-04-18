@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createIpRateLimiter, securityHeaders } from "../middleware/securityHardening.js";
+import { createIpRateLimiter, publicUploadsResourcePolicy, securityHeaders } from "../middleware/securityHardening.js";
 
 function makeReq(ip = "1.2.3.4") {
     return {
@@ -41,6 +41,19 @@ describe("securityHeaders middleware", () => {
         expect(res.headers["X-Frame-Options"]).toBe("DENY");
         expect(res.headers["Referrer-Policy"]).toBe("no-referrer");
         expect(res.headers["Cross-Origin-Opener-Policy"]).toBe("same-origin");
+    });
+});
+
+describe("publicUploadsResourcePolicy middleware", () => {
+    it("sets Cross-Origin-Resource-Policy to cross-origin for public static assets", () => {
+        const req = makeReq();
+        const res = makeRes();
+        const next = vi.fn();
+
+        publicUploadsResourcePolicy(req, res, next);
+
+        expect(next).toHaveBeenCalledOnce();
+        expect(res.headers["Cross-Origin-Resource-Policy"]).toBe("cross-origin");
     });
 });
 
