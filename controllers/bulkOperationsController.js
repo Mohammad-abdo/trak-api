@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { normalizeUserStatusInput } from "../utils/userStatusNormalize.js";
 import { parseRideRequestIdParam } from "../utils/rideRequestId.js";
 
 /**
@@ -104,22 +105,24 @@ export const bulkUpdateUserStatus = async (req, res) => {
             });
         }
 
+        const normStatus = normalizeUserStatusInput(status);
+        const statusToStore = normStatus ?? status;
         const idInts = ids.map((id) => parseInt(id));
         const updated = await prisma.user.updateMany({
             where: { id: { in: idInts } },
-            data: { status },
+            data: { status: statusToStore },
         });
 
         // Match PUT /users/:id + driver review: activating drivers must set verification flags for mobile /profile/status
-        if (status === "active") {
+        if (normStatus === "active") {
             await prisma.user.updateMany({
                 where: { id: { in: idInts }, userType: "driver" },
                 data: { isVerifiedDriver: true, isVerified: true, rejectionReason: null },
             });
-        } else if (status === "inactive") {
+        } else if (normStatus === "inactive") {
             await prisma.user.updateMany({
                 where: { id: { in: idInts }, userType: "driver" },
-                data: { isVerifiedDriver: false },
+                data: { isVerifiedDriver: false, isVerified: false },
             });
         }
 

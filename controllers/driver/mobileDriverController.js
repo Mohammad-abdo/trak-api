@@ -516,9 +516,11 @@ export const getRegistrationStatus = asyncHandler(async (req, res) => {
     const missingDocs = requiredDocs.filter((d) => !uploadedDocIds.includes(d.id));
     const unverifiedDocs = driver.driverDocuments.filter((d) => !d.isVerified);
 
+    // Mobile treats isVerified as "account ok"; for drivers, admin approval sets isVerifiedDriver — align both in response
+    const verifiedForDriver = driver.isVerified || driver.isVerifiedDriver;
     return successResponse(res, {
         status: driver.status,
-        isVerified: driver.isVerified,
+        isVerified: verifiedForDriver,
         isVerifiedDriver: driver.isVerifiedDriver,
         rejectionReason: driver.status === 'inactive' ? driver.rejectionReason : null,
         documents: driver.driverDocuments,

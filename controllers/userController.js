@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { generateExcel, generatePDF, generateCSV, formatDate } from "../utils/exportUtils.js";
 import { saveAdminNotification } from "../utils/notificationService.js";
 import { fullImageUrl } from "../utils/imageUrl.js";
+import { normalizeUserStatusInput } from "../utils/userStatusNormalize.js";
 
 // @desc    Get user list with advanced filtering
 // @route   GET /api/users/user-list
@@ -648,14 +649,18 @@ export const updateUser = async (req, res) => {
 
         const oldUser = await prisma.user.findUnique({ where: { id: parseInt(id) }, select: { status: true, userType: true } });
 
+        const normStatus = normalizeUserStatusInput(status);
         // Drivers list uses PUT /users/:id with status=active — must match POST .../review (isVerifiedDriver / isVerified)
-        if (oldUser?.userType === "driver" && status !== undefined && status !== null && status !== "") {
-            if (status === "active") {
+        if (oldUser?.userType === "driver" && normStatus !== undefined) {
+            if (normStatus === "active") {
                 updateData.isVerifiedDriver = true;
                 updateData.isVerified = true;
                 updateData.rejectionReason = null;
-            } else if (status === "inactive") {
+                updateData.status = "active";
+            } else if (normStatus === "inactive") {
                 updateData.isVerifiedDriver = false;
+                updateData.isVerified = false;
+                updateData.status = "inactive";
             }
         }
 
@@ -664,8 +669,8 @@ export const updateUser = async (req, res) => {
             data: updateData,
         });
 
-        if (oldUser?.status === 'pending' && oldUser?.userType === 'driver' && status && status !== 'pending') {
-            const isApproved = status === 'active';
+        if (oldUser?.status === 'pending' && oldUser?.userType === 'driver' && normStatus && normStatus !== 'pending') {
+            const isApproved = normStatus === 'active';
             saveAdminNotification(isApproved ? 'driver_approved' : 'new_complaint', {
                 title: isApproved ? 'Driver Approved' : 'Driver Rejected',
                 titleAr: isApproved ? 'تم قبول السائق' : 'تم رفض السائق',
@@ -876,8 +881,9 @@ export const updateDriver = async (req, res) => {
         const avatarPath = req.files?.avatar?.[0] ? `/uploads/drivers/${req.files.avatar[0].filename}` : undefined;
         const carImagePath = req.files?.carImage?.[0] ? `/uploads/drivers/${req.files.carImage[0].filename}` : undefined;
 
-        const newStatus = status !== undefined && status !== null && status !== "" ? status : existing.status;
-        const statusExplicit = status !== undefined && status !== null && status !== "";
+        const normStatus = normalizeUserStatusInput(status);
+        const newStatus = normStatus !== undefined ? normStatus : existing.status;
+        const statusExplicit = normStatus !== undefined;
         const userData = {
             firstName: firstName || existing.firstName,
             lastName: lastName || existing.lastName,
@@ -890,12 +896,13 @@ export const updateDriver = async (req, res) => {
             displayName: `${firstName || existing.firstName} ${lastName || existing.lastName}`.trim(),
         };
         if (statusExplicit) {
-            if (status === "active") {
+            if (normStatus === "active") {
                 userData.isVerifiedDriver = true;
                 userData.isVerified = true;
                 userData.rejectionReason = null;
-            } else if (status === "inactive") {
+            } else if (normStatus === "inactive") {
                 userData.isVerifiedDriver = false;
+                userData.isVerified = false;
             }
         }
         if (avatarPath) userData.avatar = avatarPath;
@@ -1036,6 +1043,7 @@ export const reviewDriver = async (req, res) => {
                 data: {
                     status: 'inactive',
                     isVerifiedDriver: false,
+                    isVerified: false,
                     rejectionReason: rejectionReason.trim(),
                 },
             });
