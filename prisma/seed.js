@@ -2187,6 +2187,61 @@ async function main() {
     }
   })
 
+  // Shipment size & weight options for booking (GET /apimobile/user/booking/shipment-sizes|weights)
+  console.log('Creating shipment sizes and weights for vehicle categories...')
+  const shipmentSizeSeeds = [
+    { name: 'Small', priceModifier: 0 },
+    { name: 'Medium', priceModifier: 5 },
+    { name: 'Large', priceModifier: 15 }
+  ]
+  const shipmentWeightSeeds = [
+    { name: 'Up to 10 kg', priceModifier: 0 },
+    { name: '10-50 kg', priceModifier: 10 },
+    { name: '50-100 kg', priceModifier: 25 },
+    { name: 'Over 100 kg', priceModifier: 40 }
+  ]
+  const allBookingVehicleCategories = [
+    regularCategory,
+    mediumCategory,
+    vipCategory,
+    suzukiCategory,
+    quarterTruckCategory,
+    quarterTruck3TonCategory,
+    jumboCategory
+  ]
+  for (const vc of allBookingVehicleCategories) {
+    for (const s of shipmentSizeSeeds) {
+      const exists = await prisma.shipmentSize.findFirst({
+        where: { vehicleCategoryId: vc.id, name: s.name }
+      })
+      if (!exists) {
+        await prisma.shipmentSize.create({
+          data: {
+            vehicleCategoryId: vc.id,
+            name: s.name,
+            priceModifier: s.priceModifier,
+            status: 1
+          }
+        })
+      }
+    }
+    for (const w of shipmentWeightSeeds) {
+      const exists = await prisma.shipmentWeight.findFirst({
+        where: { vehicleCategoryId: vc.id, name: w.name }
+      })
+      if (!exists) {
+        await prisma.shipmentWeight.create({
+          data: {
+            vehicleCategoryId: vc.id,
+            name: w.name,
+            priceModifier: w.priceModifier,
+            status: 1
+          }
+        })
+      }
+    }
+  }
+
   // Create Category Features for Passenger Vehicles
   console.log('Creating category features...')
   const featureSets = {
