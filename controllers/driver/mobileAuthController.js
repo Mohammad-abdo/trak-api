@@ -4,9 +4,14 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { generateToken } from "../../utils/jwtHelper.js";
 import { fullUserSelect } from "../../utils/prismaSelects.js";
-import { contactNumberLookupVariants } from "../../utils/phoneLookup.js";
+import { contactNumberLookupVariants, mobileLoginPhoneOnlyPolicyError } from "../../utils/phoneLookup.js";
 
 export const login = asyncHandler(async (req, res) => {
+    const policyErr = mobileLoginPhoneOnlyPolicyError(req.body);
+    if (policyErr) {
+        return errorResponse(res, policyErr.message, policyErr.status);
+    }
+
     const { phone, password } = req.body;
     if (!phone || !password) {
         return errorResponse(res, "Phone and password are required", 400);

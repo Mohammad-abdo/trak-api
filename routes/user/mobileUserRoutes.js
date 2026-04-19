@@ -139,6 +139,8 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
  *     operationId: loginWithPhone
  *     summary: Login with phone and password
  *     description: |
+ *       **Phone + password only** — do not send `email` as the login identifier (use registered `contactNumber` in `phone`). Web dashboard login (`/api/auth/login`) may use email; mobile does not.
+ *
  *       **Account must be verified to login.** If the account is not verified (isVerified = false):
  *       - API returns **403** (no token, no session).
  *       - Response body: `{ "success": false, "message": "Account not verified. Please verify your account first." }`
@@ -159,6 +161,8 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
  *                 type: string
  *                 example: "pass1234"
  *     responses:
+ *       400:
+ *         description: Missing phone, or email used instead of phone (mobile login is phone-only)
  *       200:
  *         description: Login successful – returns token + full user info (user.isVerified will be true)
  *         content:

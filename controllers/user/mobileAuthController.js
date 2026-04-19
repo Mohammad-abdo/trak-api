@@ -5,7 +5,7 @@ import { normalizeOtpInput, validateOtpAgainstUser } from '../../services/otpVer
 import { sendOtpSms } from '../../utils/smsService.js';
 import { generateToken } from '../../utils/jwtHelper.js';
 import { fullUserSelect } from '../../utils/prismaSelects.js';
-import { contactNumberLookupVariants } from '../../utils/phoneLookup.js';
+import { contactNumberLookupVariants, mobileLoginPhoneOnlyPolicyError } from '../../utils/phoneLookup.js';
 
 // @desc    Login with phone + password
 // @route   POST /apimobile/user/auth/login
@@ -13,6 +13,11 @@ import { contactNumberLookupVariants } from '../../utils/phoneLookup.js';
 export const login = async (req, res) => {
     try {
         const { phone, password } = req.body;
+
+        const policyErr = mobileLoginPhoneOnlyPolicyError(req.body);
+        if (policyErr) {
+            return res.status(policyErr.status).json({ success: false, message: policyErr.message });
+        }
 
         if (!phone || !password) {
             return res.status(400).json({ success: false, message: 'Phone and password are required' });

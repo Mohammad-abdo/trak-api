@@ -34,3 +34,32 @@ export function contactNumberLookupVariants(input) {
 
     return [...set].filter(Boolean);
 }
+
+/**
+ * Mobile rider/driver login accepts only the registered phone (`phone` body field) + `password`.
+ * Rejects mistaken email-based login attempts so clients do not use the web dashboard pattern.
+ *
+ * @param {{ phone?: unknown, email?: unknown }} body - raw request body
+ * @returns {{ status: number, message: string } | null} HTTP error to return, or null if policy passes
+ */
+export function mobileLoginPhoneOnlyPolicyError(body) {
+    const phoneRaw = body?.phone;
+    const emailRaw = body?.email;
+    const phone = typeof phoneRaw === "string" ? phoneRaw.trim() : "";
+    const email = typeof emailRaw === "string" ? emailRaw.trim() : "";
+
+    if (email && !phone) {
+        return {
+            status: 400,
+            message:
+                "Mobile login requires your phone number and password. Email cannot be used to sign in.",
+        };
+    }
+    if (phone.includes("@")) {
+        return {
+            status: 400,
+            message: "Use your phone number to sign in, not your email address.",
+        };
+    }
+    return null;
+}

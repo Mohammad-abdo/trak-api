@@ -196,6 +196,7 @@ router.get("/services", getRegistrationServices);
  *   post:
  *     tags: [Driver Auth]
  *     summary: Login with phone + password
+ *     description: Phone and password only. Do not use email to sign in on mobile (use registered phone in `phone`).
  *     security: []
  *     requestBody:
  *       required: true
@@ -228,6 +229,7 @@ router.get("/services", getRegistrationServices);
  *                         totalRatings: { type: integer }
  *                         totalEarnings: { type: number }
  *                 message: { type: string }
+ *       400: { description: Missing phone, or email used instead of phone }
  *       401: { description: Invalid credentials }
  *       403: { description: Account pending/blocked }
  */

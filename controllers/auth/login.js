@@ -1,5 +1,6 @@
 import prisma from "../../utils/prisma.js";
 import { getDashboardPermissionPayload } from "../../utils/staffPermissions.js";
+import { contactNumberLookupVariants } from "../../utils/phoneLookup.js";
 import bcrypt from "bcryptjs";
 import { generateOtp, getOtpExpiresAt } from "../../utils/otpHelper.js";
 import { generateToken } from "../../utils/jwtHelper.js";
@@ -12,7 +13,16 @@ export const login = async (req, res) => {
     try {
         const { email, contactNumber, password, loginType = "email" } = req.body;
 
-        console.log("Login attempt:", { email, contactNumber, loginType });
+        let emailInput = typeof email === "string" ? email.trim() : "";
+        let phoneInput = typeof contactNumber === "string" ? contactNumber.trim() : "";
+
+        // Dashboard sends the "Email or Contact Number" field as `email`; route phones to lookup by contactNumber.
+        if (emailInput && !emailInput.includes("@")) {
+            phoneInput = emailInput || phoneInput;
+            emailInput = "";
+        }
+
+        console.log("Login attempt:", { email: emailInput, contactNumber: phoneInput, loginType });
 
         if (!password && loginType === "email") {
             return res.status(400).json({
@@ -21,27 +31,29 @@ export const login = async (req, res) => {
             });
         }
 
-        if (!email && !contactNumber) {
+        if (!emailInput && !phoneInput) {
             return res.status(400).json({
                 success: false,
                 message: "Email or contact number is required",
             });
         }
 
-        // Find user
-        const whereClause = {};
-        if (email) {
-            whereClause.email = email.toLowerCase().trim();
-        } else if (contactNumber) {
-            whereClause.contactNumber = contactNumber.trim();
+        let user = null;
+        if (emailInput) {
+            user = await prisma.user.findFirst({
+                where: { email: emailInput.toLowerCase() },
+            });
+        } else {
+            const variants = contactNumberLookupVariants(phoneInput);
+            if (variants.length > 0) {
+                user = await prisma.user.findFirst({
+                    where: { contactNumber: { in: variants } },
+                });
+            }
         }
 
-        const user = await prisma.user.findFirst({
-            where: whereClause,
-        });
-
         if (!user) {
-            console.log("User not found with:", whereClause);
+            console.log("User not found for:", emailInput ? { email: emailInput } : { contactNumber: phoneInput });
             return res.status(401).json({
                 success: false,
                 message: "Invalid email or password",
