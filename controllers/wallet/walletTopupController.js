@@ -273,29 +273,29 @@ export const topupWallet = async (req, res) => {
     }
 };
 
-// @desc    Get wallet top-up config (for Paysky VPOS)
-// @route   POST /apimobile/driver/wallet/topup/init
+// @desc    Legacy wrapper -> unified wallet top-up handler
+// @route   POST /apimobile/driver/wallet/topup
 // @access  Private (Driver)
 export const initWalletTopup = async (req, res) => {
     return topupWallet(req, res);
 };
 
-// @desc    Pay wallet top-up with card details (direct Paysky API)
-// @route   POST /apimobile/driver/wallet/topup/pay
+// @desc    Legacy wrapper -> unified wallet top-up handler
+// @route   POST /apimobile/driver/wallet/topup
 // @access  Private (Driver)
 export const payWalletTopupWithCard = async (req, res) => {
     return topupWallet(req, res);
 };
 
-// @desc    Confirm wallet top-up after successful Paysky payment
-// @route   POST /apimobile/driver/wallet/topup/confirm
+// @desc    Legacy wrapper -> unified wallet top-up handler
+// @route   POST /apimobile/driver/wallet/topup
 // @access  Private (Driver)
 export const confirmWalletTopup = async (req, res) => {
     return topupWallet(req, res);
 };
 
-// @desc    SIMULATE wallet top-up (for testing without real Paysky)
-// @route   POST /apimobile/driver/wallet/topup/simulate
+// @desc    Legacy wrapper -> unified wallet top-up handler (simulate=true)
+// @route   POST /apimobile/driver/wallet/topup
 // @access  Private (Driver)
 export const simulateWalletTopup = async (req, res) => {
     req.body = { ...req.body, simulate: true };
