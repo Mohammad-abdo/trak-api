@@ -11,7 +11,9 @@ function payskyJson(res, statusCode, message, success) {
 }
 
 /**
- * Handle Paysky webhook for wallet top-up payments
+ * @deprecated Use `payskyNotification` in `payskyNotificationController.js` — also mounted at
+ * `POST /api/payments/paysky/wallet-notification` in `routes/payments.js` (same handler as `/paysky/notification`).
+ * This duplicate implementation is retained for reference only.
  * @route POST /api/payments/paysky/wallet-notification
  */
 export const payskyWalletNotification = async (req, res) => {

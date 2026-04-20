@@ -10,6 +10,7 @@ import {
 } from "../services/ridePaymentCompletionService.js";
 import {
     PAYSKY_NOTIFICATION_PATH,
+    PAYSKY_WALLET_NOTIFICATION_PATH,
     buildPayskyWebhookUrlFromRequest,
     getConfiguredPayskyWebhookUrl,
     notifyPayskyWebhookAdmin,
@@ -391,12 +392,19 @@ export const payskyNotification = async (req, res) => {
 export const payskyWebhookInfo = async (req, res) => {
     const fullUrl = buildPayskyWebhookUrlFromRequest(req);
     const configuredWebhookUrl = getConfiguredPayskyWebhookUrl();
+    const walletAliasUrl =
+        fullUrl && PAYSKY_WALLET_NOTIFICATION_PATH
+            ? fullUrl.replace(PAYSKY_NOTIFICATION_PATH, PAYSKY_WALLET_NOTIFICATION_PATH)
+            : null;
+
     return res.json({
         success: true,
         data: {
             method: "POST",
             path: PAYSKY_NOTIFICATION_PATH,
+            alternativeWalletPath: PAYSKY_WALLET_NOTIFICATION_PATH,
             fullUrl,
+            fullUrlWalletAlias: walletAliasUrl,
             configuredWebhookUrl,
             contentType: "application/json",
             secretConfigured: !!String(process.env.PAYSKY_SECRET_KEY_HEX || "").trim(),

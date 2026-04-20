@@ -25,6 +25,15 @@ async function parseGatewayResponseSafe(response) {
     return { parsed, rawText };
 }
 
+function isPayskyCardApprovalCode(responseCode, status) {
+    const st = String(status ?? "").toUpperCase();
+    if (st === "SUCCESS" || st === "APPROVED") return true;
+    const rc = String(responseCode ?? "").trim();
+    // PaySky card API may return "0000" (OMNI) or "00" (approved) depending on environment.
+    if (rc === "0000" || rc === "00") return true;
+    return false;
+}
+
 function normalizeGatewayResult(response, payload) {
     const parsed = payload?.parsed;
     const rawText = payload?.rawText || "";
@@ -37,7 +46,7 @@ function normalizeGatewayResult(response, payload) {
         (rawText ? rawText.slice(0, 300) : `Gateway HTTP ${response.status}`);
     const systemReference = parsed?.SystemReference ?? parsed?.systemReference ?? null;
     const merchantReference = parsed?.MerchantReference ?? parsed?.merchantReference ?? null;
-    const success = response.ok && (responseCode === "0000" || String(status).toUpperCase() === "SUCCESS");
+    const success = response.ok && isPayskyCardApprovalCode(responseCode, status);
 
     return {
         success,

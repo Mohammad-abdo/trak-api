@@ -2,6 +2,9 @@ import { saveAdminNotification } from "./notificationService.js";
 
 export const PAYSKY_NOTIFICATION_PATH = "/api/payments/paysky/notification";
 
+/** Legacy / alternate PaySky dashboard URL — mounted to the same POST handler as PAYSKY_NOTIFICATION_PATH. */
+export const PAYSKY_WALLET_NOTIFICATION_PATH = "/api/payments/paysky/wallet-notification";
+
 /**
  * Full webhook URL from env (for PaySky dashboard / .env documentation).
  * PAYSKY_WEBHOOK_URL wins; else PAYSKY_PUBLIC_API_BASE_URL + path.

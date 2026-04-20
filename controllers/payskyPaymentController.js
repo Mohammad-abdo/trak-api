@@ -9,7 +9,11 @@ import {
     getPayskyEnv,
     isPayskyProductionMode,
 } from "../utils/payskyApi.js";
-import { getConfiguredPayskyWebhookUrl } from "../utils/payskyWebhookAdminNotify.js";
+import {
+    buildPayskyWebhookUrlFromRequest,
+    getConfiguredPayskyWebhookUrl,
+    PAYSKY_NOTIFICATION_PATH,
+} from "../utils/payskyWebhookAdminNotify.js";
 
 /**
  * Get Paysky configuration for frontend Lightbox payment
@@ -86,7 +90,8 @@ export const payskyInitPayment = async (req, res) => {
         const env = getPayskyEnv();
         const callbackUrl =
             getConfiguredPayskyWebhookUrl() ||
-            `${req.protocol}://${req.get("host")}/api/payments/paysky/notification`;
+            buildPayskyWebhookUrlFromRequest(req) ||
+            `${req.protocol}://${req.get("host")}${PAYSKY_NOTIFICATION_PATH}`;
 
         res.json({
             success: true,
