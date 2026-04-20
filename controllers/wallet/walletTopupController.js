@@ -112,6 +112,8 @@ export const topupWallet = async (req, res) => {
                     success: false,
                     message: paymentResult.message || "Payment failed",
                     responseCode: paymentResult.responseCode,
+                    gatewayStatus: paymentResult.httpStatus || null,
+                    gatewayResponse: paymentResult.rawResponse || null,
                 });
             }
 

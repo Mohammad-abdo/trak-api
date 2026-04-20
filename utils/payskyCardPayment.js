@@ -2,6 +2,54 @@ import prisma from "../utils/prisma.js";
 import crypto from "crypto";
 import { getPayskyEnv } from "./payskyApi.js";
 
+function getCardPayEndpoint(env) {
+    const explicit = String(process.env.PAYSKY_CARD_PAY_URL || "").trim();
+    if (explicit) return explicit;
+    return `${env.API_BASE}/api/v1/payments/pay`;
+}
+
+function getTokenPayEndpoint(env) {
+    const explicit = String(process.env.PAYSKY_TOKEN_PAY_URL || "").trim();
+    if (explicit) return explicit;
+    return `${env.API_BASE}/api/v1/payments/token-pay`;
+}
+
+async function parseGatewayResponseSafe(response) {
+    const rawText = await response.text();
+    let parsed = null;
+    try {
+        parsed = rawText ? JSON.parse(rawText) : null;
+    } catch {
+        parsed = null;
+    }
+    return { parsed, rawText };
+}
+
+function normalizeGatewayResult(response, payload) {
+    const parsed = payload?.parsed;
+    const rawText = payload?.rawText || "";
+    const responseCode = parsed?.ResponseCode ?? parsed?.responseCode ?? null;
+    const status = parsed?.Status ?? parsed?.status ?? null;
+    const message =
+        parsed?.ResponseMessage ||
+        parsed?.message ||
+        parsed?.Message ||
+        (rawText ? rawText.slice(0, 300) : `Gateway HTTP ${response.status}`);
+    const systemReference = parsed?.SystemReference ?? parsed?.systemReference ?? null;
+    const merchantReference = parsed?.MerchantReference ?? parsed?.merchantReference ?? null;
+    const success = response.ok && (responseCode === "0000" || String(status).toUpperCase() === "SUCCESS");
+
+    return {
+        success,
+        responseCode,
+        systemReference,
+        merchantReference,
+        message,
+        httpStatus: response.status,
+        rawResponse: parsed ?? rawText,
+    };
+}
+
 export async function processPayskyCardPayment({ amount, cardNumber, expiryMonth, expiryYear, cvv, cardHolderName, merchantReference, userId }) {
     const merchantId = process.env.PAYSKY_MERCHANT_ID?.trim();
     const terminalId = process.env.PAYSKY_TERMINAL_ID?.trim();
@@ -30,39 +78,44 @@ export async function processPayskyCardPayment({ amount, cardNumber, expiryMonth
     const key = Buffer.from(secretKey.replace(/\s+/g, ""), "hex");
     const secureHash = crypto.createHmac("sha256", key).update(canonical, "utf8").digest("hex").toUpperCase();
 
-    // Call Paysky API to process card payment
-    const payskyResponse = await fetch(`${env.API_BASE}/api/v1/payments/pay`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            MerchantId: merchantId,
-            TerminalId: terminalId,
-            MerchantReference: merchantReference,
-            Amount: amountMinor,
-            TrxDateTime: datetime,
-            SecureHash: secureHash,
-            Currency: currency,
-            CardNumber: cardNumber,
-            ExpiryMonth: expiryMonth,
-            ExpiryYear: expiryYear,
-            CVV: cvv,
-            CardHolderName: cardHolderName,
-            PaymentType: "card",
-        }),
-    });
+    const endpoint = getCardPayEndpoint(env);
+    let payskyResponse;
+    try {
+        payskyResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+            },
+            body: JSON.stringify({
+                MerchantId: merchantId,
+                TerminalId: terminalId,
+                MerchantReference: merchantReference,
+                Amount: amountMinor,
+                TrxDateTime: datetime,
+                SecureHash: secureHash,
+                Currency: currency,
+                CardNumber: cardNumber,
+                ExpiryMonth: expiryMonth,
+                ExpiryYear: expiryYear,
+                CVV: cvv,
+                CardHolderName: cardHolderName,
+                PaymentType: "card",
+            }),
+        });
+    } catch (error) {
+        return {
+            success: false,
+            responseCode: null,
+            systemReference: null,
+            merchantReference,
+            message: `Gateway request failed: ${error.message}`,
+            rawResponse: { endpoint, error: error.message },
+        };
+    }
 
-    const result = await payskyResponse.json();
-
-    return {
-        success: result.ResponseCode === "0000" || result.Status === "SUCCESS",
-        responseCode: result.ResponseCode,
-        systemReference: result.SystemReference,
-        merchantReference: result.MerchantReference,
-        message: result.ResponseMessage || result.Message,
-        rawResponse: result,
-    };
+    const payload = await parseGatewayResponseSafe(payskyResponse);
+    return normalizeGatewayResult(payskyResponse, payload);
 }
 
 export async function processPayskyTokenPayment({ amount, token, merchantReference }) {
@@ -92,33 +145,38 @@ export async function processPayskyTokenPayment({ amount, token, merchantReferen
     const key = Buffer.from(secretKey.replace(/\s+/g, ""), "hex");
     const secureHash = crypto.createHmac("sha256", key).update(canonical, "utf8").digest("hex").toUpperCase();
 
-    // Call Paysky Token Payment API
-    const payskyResponse = await fetch(`${env.API_BASE}/api/v1/payments/token-pay`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            MerchantId: merchantId,
-            TerminalId: terminalId,
-            MerchantReference: merchantReference,
-            Amount: amountMinor,
-            TrxDateTime: datetime,
-            SecureHash: secureHash,
-            Currency: currency,
-            Token: token,
-            PaymentType: "card",
-        }),
-    });
+    const endpoint = getTokenPayEndpoint(env);
+    let payskyResponse;
+    try {
+        payskyResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+            },
+            body: JSON.stringify({
+                MerchantId: merchantId,
+                TerminalId: terminalId,
+                MerchantReference: merchantReference,
+                Amount: amountMinor,
+                TrxDateTime: datetime,
+                SecureHash: secureHash,
+                Currency: currency,
+                Token: token,
+                PaymentType: "card",
+            }),
+        });
+    } catch (error) {
+        return {
+            success: false,
+            responseCode: null,
+            systemReference: null,
+            merchantReference,
+            message: `Gateway request failed: ${error.message}`,
+            rawResponse: { endpoint, error: error.message },
+        };
+    }
 
-    const result = await payskyResponse.json();
-
-    return {
-        success: result.ResponseCode === "0000" || result.Status === "SUCCESS",
-        responseCode: result.ResponseCode,
-        systemReference: result.SystemReference,
-        merchantReference: result.MerchantReference,
-        message: result.ResponseMessage || result.Message,
-        rawResponse: result,
-    };
+    const payload = await parseGatewayResponseSafe(payskyResponse);
+    return normalizeGatewayResult(payskyResponse, payload);
 }

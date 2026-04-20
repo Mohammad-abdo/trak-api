@@ -474,6 +474,7 @@ try {
       tags: [
         { name: 'Driver Auth', description: 'Registration (full details + vehicle + docs), login, OTP, logout' },
         { name: 'Driver Profile', description: 'Get/update profile, registration status, bank account' },
+        { name: 'Driver Cards', description: 'Add/list/delete saved bank cards (last 4 digits + metadata only)' },
         { name: 'Driver Vehicle', description: 'Update vehicle information and image' },
         { name: 'Driver Documents', description: 'Upload and manage driver documents/licenses' },
         { name: 'Driver Status', description: 'Online/offline, availability, GPS location updates' },

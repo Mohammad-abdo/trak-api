@@ -610,7 +610,7 @@ router.put("/bank-account/update", authenticate, updateBankAccount);
 /** @swagger
  * /apimobile/driver/add-bank-card:
  *   post:
- *     tags: [Driver Profile]
+ *     tags: [Driver Cards]
  *     summary: Add a payment card (store last 4 digits + metadata only)
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -636,7 +636,7 @@ router.post("/add-bank-card", authenticate, addBankCard);
 /** @swagger
  * /apimobile/driver/bank-cards:
  *   get:
- *     tags: [Driver Profile]
+ *     tags: [Driver Cards]
  *     summary: Get driver's saved payment cards
  *     security: [{ bearerAuth: [] }]
  *     responses:
@@ -647,7 +647,7 @@ router.get("/bank-cards", authenticate, getBankCards);
 /** @swagger
  * /apimobile/driver/bank-cards/{id}:
  *   delete:
- *     tags: [Driver Profile]
+ *     tags: [Driver Cards]
  *     summary: Delete a saved payment card
  *     security: [{ bearerAuth: [] }]
  *     parameters:
