@@ -21,6 +21,9 @@ import {
     getMyDocuments,
     getRequiredDocuments,
     updateBankAccount,
+    addBankCard,
+    getBankCards,
+    deleteBankCard,
     updateDriverStatus,
     getRegistrationStatus,
     getRejectionStatus,
@@ -47,7 +50,7 @@ import {
 // ─── Wallet ──────────────────────────────────────────────────────────────────
 import { getWalletDetail, getWalletList } from "../../controllers/wallet/balanceAndHistory.js";
 import { lastUserOperations, filterOperations } from "../../controllers/user/mobileWalletController.js";
-import { initWalletTopup, confirmWalletTopup, simulateWalletTopup, getWalletBalance, payWalletTopupWithCard } from "../../controllers/wallet/walletTopupController.js";
+import { topupWallet, getWalletBalance } from "../../controllers/wallet/walletTopupController.js";
 
 // ─── Withdraw requests ───────────────────────────────────────────────────────
 import { getWithdrawRequestList, saveWithdrawRequest } from "../../controllers/withdrawRequestController.js";
@@ -604,6 +607,60 @@ router.post("/documents/upload", authenticate, docUpload, uploadDocuments);
  */
 router.put("/bank-account/update", authenticate, updateBankAccount);
 
+/** @swagger
+ * /apimobile/driver/add-bank-card:
+ *   post:
+ *     tags: [Driver Profile]
+ *     summary: Add a payment card (store last 4 digits + metadata only)
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [lastFourDigits]
+ *             properties:
+ *               cardHolderName: { type: string, example: "John Doe" }
+ *               lastFourDigits: { type: string, example: "4242" }
+ *               brand: { type: string, example: "visa" }
+ *               expiryMonth: { type: integer, example: 12 }
+ *               expiryYear: { type: integer, example: 2028 }
+ *               isDefault: { type: boolean, default: false }
+ *     responses:
+ *       201: { description: Card added }
+ *       400: { description: Valid last 4 digits required }
+ */
+router.post("/add-bank-card", authenticate, addBankCard);
+
+/** @swagger
+ * /apimobile/driver/bank-cards:
+ *   get:
+ *     tags: [Driver Profile]
+ *     summary: Get driver's saved payment cards
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Cards list }
+ */
+router.get("/bank-cards", authenticate, getBankCards);
+
+/** @swagger
+ * /apimobile/driver/bank-cards/{id}:
+ *   delete:
+ *     tags: [Driver Profile]
+ *     summary: Delete a saved payment card
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Card deleted }
+ *       404: { description: Card not found }
+ */
+router.delete("/bank-cards/:id", authenticate, deleteBankCard);
+
 // =============================================================================
 //  7 — DRIVER STATUS (online/offline/location)
 // =============================================================================
@@ -1075,10 +1132,15 @@ router.get("/wallet/operations/filter", authenticate, filterOperations);
 router.get("/wallet/earnings", authenticate, getEarningsSummary);
 
 /** @swagger
- * /apimobile/driver/wallet/topup/init:
+ * /apimobile/driver/wallet/topup:
  *   post:
  *     tags: [Driver Wallet]
- *     summary: Initialize wallet top-up payment via Paysky
+ *     summary: Single endpoint to charge driver wallet
+ *     description: |
+ *       Use one endpoint for all top-up flows:
+ *       - Direct card charge: send `amount` + card fields.
+ *       - Signed gateway confirm: send `amount` + `merchantReference` + signed PaySky fields.
+ *       - Test simulation: send `amount` + `simulate=true`.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1086,46 +1148,29 @@ router.get("/wallet/earnings", authenticate, getEarningsSummary);
  *         application/json:
  *           schema:
  *             type: object
+ *             required: [amount]
  *             properties:
- *               amount:
- *                 type: number
- *                 description: Amount to top up (in main currency, e.g., EGP)
+ *               amount: { type: number, example: 50 }
+ *               cardNumber: { type: string, example: "4111111111111111" }
+ *               expiryMonth: { type: string, example: "12" }
+ *               expiryYear: { type: string, example: "2028" }
+ *               cvv: { type: string, example: "123" }
+ *               cardHolderName: { type: string, example: "Driver One" }
+ *               merchantReference: { type: string, example: "TOPUP:10:1700000000000" }
+ *               SecureHash: { type: string }
+ *               MerchantId: { type: string }
+ *               TerminalId: { type: string }
+ *               DateTimeLocalTrxn: { type: string }
+ *               Currency: { type: string, example: "818" }
+ *               Amount: { type: string, example: "5000" }
+ *               simulate: { type: boolean, example: false }
  *     responses:
- *       200:
- *         description: Payment config for Paysky Lightbox
+ *       200: { description: Wallet top-up processed }
+ *       400: { description: Validation or payload mismatch error }
+ *       401: { description: Invalid PaySky signature/ids }
+ *       503: { description: Payment service not configured }
  */
-router.post("/wallet/topup/init", authenticate, initWalletTopup);
-
-/** @swagger
- * /apimobile/driver/wallet/topup/confirm:
- *   post:
- *     tags: [Driver Wallet]
- *     summary: Confirm wallet top-up after successful Paysky payment
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               merchantReference:
- *                 type: string
- *                 description: Merchant reference from Paysky
- *               systemReference:
- *                 type: string
- *                 description: System reference from Paysky
- *               amount:
- *                 type: number
- *                 description: Amount paid in minor units (e.g., halalas)
- *               paidThrough:
- *                 type: string
- *                 description: Payment method (card, wallet, etc.)
- *     responses:
- *       200:
- *         description: Top-up confirmed and balance updated
- */
-router.post("/wallet/topup/confirm", authenticate, confirmWalletTopup);
+router.post("/wallet/topup", authenticate, topupWallet);
 
 /** @swagger
  * /apimobile/driver/wallet/balance:
@@ -1139,64 +1184,6 @@ router.post("/wallet/topup/confirm", authenticate, confirmWalletTopup);
  */
 router.get("/wallet/balance", authenticate, getWalletBalance);
 
-/** @swagger
- * /apimobile/driver/wallet/topup/simulate:
- *   post:
- *     tags: [Driver Wallet]
- *     summary: SIMULATE wallet top-up (for testing without real Paysky)
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               amount:
- *                 type: number
- *                 description: Amount to top up
- *     responses:
- *       200:
- *         description: Top-up simulated successfully
- */
-router.post("/wallet/topup/simulate", authenticate, simulateWalletTopup);
-
-/** @swagger
- * /apimobile/driver/wallet/topup/pay:
- *   post:
- *     tags: [Driver Wallet]
- *     summary: Pay wallet top-up with card details (direct Paysky API)
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               amount:
- *                 type: number
- *                 description: Amount to top up (in EGP)
- *               cardNumber:
- *                 type: string
- *                 description: Card number
- *               expiryMonth:
- *                 type: string
- *                 description: Expiry month (MM)
- *               expiryYear:
- *                 type: string
- *                 description: Expiry year (YYYY)
- *               cvv:
- *                 type: string
- *                 description: CVV
- *               cardHolderName:
- *                 type: string
- *                 description: Card holder name
- *     responses:
- *       200:
- *         description: Payment result
- */
-router.post("/wallet/topup/pay", authenticate, payWalletTopupWithCard);
 
 // =============================================================================
 //  11 — WITHDRAW REQUESTS

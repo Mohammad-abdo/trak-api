@@ -620,6 +620,63 @@ Counts messages **from the other party** that are still unread.
 
 ---
 
+## Driver Wallet Top-up (Unified)
+
+### POST `/apimobile/driver/wallet/topup` — Charge wallet with one endpoint
+
+Use this single endpoint for all driver wallet charging flows:
+
+- **Direct card charge**: send `amount` + card details
+- **Signed gateway confirmation**: send `amount` + `merchantReference` + signed PaySky fields
+- **QA simulation**: send `amount` + `simulate: true`
+
+**Auth:** Bearer token (driver).
+
+### Request body (card flow example)
+
+```json
+{
+  "amount": 50,
+  "cardNumber": "4111111111111111",
+  "expiryMonth": "12",
+  "expiryYear": "2028",
+  "cvv": "123",
+  "cardHolderName": "Driver One"
+}
+```
+
+### Response (`200`)
+
+```json
+{
+  "success": true,
+  "message": "Wallet topped up successfully",
+  "data": {
+    "newBalance": 150,
+    "topupAmount": 50,
+    "transactionId": "1234567890"
+  }
+}
+```
+
+### Response when already processed (`200`)
+
+```json
+{
+  "success": true,
+  "message": "Topup already processed",
+  "data": {
+    "newBalance": 150,
+    "topupAmount": 50,
+    "transactionId": "1234567890"
+  }
+}
+```
+
+**Errors:** `400` invalid/missing payload, `401` invalid PaySky signature or merchant/terminal mismatch, `503` payment service not configured.
+
+---
+
 ## Notes for clients
 
 1. **Route order:** `GET /rides/available` must be registered **before** `GET /rides/:id` so `available` is not parsed as an id (this order is already used in the server).

@@ -47,6 +47,17 @@ const driverProfileSelect = {
     },
 };
 
+const bankCardSelect = {
+    id: true,
+    cardHolderName: true,
+    lastFourDigits: true,
+    brand: true,
+    expiryMonth: true,
+    expiryYear: true,
+    isDefault: true,
+    createdAt: true,
+};
+
 function formatDriverResponse(driver, req) {
     if (!driver) return null;
     return {
@@ -531,6 +542,63 @@ export const updateBankAccount = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, bank, "Bank account updated");
+});
+
+// ─── Driver Bank Cards (tokenized/meta only) ─────────────────────────────────
+export const addBankCard = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const { cardHolderName, lastFourDigits, brand, expiryMonth, expiryYear, isDefault = false } = req.body;
+
+    const digits = String(lastFourDigits ?? "").replace(/\D/g, "").slice(-4);
+    if (digits.length !== 4) {
+        return errorResponse(res, "Valid last 4 digits of card are required", 400);
+    }
+
+    if (isDefault) {
+        await prisma.userBankCard.updateMany({ where: { userId }, data: { isDefault: false } });
+    }
+
+    const card = await prisma.userBankCard.create({
+        data: {
+            userId,
+            cardHolderName: cardHolderName?.trim() || null,
+            lastFourDigits: digits,
+            brand: brand?.trim() || null,
+            expiryMonth: expiryMonth != null ? parseInt(expiryMonth, 10) : null,
+            expiryYear: expiryYear != null ? parseInt(expiryYear, 10) : null,
+            isDefault: !!isDefault,
+        },
+        select: bankCardSelect,
+    });
+
+    return successResponse(res, card, "Card added", 201);
+});
+
+export const getBankCards = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const cards = await prisma.userBankCard.findMany({
+        where: { userId },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+        select: bankCardSelect,
+    });
+
+    return successResponse(res, cards, "Cards retrieved");
+});
+
+export const deleteBankCard = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+        return errorResponse(res, "Invalid card id", 400);
+    }
+
+    const card = await prisma.userBankCard.findFirst({ where: { id, userId } });
+    if (!card) {
+        return errorResponse(res, "Card not found", 404);
+    }
+
+    await prisma.userBankCard.delete({ where: { id } });
+    return successResponse(res, null, "Card deleted");
 });
 
 // ─── Update Status (online / available) ──────────────────────────────────────
