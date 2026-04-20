@@ -908,7 +908,8 @@ router.post("/rides/respond", authenticate, respondToRide);
  *             type: object
  *             required: [rideRequestId, status]
  *             properties:
- *               rideRequestId: { type: string, format: uuid }
+ *               rideRequestId: { type: integer }
+ *               booking_id: { type: integer }
  *               status: { type: string, enum: [arrived, started] }
  *     responses:
  *       200: { description: Status updated }

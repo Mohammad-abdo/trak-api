@@ -441,12 +441,13 @@ const calculateEstimatedPrice = async (ride) => {
 
 // Update ride status (arrived, started)
 export const updateRideStatus = asyncHandler(async (req, res) => {
-    const { rideRequestId, status } = req.body;
+    const rawId = pickRideRequestIdFromBody(req.body);
+    const { status } = req.body || {};
     const allowed = ["arrived", "started"];
     if (!allowed.includes(status)) return errorResponse(res, `status must be one of: ${allowed.join(", ")}`, 400);
 
-    const rideId = parseRideRequestIdParam(rideRequestId);
-    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+    const rideId = parseRideRequestIdParam(rawId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId (use numeric id or booking_id)", 400);
     const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
@@ -464,9 +465,10 @@ export const updateRideStatus = asyncHandler(async (req, res) => {
 
 // Complete ride (driver ends trip)
 export const completeRide = asyncHandler(async (req, res) => {
-    const { rideRequestId, tips } = req.body;
-    const rideId = parseRideRequestIdParam(rideRequestId);
-    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+    const rawId = pickRideRequestIdFromBody(req.body);
+    const { tips } = req.body || {};
+    const rideId = parseRideRequestIdParam(rawId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId (use numeric id or booking_id)", 400);
 
     const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
@@ -678,9 +680,32 @@ export const updateLocation = asyncHandler(async (req, res) => {
     });
 
     try {
-        const { emitDriverLocationUpdate } = await import("../../utils/socketService.js");
+        const { emitDriverLocationUpdate, emitToRide } = await import("../../utils/socketService.js");
         const io = req.app.get("io") || global.io;
-        if (io) emitDriverLocationUpdate(io, req.user.id, { lat: latitude, lng: longitude, heading: currentHeading });
+        if (io) {
+            emitDriverLocationUpdate(io, req.user.id, {
+                latitude,
+                longitude,
+                currentHeading,
+                heading: currentHeading,
+            });
+            const activeRides = await prisma.rideRequest.findMany({
+                where: {
+                    driverId: req.user.id,
+                    status: { in: ["accepted", "arrived", "started"] },
+                },
+                select: { id: true },
+            });
+            const payload = {
+                driverId: req.user.id,
+                latitude: String(latitude),
+                longitude: String(longitude),
+                heading: currentHeading != null ? parseFloat(currentHeading) : null,
+            };
+            for (const r of activeRides) {
+                emitToRide(io, r.id, "driver-location-for-ride", { ...payload, rideRequestId: r.id });
+            }
+        }
     } catch (_) {}
 
     return successResponse(res, { latitude, longitude }, "Location updated");

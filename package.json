@@ -20,6 +20,7 @@
     "backfill:ride-service-id:apply": "node scripts/backfill-ride-service-id.js --apply",
     "backfill:role-permissions": "node scripts/backfillRolePermissions.js",
     "test": "vitest run",
+    "test:driver-trip-e2e": "vitest run tests/driverTripLifecycle.integration.test.js",
     "test:watch": "vitest",
     "test:seed-e2e": "node scripts/seedE2ETest.js",
     "test:user-api": "node scripts/testUserEndpoints.js",

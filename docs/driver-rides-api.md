@@ -17,6 +17,33 @@ Errors:
 
 ---
 
+## مسار تشغيل الرحلة بعد القبول (بدون مسارات إضافية)
+
+بعد تعيين السائق وحالة **`accepted`** (سواء قبول مباشر أو بعد موافقة الراكب على التفاوض)، **كل تتبع تشغيل الرحلة من جهة السائق** يمر بالنداءات التالية فقط تحت **`/apimobile/driver`**:
+
+| الترتيب | الوظيفة | Method | Path |
+|--------|---------|--------|------|
+| 1 | تحديث موقع السائق على الخريطة (متكرر أثناء الرحلة) | `POST` | **`/location/update`** |
+| 2 | السائق وصل نقطة الالتقاء | `POST` | **`/rides/update-status`** — body: `status: "arrived"` |
+| 3 | بدء الرحلة نحو الوجهة | `POST` | **`/rides/update-status`** — body: `status: "started"` |
+| 4 | إنهاء الرحلة والمحاسبة | `POST` | **`/rides/complete`** |
+
+**حقول الهوية:** في `update-status` و `complete` يمكن إرسال **`rideRequestId`** أو **`booking_id`** / **`bookingId`** (رقم الرحلة `RideRequest.id`).
+
+**سوكِت الراكب (تتبع حي):** الراكب يشترك بـ **`subscribe-ride`** مع `rideId`، ويستقبل على غرفة الرحلة الحدث **`driver-location-for-ride`** عند كل **`POST /location/update`** ما دامت الرحلة بحالة `accepted` أو `arrived` أو `started`. يبقى البث العام **`driver-location-update`** للوحة التحكم/المراقبة.
+
+### Same flow in English
+
+After the ride is **`accepted`**, the driver-side **operational tracking** uses **only** these endpoints (no extra REST surface):
+
+1. **`POST /location/update`** — GPS heartbeat (repeat while en route).  
+2. **`POST /rides/update-status`** — `arrived` then `started`.  
+3. **`POST /rides/complete`** — end trip.
+
+Rider app: Socket.IO **`subscribe-ride`** → listen for **`driver-location-for-ride`** on the ride room.
+
+---
+
 ## GET `/rides` — My ride history (paginated, filterable)
 
 **Query parameters**

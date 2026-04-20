@@ -78,11 +78,17 @@ export const emitRideRequestToDrivers = (io, driverIds, rideRequest) => {
  */
 export const emitDriverLocationUpdate = (io, driverId, data) => {
     if (!io) return;
+    const lat = data.latitude ?? data.lat;
+    const lng = data.longitude ?? data.lng;
     io.emit("driver-location-update", {
         driverId,
-        lat: data.latitude,
-        lng: data.longitude,
-        name: data.firstName || data.lastName ? `${data.firstName || ""} ${data.lastName || ""}`.trim() : undefined,
+        lat,
+        lng,
+        heading: data.currentHeading ?? data.heading ?? undefined,
+        name:
+            data.firstName || data.lastName
+                ? `${data.firstName || ""} ${data.lastName || ""}`.trim()
+                : undefined,
         status: data.isOnline ? (data.isAvailable ? "online" : "busy") : "offline",
         isAvailable: data.isAvailable,
     });
