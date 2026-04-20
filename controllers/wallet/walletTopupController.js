@@ -78,7 +78,6 @@ export const topupWallet = async (req, res) => {
         const secureHash = String(req.body.SecureHash ?? req.body.secureHash ?? "").trim();
         const merchantReference = String(req.body.merchantReference ?? "").trim();
         const isConfirmPayload = merchantReference.startsWith("TOPUP:");
-        const isSignedConfirm = secureHash && isConfirmPayload;
         const hasCardDetails =
             !!req.body.cardNumber &&
             !!req.body.expiryMonth &&
@@ -86,7 +85,56 @@ export const topupWallet = async (req, res) => {
             !!req.body.cvv &&
             !!req.body.cardHolderName;
 
-        // Flow A: Signed callback confirmation payload.
+        // Flow A: Direct card charge (mobile client should use only this flow).
+        if (hasCardDetails) {
+            const wallet = await getOrCreateWallet(req.user.id);
+            if (!isPayskyConfigured()) {
+                return res.status(503).json({
+                    success: false,
+                    message: "Payment service is not configured on this server",
+                });
+            }
+
+            const reference = merchantReference || `TOPUP:${wallet.id}:${Date.now()}`;
+            const paymentResult = await processPayskyCardPayment({
+                amount: topupAmount,
+                cardNumber: req.body.cardNumber,
+                expiryMonth: req.body.expiryMonth,
+                expiryYear: req.body.expiryYear,
+                cvv: req.body.cvv,
+                cardHolderName: req.body.cardHolderName,
+                merchantReference: reference,
+                userId: req.user.id,
+            });
+
+            if (!paymentResult.success) {
+                return res.json({
+                    success: false,
+                    message: paymentResult.message || "Payment failed",
+                    responseCode: paymentResult.responseCode,
+                });
+            }
+
+            const credited = await creditWalletIfNotProcessed({
+                wallet,
+                userId: req.user.id,
+                amount: topupAmount,
+                reference,
+                transactionId: paymentResult.systemReference || null,
+            });
+
+            return res.json({
+                success: true,
+                message: credited.alreadyProcessed ? "Topup already processed" : "Wallet topped up successfully",
+                data: {
+                    newBalance: credited.balance,
+                    topupAmount: credited.amount,
+                    transactionId: credited.transactionId,
+                },
+            });
+        }
+
+        // Flow B: Signed callback confirmation payload (server-to-server / gateway callbacks).
         if (isConfirmPayload) {
             const merchantId = String(req.body.MerchantId ?? req.body.merchantId ?? "").trim();
             const terminalId = String(req.body.TerminalId ?? req.body.terminalId ?? "").trim();
@@ -184,55 +232,6 @@ export const topupWallet = async (req, res) => {
             });
         }
 
-        // Flow B: Direct card charge.
-        if (hasCardDetails) {
-            const wallet = await getOrCreateWallet(req.user.id);
-            if (!isPayskyConfigured()) {
-                return res.status(503).json({
-                    success: false,
-                    message: "Payment service is not configured on this server",
-                });
-            }
-
-            const reference = merchantReference || `TOPUP:${wallet.id}:${Date.now()}`;
-            const paymentResult = await processPayskyCardPayment({
-                amount: topupAmount,
-                cardNumber: req.body.cardNumber,
-                expiryMonth: req.body.expiryMonth,
-                expiryYear: req.body.expiryYear,
-                cvv: req.body.cvv,
-                cardHolderName: req.body.cardHolderName,
-                merchantReference: reference,
-                userId: req.user.id,
-            });
-
-            if (!paymentResult.success) {
-                return res.json({
-                    success: false,
-                    message: paymentResult.message || "Payment failed",
-                    responseCode: paymentResult.responseCode,
-                });
-            }
-
-            const credited = await creditWalletIfNotProcessed({
-                wallet,
-                userId: req.user.id,
-                amount: topupAmount,
-                reference,
-                transactionId: paymentResult.systemReference || null,
-            });
-
-            return res.json({
-                success: true,
-                message: credited.alreadyProcessed ? "Topup already processed" : "Wallet topped up successfully",
-                data: {
-                    newBalance: credited.balance,
-                    topupAmount: credited.amount,
-                    transactionId: credited.transactionId,
-                },
-            });
-        }
-
         // Flow C: Simulation fallback for QA (explicit flag).
         if (req.body.simulate === true) {
             const wallet = await getOrCreateWallet(req.user.id);
@@ -261,8 +260,7 @@ export const topupWallet = async (req, res) => {
 
         return res.status(400).json({
             success: false,
-            message:
-                "Missing charge data. Send card fields for direct charge, or signed PaySky fields for confirmation.",
+            message: "Card details are required: cardNumber, expiryMonth, expiryYear, cvv, cardHolderName",
         });
     } catch (error) {
         console.error("Wallet topup error:", error);

@@ -1135,12 +1135,10 @@ router.get("/wallet/earnings", authenticate, getEarningsSummary);
  * /apimobile/driver/wallet/topup:
  *   post:
  *     tags: [Driver Wallet]
- *     summary: Single endpoint to charge driver wallet
+ *     summary: Charge driver wallet using card details
  *     description: |
- *       Use one endpoint for all top-up flows:
- *       - Direct card charge: send `amount` + card fields.
- *       - Signed gateway confirm: send `amount` + `merchantReference` + signed PaySky fields.
- *       - Test simulation: send `amount` + `simulate=true`.
+ *       Mobile client sends only card data + amount.
+ *       Do not send gateway signed fields (`SecureHash`, `MerchantId`, etc.) from the app.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1148,7 +1146,7 @@ router.get("/wallet/earnings", authenticate, getEarningsSummary);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [amount]
+ *             required: [amount, cardNumber, expiryMonth, expiryYear, cvv, cardHolderName]
  *             properties:
  *               amount: { type: number, example: 50 }
  *               cardNumber: { type: string, example: "4111111111111111" }
@@ -1156,18 +1154,9 @@ router.get("/wallet/earnings", authenticate, getEarningsSummary);
  *               expiryYear: { type: string, example: "2028" }
  *               cvv: { type: string, example: "123" }
  *               cardHolderName: { type: string, example: "Driver One" }
- *               merchantReference: { type: string, example: "TOPUP:10:1700000000000" }
- *               SecureHash: { type: string }
- *               MerchantId: { type: string }
- *               TerminalId: { type: string }
- *               DateTimeLocalTrxn: { type: string }
- *               Currency: { type: string, example: "818" }
- *               Amount: { type: string, example: "5000" }
- *               simulate: { type: boolean, example: false }
  *     responses:
- *       200: { description: Wallet top-up processed }
- *       400: { description: Validation or payload mismatch error }
- *       401: { description: Invalid PaySky signature/ids }
+ *       200: { description: Wallet top-up success or payment failed result }
+ *       400: { description: Missing/invalid amount or card fields }
  *       503: { description: Payment service not configured }
  */
 router.post("/wallet/topup", authenticate, topupWallet);
