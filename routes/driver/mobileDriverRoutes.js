@@ -953,7 +953,9 @@ router.post("/rides/complete", authenticate, completeRide);
  *             type: object
  *             required: [rideRequestId]
  *             properties:
- *               rideRequestId: { type: string, format: uuid }
+ *               rideRequestId: { type: integer, description: "Numeric ride request id (same as RideRequest.id)" }
+ *               booking_id: { type: integer, description: "Alias for rideRequestId (rider app naming)" }
+ *               bookingId: { type: integer }
  *               reason: { type: string }
  *     responses:
  *       200: { description: Cancelled }

@@ -1,5 +1,5 @@
 import prisma from "../../utils/prisma.js";
-import { parseRideRequestIdParam } from "../../utils/rideRequestId.js";
+import { parseRideRequestIdParam, pickRideRequestIdFromBody } from "../../utils/rideRequestId.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
@@ -523,13 +523,25 @@ export const completeRide = asyncHandler(async (req, res) => {
 
 // Cancel ride from driver side
 export const cancelRide = asyncHandler(async (req, res) => {
-    const { rideRequestId, reason } = req.body;
-    const rideId = parseRideRequestIdParam(rideRequestId);
-    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+    const rawId = pickRideRequestIdFromBody(req.body);
+    const { reason } = req.body || {};
+    if (rawId == null || rawId === "") {
+        return errorResponse(res, "rideRequestId is required (or booking_id / bookingId)", 400);
+    }
+    const rideId = parseRideRequestIdParam(rawId);
+    if (!rideId) {
+        return errorResponse(
+            res,
+            "Invalid ride id: use the numeric id from GET /apimobile/driver/rides or ride details (integers only, not UUID strings).",
+            400
+        );
+    }
 
     const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
     if (!ride) return errorResponse(res, "Ride not found", 404);
-    if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
+    if (ride.driverId !== req.user.id) {
+        return errorResponse(res, "This ride is not assigned to your driver account", 403);
+    }
 
     await prisma.rideRequest.update({
         where: { id: ride.id },
