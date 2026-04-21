@@ -1,5 +1,14 @@
 import prisma from "../utils/prisma.js";
 
+const mapAudienceToFlags = (userType) => {
+    const audience = typeof userType === "string" ? userType.toLowerCase() : "";
+
+    return {
+        forRider: audience === "all" || audience === "rider",
+        forDriver: audience === "all" || audience === "driver",
+    };
+};
+
 // @desc    Get push notification list
 // @route   GET /api/push-notifications
 // @access  Private (Admin)
@@ -43,14 +52,15 @@ export const getPushNotificationList = async (req, res) => {
 export const createPushNotification = async (req, res) => {
     try {
         const { title, message, user_type, user_ids, image_url, data } = req.body;
+        const { forRider, forDriver } = mapAudienceToFlags(user_type);
 
         // Create notification record
         const notification = await prisma.pushNotification.create({
             data: {
                 title,
                 message,
-                userType: user_type,
-                userIds: user_ids ? JSON.stringify(user_ids) : null,
+                forRider,
+                forDriver,
             },
         });
 
@@ -130,14 +140,15 @@ export const updatePushNotification = async (req, res) => {
     try {
         const { id } = req.params;
         const { title, message, user_type, user_ids } = req.body;
+        const { forRider, forDriver } = mapAudienceToFlags(user_type);
 
         const notification = await prisma.pushNotification.update({
             where: { id: parseInt(id) },
             data: {
                 title,
                 message,
-                userType: user_type,
-                userIds: user_ids ? JSON.stringify(user_ids) : null,
+                forRider,
+                forDriver,
             },
         });
 
