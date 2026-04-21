@@ -778,7 +778,7 @@ router.post("/status/go-online", authenticate, goOnlineOffline);
  *             properties:
  *               latitude: { type: number, example: 24.7136 }
  *               longitude: { type: number, example: 46.6753 }
- *               currentHeading: { type: number }
+ *              
  *     responses:
  *       200: { description: Location updated }
  */
