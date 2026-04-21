@@ -25,6 +25,7 @@ model User {
   userType             String?   @map("user_type") @db.VarChar(20)
   playerId             String?   @map("player_id")
   fcmToken             String?   @map("fcm_token")
+  pushNotificationsEnabled Boolean @default(true) @map("push_notifications_enabled")
   fleetId              Int?      @map("fleet_id")
   latitude             String?
   longitude            String?

@@ -1,12 +1,36 @@
 import prisma from "../utils/prisma.js";
 
 const mapAudienceToFlags = (userType) => {
-    const audience = typeof userType === "string" ? userType.toLowerCase() : "";
+    const audience = normalizeUserType(userType);
 
     return {
         forRider: audience === "all" || audience === "rider",
         forDriver: audience === "all" || audience === "driver",
     };
+};
+
+const normalizeUserType = (userType) => {
+    const audience = typeof userType === "string" ? userType.toLowerCase().trim() : "";
+
+    if (audience === "drivers") return "driver";
+    if (audience === "riders") return "rider";
+    if (audience === "both") return "all";
+
+    return audience;
+};
+
+const buildUserTypeWhere = (userType) => {
+    const audience = normalizeUserType(userType);
+
+    if (audience === "all" || !audience) {
+        return { in: ["rider", "driver"] };
+    }
+
+    if (audience === "rider" || audience === "driver") {
+        return audience;
+    }
+
+    return undefined;
 };
 
 // @desc    Get push notification list
@@ -53,6 +77,7 @@ export const createPushNotification = async (req, res) => {
     try {
         const { title, message, user_type, user_ids, image_url, data } = req.body;
         const { forRider, forDriver } = mapAudienceToFlags(user_type);
+        const userTypeFilter = buildUserTypeWhere(user_type);
 
         // Create notification record
         const notification = await prisma.pushNotification.create({
@@ -78,11 +103,17 @@ export const createPushNotification = async (req, res) => {
         // Get target users
         let users = [];
         if (user_ids && Array.isArray(user_ids) && user_ids.length > 0) {
+            const whereClause = {
+                id: { in: user_ids.map((id) => parseInt(id)) },
+                pushNotificationsEnabled: true,
+            };
+
+            if (userTypeFilter) {
+                whereClause.userType = userTypeFilter;
+            }
+
             users = await prisma.user.findMany({
-                where: {
-                    id: { in: user_ids.map(id => parseInt(id)) },
-                    ...(user_type && { userType: user_type }),
-                },
+                where: whereClause,
                 select: {
                     id: true,
                     playerId: true,
@@ -90,11 +121,17 @@ export const createPushNotification = async (req, res) => {
                 },
             });
         } else if (user_type) {
+            const whereClause = {
+                status: "active",
+                pushNotificationsEnabled: true,
+            };
+
+            if (userTypeFilter) {
+                whereClause.userType = userTypeFilter;
+            }
+
             users = await prisma.user.findMany({
-                where: {
-                    userType: user_type,
-                    status: "active",
-                },
+                where: whereClause,
                 select: {
                     id: true,
                     playerId: true,

@@ -41,6 +41,10 @@ import {
     addSosContact,
     deleteSosContact,
 } from '../../controllers/user/mobileUserExtrasController.js';
+import {
+    getMyPushNotificationPreference,
+    setMyPushNotificationPreference,
+} from '../../controllers/notificationPreferenceController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1927,6 +1931,71 @@ router.get('/negotiation/history/:rideRequestId', authenticate, getNegotiationHi
  *         description: fcmToken or playerId is required
  */
 router.post('/device-token', authenticate, registerDeviceToken);
+
+/**
+ * @swagger
+ * /apimobile/user/notifications/push-preference:
+ *   get:
+ *     tags: [Profile]
+ *     summary: Get push notification status for current user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Push preference retrieved
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Push notification preference fetched
+ *               data:
+ *                 id: 42
+ *                 userType: rider
+ *                 pushNotificationsEnabled: true
+ *   put:
+ *     tags: [Profile]
+ *     summary: Stop or activate push notifications for current user
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [enabled]
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ *                 example: false
+ *                 description: false = stop notifications, true = activate notifications
+ *     responses:
+ *       200:
+ *         description: Push preference updated
+ *         content:
+ *           application/json:
+ *             examples:
+ *               stop:
+ *                 value:
+ *                   success: true
+ *                   message: Push notifications stopped
+ *                   data:
+ *                     id: 42
+ *                     userType: rider
+ *                     pushNotificationsEnabled: false
+ *               activate:
+ *                 value:
+ *                   success: true
+ *                   message: Push notifications activated
+ *                   data:
+ *                     id: 42
+ *                     userType: rider
+ *                     pushNotificationsEnabled: true
+ *       400:
+ *         description: enabled must be true or false
+ */
+router.get('/notifications/push-preference', authenticate, getMyPushNotificationPreference);
+router.put('/notifications/push-preference', authenticate, setMyPushNotificationPreference);
 
 // =============================================
 // AUTH - CHANGE PASSWORD (logged in)

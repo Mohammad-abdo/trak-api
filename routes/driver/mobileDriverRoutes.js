@@ -60,6 +60,10 @@ import { saveComplaint, getComplaintDetail } from "../../controllers/complaintCo
 
 // ─── Notifications ───────────────────────────────────────────────────────────
 import { getDriverNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "../../controllers/driver/mobileNotificationController.js";
+import {
+    getMyPushNotificationPreference,
+    setMyPushNotificationPreference,
+} from "../../controllers/notificationPreferenceController.js";
 
 // ─── Negotiation ─────────────────────────────────────────────────────────────
 import { getSettings as getNegotiationSettings, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from "../../controllers/negotiationController.js";
@@ -1401,6 +1405,68 @@ router.put("/notifications/:id/read", authenticate, markNotificationAsRead);
  *       200: { description: All marked as read }
  */
 router.put("/notifications/read-all", authenticate, markAllNotificationsAsRead);
+
+/** @swagger
+ * /apimobile/driver/notifications/push-preference:
+ *   get:
+ *     tags: [Driver Notifications]
+ *     summary: Get push notification status for current driver
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Push preference retrieved
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Push notification preference fetched
+ *               data:
+ *                 id: 75
+ *                 userType: driver
+ *                 pushNotificationsEnabled: true
+ *   put:
+ *     tags: [Driver Notifications]
+ *     summary: Stop or activate push notifications for current driver
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [enabled]
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ *                 example: false
+ *                 description: false = stop notifications, true = activate notifications
+ *     responses:
+ *       200:
+ *         description: Push preference updated
+ *         content:
+ *           application/json:
+ *             examples:
+ *               stop:
+ *                 value:
+ *                   success: true
+ *                   message: Push notifications stopped
+ *                   data:
+ *                     id: 75
+ *                     userType: driver
+ *                     pushNotificationsEnabled: false
+ *               activate:
+ *                 value:
+ *                   success: true
+ *                   message: Push notifications activated
+ *                   data:
+ *                     id: 75
+ *                     userType: driver
+ *                     pushNotificationsEnabled: true
+ *       400:
+ *         description: enabled must be true or false
+ */
+router.get("/notifications/push-preference", authenticate, getMyPushNotificationPreference);
+router.put("/notifications/push-preference", authenticate, setMyPushNotificationPreference);
 
 // =============================================================================
 //  15 — STATIC PAGES
