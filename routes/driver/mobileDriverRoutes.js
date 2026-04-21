@@ -29,6 +29,7 @@ import {
     getRejectionStatus,
     getMyStatus,
     goOnlineOffline,
+    deleteMyAccount,
 } from "../../controllers/driver/mobileDriverController.js";
 
 // ─── Rides lifecycle ─────────────────────────────────────────────────────────
@@ -466,6 +467,32 @@ router.get("/profile", authenticate, getMyProfile);
  *       200: { description: Updated }
  */
 router.put("/profile/update", authenticate, profileUpload, updateMyProfile);
+
+/** @swagger
+ * /apimobile/driver/profile/delete:
+ *   delete:
+ *     tags: [Driver Profile]
+ *     summary: Delete driver account (soft delete)
+ *     description: |
+ *       Marks driver account as deleted and logs the driver out from push targeting.
+ *       The account record is kept for audit/history.
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Driver account deleted
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Driver account deleted successfully
+ *               data:
+ *                 deleted: true
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Driver not found
+ */
+router.delete("/profile/delete", authenticate, deleteMyAccount);
 
 /** @swagger
  * /apimobile/driver/profile/status:

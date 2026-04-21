@@ -293,6 +293,23 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
     return successResponse(res, formatDriverResponse(driver, req), "Profile updated");
 });
 
+// ─── Delete Driver Account (soft delete) ─────────────────────────────────────
+export const deleteMyAccount = asyncHandler(async (req, res) => {
+    await prisma.user.update({
+        where: { id: req.user.id },
+        data: {
+            status: "deleted",
+            isOnline: false,
+            isAvailable: false,
+            pushNotificationsEnabled: false,
+            fcmToken: null,
+            playerId: null,
+        },
+    });
+
+    return successResponse(res, { deleted: true }, "Driver account deleted successfully");
+});
+
 // ─── Update Vehicle ──────────────────────────────────────────────────────────
 export const updateVehicle = asyncHandler(async (req, res) => {
     const { carModel, carColor, carPlateNumber, carProductionYear } = req.body;
