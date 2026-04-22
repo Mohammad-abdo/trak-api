@@ -57,11 +57,18 @@ export const saveDriverDocument = async (req, res) => {
         const { documentId, expireDate } = req.body;
         const driverId = req.user.userType === "driver" ? req.user.id : req.body.driverId;
 
+        // Get the uploaded file path
+        let documentImagePath = null;
+        if (req.file) {
+            documentImagePath = `/uploads/driver-documents/${req.file.filename}`;
+        }
+
         const document = await prisma.driverDocument.create({
             data: {
                 driver: { connect: { id: driverId } },
                 document: { connect: { id: parseInt(documentId) } },
                 expireDate: expireDate ? new Date(expireDate) : null,
+                documentImage: documentImagePath,
                 isVerified: false,
             },
             include: {
@@ -95,6 +102,11 @@ export const updateDriverDocument = async (req, res) => {
         if (documentId) updateData.documentId = parseInt(documentId);
         if (expireDate) updateData.expireDate = new Date(expireDate);
         if (isVerified !== undefined) updateData.isVerified = isVerified;
+        
+        // If a new file is uploaded, update the documentImage
+        if (req.file) {
+            updateData.documentImage = `/uploads/driver-documents/${req.file.filename}`;
+        }
 
         const document = await prisma.driverDocument.update({
             where: { id: parseInt(id) },

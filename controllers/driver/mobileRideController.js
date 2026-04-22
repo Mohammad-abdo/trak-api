@@ -545,6 +545,15 @@ export const cancelRide = asyncHandler(async (req, res) => {
         return errorResponse(res, "This ride is not assigned to your driver account", 403);
     }
 
+    // Check if ride can be cancelled
+    if (ride.status === "completed") {
+        return errorResponse(res, "Cannot cancel a completed ride", 400);
+    }
+
+    if (ride.status === "cancelled") {
+        return errorResponse(res, "Ride is already cancelled", 400);
+    }
+
     await prisma.rideRequest.update({
         where: { id: ride.id },
         data: { status: "cancelled", cancelBy: "driver", reason: reason || null, driverId: null },

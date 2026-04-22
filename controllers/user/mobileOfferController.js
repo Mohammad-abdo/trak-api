@@ -420,7 +420,7 @@ export const getTripStatus = async (req, res) => {
 export const cancelTrip = async (req, res) => {
     try {
         const riderId = req.user.id;
-        const { driver_id, booking_id } = req.body;
+        const { driver_id, booking_id, reason } = req.body;
         const driverId = driver_id ? parseDriverId(driver_id) : null;
         if (driver_id && !driverId) {
             return res.status(400).json({ success: false, message: 'Invalid driver_id' });
@@ -442,19 +442,23 @@ export const cancelTrip = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Booking not found' });
         }
 
-        if (['completed', 'cancelled'].includes(booking.status)) {
-            return res.status(400).json({ success: false, message: `Cannot cancel a ${booking.status} trip` });
+        if (booking.status === 'completed') {
+            return res.status(400).json({ success: false, message: 'Cannot cancel a completed trip' });
+        }
+
+        if (booking.status === 'cancelled') {
+            return res.status(400).json({ success: false, message: 'Trip is already cancelled' });
         }
 
         await prisma.rideRequest.update({
             where: { id: rideId },
-            data: { status: 'cancelled', cancelBy: 'rider' },
+            data: { status: 'cancelled', cancelBy: 'rider', reason: reason || null },
         });
 
         // Notify driver
         const io = req.app.get('io');
         if (io && driverId) {
-            io.to(`driver-${driverId}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider' });
+            io.to(`driver-${driverId}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider', reason });
         }
 
         return res.json({ success: true, message: 'Trip cancelled successfully' });
