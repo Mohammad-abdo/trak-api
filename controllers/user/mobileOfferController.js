@@ -126,32 +126,36 @@ export const getNearDrivers = async (req, res) => {
                 b.driver.isAvailable === true
         );
 
-        // Fallback: include offer created through driver `/rides/respond` negotiation flow
-        // when ride has a negotiated fare and assigned driver but no explicit bid row.
+        // Fallback: include driver who responded via `/rides/respond`
+        // Covers two sub-cases:
+        //   A) Driver counter-offered (negotiatedFare != null, status = negotiating)
+        //   B) Driver directly accepted (status = accepted, driverId set, no bid row)
         let respondFlowOffer = null;
-        if (booking.negotiatedFare != null && booking.driverId) {
-            const driver = await prisma.user.findUnique({
-                where: { id: booking.driverId },
-                select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                    latitude: true,
-                    longitude: true,
-                    status: true,
-                    isOnline: true,
-                    isAvailable: true,
-                    userDetail: { select: { carModel: true, carColor: true, carPlateNumber: true } },
-                },
-            });
+        if (booking.driverId) {
+            const alreadyInBids = activeBids.some((b) => b.driverId === booking.driverId);
+            if (!alreadyInBids) {
+                const driver = await prisma.user.findUnique({
+                    where: { id: booking.driverId },
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true,
+                        latitude: true,
+                        longitude: true,
+                        status: true,
+                        isOnline: true,
+                        isAvailable: true,
+                        userDetail: { select: { carModel: true, carColor: true, carPlateNumber: true } },
+                    },
+                });
 
-            if (driver && driver.status === 'active' && driver.isOnline === true && driver.isAvailable === true) {
-                const alreadyInBids = activeBids.some((b) => b.driverId === booking.driverId);
-                if (!alreadyInBids) {
+                if (driver && driver.status === 'active') {
                     respondFlowOffer = {
                         id: `respond-${booking.id}-${driver.id}`,
-                        bidAmount: booking.negotiatedFare,
+                        // For direct-accept: show original fare; for negotiation: show proposed fare
+                        bidAmount: booking.negotiatedFare ?? booking.totalAmount,
+                        isDirectAccept: booking.negotiatedFare == null,
                         createdAt: booking.updatedAt,
                         driver,
                     };
@@ -164,7 +168,7 @@ export const getNearDrivers = async (req, res) => {
         if (mergedOffers.length === 0) {
             return res.json({
                 success: true,
-                message: 'No negotiated offers yet',
+                message: 'No driver offers yet. Waiting for drivers to respond.',
                 data: [],
             });
         }
@@ -210,18 +214,19 @@ export const getNearDrivers = async (req, res) => {
                 avatar: fullImageUrl(req, d.avatar),
                 rate: ratingByDriverId.get(d.id)?.avg ?? null,
                 totalRatings: ratingByDriverId.get(d.id)?.count ?? 0,
-                price: b.bidAmount,
-                newPrice: b.bidAmount,
-                basePrice: booking.totalAmount,
+                offeredPrice: parseFloat(b.bidAmount),
+                basePrice: parseFloat(booking.totalAmount),
+                isDirectAccept: b.isDirectAccept ?? false,
                 vehicleType: d.userDetail?.carModel ?? 'Vehicle',
-                vehicleImage: null,
+                carColor: d.userDetail?.carColor ?? null,
+                carPlate: d.userDetail?.carPlateNumber ?? null,
                 currentLocation: { lat, lng },
                 distanceKm: Number.isFinite(distanceKm) ? Math.round(distanceKm * 100) / 100 : null,
                 respondedAt: b.createdAt,
             };
         });
 
-        return res.json({ success: true, message: 'Negotiated driver offers found', data });
+        return res.json({ success: true, message: 'Driver offers received', data });
     } catch (error) {
         console.error('Get near drivers error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to get nearby drivers' });
@@ -256,6 +261,13 @@ export const acceptDriver = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Booking not found' });
         }
 
+        if (!['pending', 'accepted', 'negotiating', 'scheduled'].includes(booking.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot accept driver on a ride with status '${booking.status}'`,
+            });
+        }
+
         const tripCode = `TRP${Date.now()}`;
 
         const updated = await prisma.rideRequest.update({
@@ -263,7 +275,8 @@ export const acceptDriver = async (req, res) => {
             data: {
                 driverId,
                 status: 'accepted',
-                otp: tripCode.slice(-6),
+                negotiationStatus: booking.negotiationStatus === 'pending' ? 'accepted' : booking.negotiationStatus,
+                otp: booking.otp || tripCode.slice(-6),
             },
             select: {
                 id: true,
