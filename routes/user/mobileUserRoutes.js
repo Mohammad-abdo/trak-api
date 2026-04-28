@@ -6,6 +6,8 @@ import { authenticate } from '../../middleware/auth.js';
 
 // Auth
 import { login, register, sendOtp, submitOtp, resendOtp, forgotPassword, resetPassword, logout, currentUserLocation } from '../../controllers/user/mobileAuthController.js';
+// Social Auth (Google & Facebook)
+import { googleSignIn, facebookSignIn } from '../../controllers/user/mobileSocialAuthController.js';
 // Home
 import { sliderOffers, getAllServices as homeGetAllServices, getLastCurrentUserBooking } from '../../controllers/user/mobileHomeController.js';
 // Services
@@ -195,6 +197,127 @@ const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
  *                 message: { type: string, example: "Account not verified. Please verify your account first." }
  */
 router.post('/auth/login', login);
+
+/**
+ * @swagger
+ * /apimobile/user/auth/google:
+ *   post:
+ *     tags: [Auth]
+ *     operationId: googleSignIn
+ *     summary: Sign in / register with Google
+ *     description: |
+ *       **Flutter flow:**
+ *       1. Use the `google_sign_in` Flutter package to start the Google OAuth flow.
+ *       2. After the user signs in, get the `idToken` from `GoogleSignInAuthentication`.
+ *       3. Send it here. The backend verifies it with Google and returns a JWT token.
+ *
+ *       ```dart
+ *       final GoogleSignInAccount? account = await GoogleSignIn().signIn();
+ *       final GoogleSignInAuthentication auth = await account!.authentication;
+ *       final idToken = auth.idToken; // ← send this
+ *       ```
+ *
+ *       **Google Client ID (Android/iOS):**
+ *       `910278817773-apfpnjhtb754am6othj9q0fqm9u5us1p.apps.googleusercontent.com`
+ *
+ *       **Behaviour:**
+ *       - If the Google account already exists in the system → logs in and returns token.
+ *       - If the email matches an existing account → links Google to that account.
+ *       - If completely new → creates a new rider account (auto-verified, no OTP needed).
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [idToken]
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *                 description: Google ID token from google_sign_in Flutter package
+ *                 example: "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+ *     responses:
+ *       200:
+ *         description: Sign-in successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Google sign-in successful" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, description: "JWT token for all subsequent requests" }
+ *                     user:
+ *                       $ref: '#/components/schemas/UserFull'
+ *       400: { description: Missing idToken }
+ *       401: { description: Invalid or expired Google token }
+ *       403: { description: Account is banned/suspended }
+ */
+router.post('/auth/google', googleSignIn);
+
+/**
+ * @swagger
+ * /apimobile/user/auth/facebook:
+ *   post:
+ *     tags: [Auth]
+ *     operationId: facebookSignIn
+ *     summary: Sign in / register with Facebook
+ *     description: |
+ *       **Flutter flow:**
+ *       1. Use the `flutter_facebook_auth` Flutter package to start the Facebook login flow.
+ *       2. After login, get the `accessToken` from `LoginResult`.
+ *       3. Send it here. The backend calls the Facebook Graph API to verify and get user info.
+ *
+ *       ```dart
+ *       final LoginResult result = await FacebookAuth.instance.login();
+ *       final accessToken = result.accessToken!.token; // ← send this
+ *       ```
+ *
+ *       **Behaviour:**
+ *       - If the Facebook account already exists → logs in and returns token.
+ *       - If the email matches an existing account → links Facebook to that account.
+ *       - If completely new → creates a new rider account (auto-verified, no OTP needed).
+ *
+ *       **Note:** Facebook does not always return an email (user may have phone-only account).
+ *       If no email is returned, the account is still created using the Facebook user ID.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [accessToken]
+ *             properties:
+ *               accessToken:
+ *                 type: string
+ *                 description: Facebook access token from flutter_facebook_auth package
+ *                 example: "EAABsbCS1iHgBAMZD..."
+ *     responses:
+ *       200:
+ *         description: Sign-in successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "Facebook sign-in successful" }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     token: { type: string, description: "JWT token for all subsequent requests" }
+ *                     user:
+ *                       $ref: '#/components/schemas/UserFull'
+ *       400: { description: Missing accessToken }
+ *       401: { description: Invalid or expired Facebook token }
+ *       403: { description: Account is banned/suspended }
+ */
+router.post('/auth/facebook', facebookSignIn);
 
 /**
  * @swagger

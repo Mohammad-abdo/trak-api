@@ -362,8 +362,10 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
 
     // Format response data
     const formattedRides = await Promise.all(availableRides.map(async (ride) => {
-        // Calculate estimated price
         const estimatedPrice = await calculateEstimatedPrice(ride);
+
+        // Real system-calculated price (km × service rate). Falls back to stored amount.
+        const realPrice = estimatedPrice?.estimatedTotal ?? parseFloat(ride.totalAmount);
 
         return {
             id: ride.id,
@@ -396,14 +398,17 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
                 capacity: ride.service.vehicleCategory.capacity
             } : null,
             pricing: {
-                totalAmount: ride.totalAmount,
-                estimatedPrice: estimatedPrice,
+                realPrice,                        // km × service rate (the authoritative price)
+                userRequestedPrice: parseFloat(ride.totalAmount),
+                breakdown: estimatedPrice?.breakdown ?? null,
+                currency: estimatedPrice?.currency ?? "SAR",
                 baseFare: ride.baseFare,
-                distance: ride.distance,
+                tripDistanceKm: estimatedPrice?.breakdown?.distance ?? null,
+                perKmRate: estimatedPrice?.breakdown?.perKmRate ?? null,
                 duration: ride.duration,
                 paymentType: ride.paymentType
             },
-            distance: ride.distance, // Distance from driver to pickup
+            distance: ride.distance,
             createdAt: ride.createdAt,
             isScheduled: ride.isSchedule,
             scheduledTime: ride.scheduleDatetime
@@ -706,6 +711,152 @@ export const applyBid = asyncHandler(async (req, res) => {
     await prisma.rideRequest.update({ where: { id: ride.id }, data: { rideHasBid: true } });
 
     return successResponse(res, null, "Bid applied successfully");
+});
+
+// ─── Driver Proposes a Negotiation Price to the Rider ────────────────────────
+// POST /negotiation/propose
+// Driver sends ONE price offer on an unassigned ride. Rider must accept/reject.
+export const driverProposeNegotiation = asyncHandler(async (req, res) => {
+    const { rideRequestId, proposedFare } = req.body;
+    if (!rideRequestId || proposedFare == null) {
+        return errorResponse(res, "rideRequestId and proposedFare are required", 400);
+    }
+    const rideId = parseRideRequestIdParam(rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+
+    const parsedFare = parseFloat(proposedFare);
+    if (!Number.isFinite(parsedFare) || parsedFare <= 0) {
+        return errorResponse(res, "proposedFare must be a positive number", 400);
+    }
+
+    const ride = await prisma.rideRequest.findUnique({
+        where: { id: rideId },
+        include: {
+            service: { include: { vehicleCategory: true } }
+        }
+    });
+    if (!ride) return errorResponse(res, "Ride request not found", 404);
+
+    if (ride.driverId && ride.driverId !== req.user.id) {
+        return errorResponse(res, "This ride is already taken by another driver", 409);
+    }
+    if (!["pending", "scheduled"].includes(ride.status)) {
+        return errorResponse(res, `Cannot negotiate on a ride with status '${ride.status}'`, 400);
+    }
+
+    // Calculate the real system price (km × service rate) to anchor the negotiation
+    let realPrice = parseFloat(ride.totalAmount);
+    let priceBreakdown = null;
+    if (ride.startLatitude && ride.startLongitude && ride.endLatitude && ride.endLongitude) {
+        const tripDistance = calculateDistance(
+            parseFloat(ride.startLatitude), parseFloat(ride.startLongitude),
+            parseFloat(ride.endLatitude), parseFloat(ride.endLongitude)
+        );
+        const vehicleCategoryId = ride.service?.vehicleCategory?.id || ride.vehicleCategoryId;
+        if (vehicleCategoryId) {
+            const priceResult = await calculateTripPrice(vehicleCategoryId, tripDistance, ride.duration || 0, 0);
+            if (priceResult.success) {
+                realPrice = priceResult.totalAmount;
+                priceBreakdown = priceResult.breakdown;
+            }
+        }
+    }
+
+    const percentChange = Math.round(((parsedFare - realPrice) / realPrice) * 10000) / 100;
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5-minute window for rider response
+
+    await prisma.$transaction([
+        prisma.rideRequest.update({
+            where: { id: ride.id },
+            data: {
+                driverId: req.user.id,
+                negotiatedFare: parsedFare,
+                negotiationStatus: "pending",
+                lastNegotiationBy: "driver",
+                negotiationRounds: 1,
+                negotiationExpiresAt: expiresAt,
+            },
+        }),
+        prisma.rideNegotiation.create({
+            data: {
+                rideRequestId: ride.id,
+                proposedBy: "driver",
+                proposedFare: parsedFare,
+                percentChange,
+                action: "propose",
+                round: 1,
+            },
+        }),
+    ]);
+
+    try {
+        const { emitToUser } = await import("../../utils/socketService.js");
+        const io = req.app.get("io") || global.io;
+        if (io) emitToUser(io, ride.riderId, "ride-negotiation-offer", {
+            rideRequestId: ride.id,
+            driverId: req.user.id,
+            proposedFare: parsedFare,
+            realPrice,
+            originalFare: parseFloat(ride.totalAmount),
+            expiresAt,
+        });
+    } catch (_) {}
+
+    return successResponse(res, {
+        rideRequestId: ride.id,
+        proposedFare: parsedFare,
+        realPrice,
+        originalFare: parseFloat(ride.totalAmount),
+        priceBreakdown,
+        percentChange,
+        negotiationStatus: "pending",
+        expiresAt,
+    }, "Negotiation offer sent to rider. Waiting for their response.");
+});
+
+// ─── Driver Polls Negotiation Status ─────────────────────────────────────────
+// GET /negotiation/status/:rideRequestId
+// Returns whether the rider accepted, rejected, or has not yet responded.
+export const checkNegotiationStatus = asyncHandler(async (req, res) => {
+    const rideId = parseRideRequestIdParam(req.params.rideRequestId);
+    if (!rideId) return errorResponse(res, "Invalid rideRequestId", 400);
+
+    const ride = await prisma.rideRequest.findUnique({
+        where: { id: rideId },
+        select: {
+            id: true,
+            driverId: true,
+            riderId: true,
+            status: true,
+            totalAmount: true,
+            negotiatedFare: true,
+            negotiationStatus: true,
+            negotiationExpiresAt: true,
+            lastNegotiationBy: true,
+        }
+    });
+    if (!ride) return errorResponse(res, "Ride request not found", 404);
+    if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
+
+    let currentStatus = ride.negotiationStatus;
+
+    // Auto-expire if window passed without rider response
+    if (currentStatus === "pending" && ride.negotiationExpiresAt && new Date() > new Date(ride.negotiationExpiresAt)) {
+        currentStatus = "expired";
+        await prisma.rideRequest.update({
+            where: { id: ride.id },
+            data: { negotiationStatus: "expired", driverId: null },
+        });
+    }
+
+    return successResponse(res, {
+        rideRequestId: ride.id,
+        negotiationStatus: currentStatus,         // pending | accepted | rejected | expired
+        originalFare: parseFloat(ride.totalAmount),
+        negotiatedFare: ride.negotiatedFare != null ? parseFloat(ride.negotiatedFare) : null,
+        rideStatus: ride.status,
+        expiresAt: ride.negotiationExpiresAt,
+    });
 });
 
 // Update driver location during a ride

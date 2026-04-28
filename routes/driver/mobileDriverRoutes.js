@@ -43,9 +43,10 @@ import {
     rateRider,
     getMyRatings,
     getEarningsSummary,
-    applyBid,
     updateLocation,
     getAvailableRides,
+    driverProposeNegotiation,
+    checkNegotiationStatus,
 } from "../../controllers/driver/mobileRideController.js";
 
 // ─── Wallet ──────────────────────────────────────────────────────────────────
@@ -65,9 +66,6 @@ import {
     getMyPushNotificationPreference,
     setMyPushNotificationPreference,
 } from "../../controllers/notificationPreferenceController.js";
-
-// ─── Negotiation ─────────────────────────────────────────────────────────────
-import { getSettings as getNegotiationSettings, counterOffer, acceptNegotiation, rejectNegotiation, getNegotiationHistory } from "../../controllers/negotiationController.js";
 
 // ─── Static pages ────────────────────────────────────────────────────────────
 import { getPrivacyPolicy, getHelpCenter, getTerms } from "../../controllers/user/mobileStaticController.js";
@@ -888,15 +886,28 @@ router.get("/rides/:id", authenticate, getRideDetail);
  * /apimobile/driver/rides/respond:
  *   post:
  *     tags: [Driver Rides]
- *     summary: Accept, reject, or negotiate ride request price
- *     deprecated: true
+ *     summary: Accept or reject a ride request (with optional price negotiation)
  *     description: |
- *       تنبيه: هذا المسار للتوافق (Wrapper/Legacy) وقد يسبب تضاربًا مع مسارات التفاوض الرسمية.
- *       المسارات الرسمية للتفاوض هي:
- *       `/apimobile/driver/negotiation/counter` و `/apimobile/driver/negotiation/accept` و `/apimobile/driver/negotiation/reject`.
+ *       Single endpoint for the driver's response to a ride request. Supports three actions:
  *
- *       Driver can accept ride directly, reject with reason, or propose different fare.
- *       If proposing different fare, creates negotiation record and notifies rider.
+ *       **1. Direct Accept (no negotiation)**
+ *       Send `accept: true` without `proposedFare`. The ride is immediately assigned to the driver.
+ *       ```json
+ *       { "rideRequestId": 42, "accept": true }
+ *       ```
+ *
+ *       **2. Accept with a price counter-offer**
+ *       Send `accept: true` with `proposedFare`. The ride enters negotiation — the rider is notified
+ *       and must accept or reject the driver's price. Use `GET /negotiation/status/:id` to poll.
+ *       ```json
+ *       { "rideRequestId": 42, "accept": true, "proposedFare": 85.0 }
+ *       ```
+ *
+ *       **3. Reject**
+ *       Send `accept: false`. The driver is added to the rejected list; the ride stays visible to others.
+ *       ```json
+ *       { "rideRequestId": 42, "accept": false, "rejectReason": "Too far" }
+ *       ```
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -906,27 +917,50 @@ router.get("/rides/:id", authenticate, getRideDetail);
  *             type: object
  *             required: [rideRequestId, accept]
  *             properties:
- *               rideRequestId: { type: string, format: uuid, example: "123e4567-e89b-12d3-a456-426614174000" }
- *               accept: { type: boolean, example: true, description: "Whether to accept the ride" }
- *               proposedFare: { type: number, format: float, example: 25.50, description: "Optional: proposed fare if different from original" }
- *               rejectReason: { type: string, example: "Too far from my location", description: "Required if accept=false: reason for rejection" }
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 42
+ *                 description: Numeric ride request ID from GET /rides/available
+ *               accept:
+ *                 type: boolean
+ *                 example: true
+ *                 description: true = accept (direct or with counter-offer) | false = reject
+ *               proposedFare:
+ *                 type: number
+ *                 format: float
+ *                 example: 85.0
+ *                 description: Optional — include only when proposing a different price. Omit for direct accept.
+ *               rejectReason:
+ *                 type: string
+ *                 example: "Too far from my location"
+ *                 description: Optional reason when accept=false
  *     responses:
  *       200:
- *         description: Response based on action taken
+ *         description: Response depends on the action taken
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data:
- *                   type: object
- *                   properties:
- *                     rideRequestId: { type: integer }
- *                     status: { type: string, enum: [accepted, rejected, negotiating] }
- *                     proposedFare: { type: number, format: float }
- *                     reason: { type: string }
- *                 message: { type: string }
+ *             examples:
+ *               directAccept:
+ *                 summary: Direct accept
+ *                 value:
+ *                   success: true
+ *                   data: { rideRequestId: 42, status: accepted }
+ *                   message: Ride accepted successfully
+ *               negotiating:
+ *                 summary: Counter-offer sent to rider
+ *                 value:
+ *                   success: true
+ *                   data: { rideRequestId: 42, status: negotiating, proposedFare: 85.0 }
+ *                   message: Counter offer sent to rider
+ *               rejected:
+ *                 summary: Ride rejected
+ *                 value:
+ *                   success: true
+ *                   data: { rideRequestId: 42, status: rejected, reason: "Too far" }
+ *                   message: Ride rejected
+ *       400: { description: Missing rideRequestId or invalid fare }
+ *       404: { description: Ride not found }
+ *       429: { description: Driver temporarily blocked due to too many rejections }
  */
 router.post("/rides/respond", authenticate, respondToRide);
 
@@ -1021,30 +1055,6 @@ router.post("/rides/cancel", authenticate, cancelRide);
  */
 router.post("/rides/rate-rider", authenticate, rateRider);
 
-/** @swagger
- * /apimobile/driver/rides/apply-bid:
- *   post:
- *     tags: [Driver Rides]
- *     summary: Apply bid on a ride request
- *     deprecated: true
- *     description: |
- *       ?????: ??? endpoint ???? ????? Bidding.
- *       ??????? ??????? ??? ????? ?????? ?????? `/negotiation/*` ???????.
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [rideRequestId, bidAmount]
- *             properties:
- *               rideRequestId: { type: string, format: uuid }
- *               bidAmount: { type: number, example: 85.0 }
- *     responses:
- *       200: { description: Bid applied }
- */
-router.post("/rides/apply-bid", authenticate, applyBid);
 
 // =============================================================================
 //  9 — RATINGS (received by driver)
@@ -1303,80 +1313,17 @@ router.get("/complaints/:id", authenticate, getComplaintDetail);
 // =============================================================================
 
 /** @swagger
- * /apimobile/driver/negotiation/settings:
- *   get:
- *     tags: [Driver Negotiation]
- *     summary: Get negotiation feature settings
- *     security: []
- *     responses:
- *       200: { description: Settings (enabled, maxPercent, maxRounds, timeout) }
- */
-/** @swagger
- * components:
- *   schemas:
- *     DriverNegotiationRouteStatus:
- *       type: object
- *       properties:
- *         endpoint:
- *           type: string
- *           example: /apimobile/driver/negotiation/counter
- *         status:
- *           type: string
- *           enum: [OFFICIAL, LEGACY, DEPRECATED]
- *           example: OFFICIAL
- *         note:
- *           type: string
- *           example: "???? ???? ??????? ?? ??? ??????"
- *         replacement:
- *           type: string
- *           nullable: true
- *           example: null
- *
- * /apimobile/driver/negotiation/route-status:
- *   get:
- *     tags: [Driver Negotiation]
- *     summary: Route Status Map (خريطة حالة المسارات)
- *     description: |
- *       Endpoint توثيقي داخل Swagger فقط لتوضيح المسارات الرسمية والقديمة.
- *       OFFICIAL = معتمد للتطوير الجديد.
- *       LEGACY/DEPRECATED = للتوافق فقط.
- *     security: []
- *     responses:
- *       200:
- *         description: Driver negotiation route status list
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 items:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/DriverNegotiationRouteStatus'
- *             example:
- *               items:
- *                 - endpoint: /apimobile/driver/negotiation/counter
- *                   status: OFFICIAL
- *                   note: "Counter-offer الرسمي"
- *                   replacement: null
- *                 - endpoint: /apimobile/driver/rides/respond
- *                   status: LEGACY
- *                   note: "Wrapper للتوافق"
- *                   replacement: /apimobile/driver/negotiation/counter
- *                 - endpoint: /apimobile/driver/rides/apply-bid
- *                   status: DEPRECATED
- *                   note: "Bidding قديم"
- *                   replacement: /apimobile/driver/negotiation/counter
- */router.get("/negotiation/settings", getNegotiationSettings);
-
-/** @swagger
- * /apimobile/driver/negotiation/counter:
+ * /apimobile/driver/negotiation/propose:
  *   post:
  *     tags: [Driver Negotiation]
- *     summary: Counter-offer on a ride fare
+ *     summary: Propose a fare to the rider
  *     description: |
- *       ?????? ?????? ?????? ??? ??? ???? ?? ??????.
- *       ????? ???????? ??? `/rides/respond` ? `/rides/apply-bid` ?? ?? ???? ????.
+ *       Driver sends ONE price offer on an unassigned pending ride.
+ *       The system attaches this driver to the ride and notifies the rider via socket (`ride-negotiation-offer`).
+ *       Use `GET /apimobile/driver/negotiation/status/{rideRequestId}` to poll for the rider's response.
+ *
+ *       The response includes `realPrice` — the authoritative price calculated from trip distance × the
+ *       service rate the rider chose — so the driver can see what the system fair price is before proposing.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1386,68 +1333,84 @@ router.get("/complaints/:id", authenticate, getComplaintDetail);
  *             type: object
  *             required: [rideRequestId, proposedFare]
  *             properties:
- *               rideRequestId: { type: string, format: uuid }
- *               proposedFare: { type: number, example: 95.0 }
+ *               rideRequestId:
+ *                 type: integer
+ *                 example: 42
+ *                 description: Numeric ride request ID from GET /apimobile/driver/rides/available
+ *               proposedFare:
+ *                 type: number
+ *                 example: 85.0
+ *                 description: The fare the driver is proposing (must be positive)
  *     responses:
- *       200: { description: Counter-offer submitted }
+ *       200:
+ *         description: Negotiation offer sent to rider
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     proposedFare: { type: number }
+ *                     realPrice: { type: number, description: "System-calculated price (km × service rate)" }
+ *                     originalFare: { type: number, description: "Price the rider originally set" }
+ *                     priceBreakdown: { type: object, nullable: true }
+ *                     percentChange: { type: number }
+ *                     negotiationStatus: { type: string, example: pending }
+ *                     expiresAt: { type: string, format: date-time }
+ *                 message: { type: string }
+ *       400: { description: Missing fields or invalid ride status }
+ *       404: { description: Ride not found }
+ *       409: { description: Ride already taken by another driver }
  */
-router.post("/negotiation/counter", authenticate, counterOffer);
+router.post("/negotiation/propose", authenticate, driverProposeNegotiation);
 
 /** @swagger
- * /apimobile/driver/negotiation/accept:
- *   post:
- *     tags: [Driver Negotiation]
- *     summary: Accept the negotiated fare
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [rideRequestId]
- *             properties:
- *               rideRequestId: { type: string, format: uuid }
- *     responses:
- *       200: { description: Fare accepted and locked }
- */
-router.post("/negotiation/accept", authenticate, acceptNegotiation);
-
-/** @swagger
- * /apimobile/driver/negotiation/reject:
- *   post:
- *     tags: [Driver Negotiation]
- *     summary: Reject negotiation — revert to base fare
- *     security: [{ bearerAuth: [] }]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [rideRequestId]
- *             properties:
- *               rideRequestId: { type: string, format: uuid }
- *     responses:
- *       200: { description: Negotiation rejected }
- */
-router.post("/negotiation/reject", authenticate, rejectNegotiation);
-
-/** @swagger
- * /apimobile/driver/negotiation/history/{rideRequestId}:
+ * /apimobile/driver/negotiation/status/{rideRequestId}:
  *   get:
  *     tags: [Driver Negotiation]
- *     summary: Get negotiation history for a ride
+ *     summary: Check if rider accepted or rejected the driver's offer
+ *     description: |
+ *       Poll this endpoint after calling `POST /negotiation/propose`.
+ *       Returns the current `negotiationStatus`:
+ *       - `pending` — rider has not responded yet
+ *       - `accepted` — rider accepted; proceed to pick up the ride
+ *       - `rejected` — rider rejected the offer
+ *       - `expired` — 5-minute window passed without a response (driver is automatically unlinked)
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: rideRequestId
  *         required: true
- *         schema: { type: string, format: uuid }
+ *         schema: { type: integer }
+ *         description: Numeric ride request ID
  *     responses:
- *       200: { description: Negotiation history }
+ *       200:
+ *         description: Current negotiation status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rideRequestId: { type: integer }
+ *                     negotiationStatus:
+ *                       type: string
+ *                       enum: [pending, accepted, rejected, expired]
+ *                     originalFare: { type: number }
+ *                     negotiatedFare: { type: number, nullable: true }
+ *                     rideStatus: { type: string }
+ *                     expiresAt: { type: string, format: date-time, nullable: true }
+ *       403: { description: Not authorized (ride not assigned to this driver) }
+ *       404: { description: Ride not found }
  */
-router.get("/negotiation/history/:rideRequestId", authenticate, getNegotiationHistory);
+router.get("/negotiation/status/:rideRequestId", authenticate, checkNegotiationStatus);
 
 // =============================================================================
 //  14 — NOTIFICATIONS
