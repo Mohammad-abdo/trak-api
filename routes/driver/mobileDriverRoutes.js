@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -889,7 +889,12 @@ router.get("/rides/:id", authenticate, getRideDetail);
  *   post:
  *     tags: [Driver Rides]
  *     summary: Accept, reject, or negotiate ride request price
+ *     deprecated: true
  *     description: |
+ *       تنبيه: هذا المسار للتوافق (Wrapper/Legacy) وقد يسبب تضاربًا مع مسارات التفاوض الرسمية.
+ *       المسارات الرسمية للتفاوض هي:
+ *       `/apimobile/driver/negotiation/counter` و `/apimobile/driver/negotiation/accept` و `/apimobile/driver/negotiation/reject`.
+ *
  *       Driver can accept ride directly, reject with reason, or propose different fare.
  *       If proposing different fare, creates negotiation record and notifies rider.
  *     security: [{ bearerAuth: [] }]
@@ -1021,6 +1026,10 @@ router.post("/rides/rate-rider", authenticate, rateRider);
  *   post:
  *     tags: [Driver Rides]
  *     summary: Apply bid on a ride request
+ *     deprecated: true
+ *     description: |
+ *       ?????: ??? endpoint ???? ????? Bidding.
+ *       ??????? ??????? ??? ????? ?????? ?????? `/negotiation/*` ???????.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1302,13 +1311,72 @@ router.get("/complaints/:id", authenticate, getComplaintDetail);
  *     responses:
  *       200: { description: Settings (enabled, maxPercent, maxRounds, timeout) }
  */
-router.get("/negotiation/settings", getNegotiationSettings);
+/** @swagger
+ * components:
+ *   schemas:
+ *     DriverNegotiationRouteStatus:
+ *       type: object
+ *       properties:
+ *         endpoint:
+ *           type: string
+ *           example: /apimobile/driver/negotiation/counter
+ *         status:
+ *           type: string
+ *           enum: [OFFICIAL, LEGACY, DEPRECATED]
+ *           example: OFFICIAL
+ *         note:
+ *           type: string
+ *           example: "???? ???? ??????? ?? ??? ??????"
+ *         replacement:
+ *           type: string
+ *           nullable: true
+ *           example: null
+ *
+ * /apimobile/driver/negotiation/route-status:
+ *   get:
+ *     tags: [Driver Negotiation]
+ *     summary: Route Status Map (خريطة حالة المسارات)
+ *     description: |
+ *       Endpoint توثيقي داخل Swagger فقط لتوضيح المسارات الرسمية والقديمة.
+ *       OFFICIAL = معتمد للتطوير الجديد.
+ *       LEGACY/DEPRECATED = للتوافق فقط.
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Driver negotiation route status list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DriverNegotiationRouteStatus'
+ *             example:
+ *               items:
+ *                 - endpoint: /apimobile/driver/negotiation/counter
+ *                   status: OFFICIAL
+ *                   note: "Counter-offer الرسمي"
+ *                   replacement: null
+ *                 - endpoint: /apimobile/driver/rides/respond
+ *                   status: LEGACY
+ *                   note: "Wrapper للتوافق"
+ *                   replacement: /apimobile/driver/negotiation/counter
+ *                 - endpoint: /apimobile/driver/rides/apply-bid
+ *                   status: DEPRECATED
+ *                   note: "Bidding قديم"
+ *                   replacement: /apimobile/driver/negotiation/counter
+ */router.get("/negotiation/settings", getNegotiationSettings);
 
 /** @swagger
  * /apimobile/driver/negotiation/counter:
  *   post:
  *     tags: [Driver Negotiation]
  *     summary: Counter-offer on a ride fare
+ *     description: |
+ *       ?????? ?????? ?????? ??? ??? ???? ?? ??????.
+ *       ????? ???????? ??? `/rides/respond` ? `/rides/apply-bid` ?? ?? ???? ????.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1533,3 +1601,8 @@ router.get("/static/terms", authenticate, getTerms);
 router.get("/static/help-center", authenticate, getHelpCenter);
 
 export default router;
+
+
+
+
+

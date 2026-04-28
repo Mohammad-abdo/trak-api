@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import { getDriverSearchRadius, getDriverRejectionCooldownDuration } from "../../utils/settingsHelper.js";
+import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
 
 /**
  * Check if driver is currently blocked from rejecting rides
@@ -114,28 +115,50 @@ export const respondToRide = asyncHandler(async (req, res) => {
     if (accept) {
         // Check if driver proposed a different fare (negotiation)
         if (proposedFare && parseFloat(proposedFare) !== parseFloat(ride.totalAmount)) {
-            // Create negotiation record
-            await prisma.negotiation.create({
-                data: {
-                    rideRequestId: ride.id,
-                    driverId: req.user.id,
-                    riderId: ride.riderId,
-                    originalFare: ride.totalAmount,
-                    proposedFare: parseFloat(proposedFare),
-                    status: "pending",
-                    type: "driver_offer"
-                }
-            });
+            const parsedFare = parseFloat(proposedFare);
+            if (!Number.isFinite(parsedFare) || parsedFare <= 0) {
+                return errorResponse(res, "Invalid proposedFare", 400);
+            }
 
-            // Update ride status to show negotiation is in progress
-            await prisma.rideRequest.update({
-                where: { id: ride.id },
-                data: {
-                    driverId: req.user.id,
-                    status: "negotiating",
-                    negotiationStatus: "pending"
-                },
-            });
+            const settings = await getNegotiationSettings();
+            if (!settings.enabled) {
+                return errorResponse(res, "Negotiation is disabled", 403);
+            }
+
+            const { valid, percentChange, message } = validateFareBounds(
+                parseFloat(ride.totalAmount),
+                parsedFare,
+                settings.maxPercent
+            );
+            if (!valid) return errorResponse(res, message, 400);
+
+            const expiresAt = computeExpiresAt(settings.timeoutSeconds);
+
+            await prisma.$transaction([
+                prisma.rideNegotiation.create({
+                    data: {
+                        rideRequestId: ride.id,
+                        proposedBy: "driver",
+                        proposedFare: parsedFare,
+                        percentChange,
+                        action: "counter",
+                        round: (ride.negotiationRounds || 0) + 1,
+                    },
+                }),
+                prisma.rideRequest.update({
+                    where: { id: ride.id },
+                    data: {
+                        driverId: req.user.id,
+                        status: "negotiating",
+                        negotiatedFare: parsedFare,
+                        negotiationStatus: "pending",
+                        lastNegotiationBy: "driver",
+                        negotiationRounds: (ride.negotiationRounds || 0) + 1,
+                        negotiationMaxPercent: settings.maxPercent,
+                        negotiationExpiresAt: expiresAt,
+                    },
+                }),
+            ]);
 
             // Notify rider about the counter offer
             try {
@@ -144,15 +167,16 @@ export const respondToRide = asyncHandler(async (req, res) => {
                 if (io) emitToUser(io, ride.riderId, "ride-negotiation-offer", {
                     rideRequestId: ride.id,
                     driverId: req.user.id,
-                    proposedFare: parseFloat(proposedFare),
-                    originalFare: ride.totalAmount
+                    proposedFare: parsedFare,
+                    originalFare: ride.totalAmount,
+                    expiresAt,
                 });
             } catch (_) {}
 
             return successResponse(res, {
                 rideRequestId: ride.id,
                 status: "negotiating",
-                proposedFare: parseFloat(proposedFare)
+                proposedFare: parsedFare
             }, "Counter offer sent to rider");
         } else {
             // Direct acceptance without negotiation
@@ -245,14 +269,25 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
     const driverLat = parseFloat(latitude);
     const driverLng = parseFloat(longitude);
     const searchRadius = await getDriverSearchRadius();
+    const now = new Date();
+    const scheduleOpenAt = new Date(now.getTime() + 30 * 60 * 1000); // show scheduled rides in next 30 min
 
     // Get pending ride requests
     const pendingRides = await prisma.rideRequest.findMany({
         where: {
-            status: "pending",
             driverId: null, // Not yet assigned to any driver
             startLatitude: { not: null },
             startLongitude: { not: null },
+            // Defensive guard: if a payment record exists, this ride should not be offered again.
+            payments: { none: {} },
+            OR: [
+                // Normal/immediate bookings
+                { status: "pending", isSchedule: false },
+                // Backward-compat: scheduled but still pending
+                { status: "pending", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
+                // Special/scheduled bookings in scheduled state
+                { status: "scheduled", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
+            ],
         },
         include: {
             rider: {

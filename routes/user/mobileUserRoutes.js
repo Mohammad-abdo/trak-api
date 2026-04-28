@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -804,6 +804,19 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *   post:
  *     tags: [Booking]
  *     summary: Create a new booking
+ *     description: |
+ *       Supports two booking types **without breaking old clients**:
+ *
+ *       - **normal**: immediate booking (default)
+ *       - **special**: scheduled booking (must be in the future, minimum 30 minutes from now)
+ *
+ *       To create **special** booking send either:
+ *       - `bookingType: "special"` OR
+ *       - `isSpecial: true`
+ *
+ *       And provide schedule time via:
+ *       - `scheduledAt` OR
+ *       - `scheduleDatetime`
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -818,6 +831,29 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *               shipmentSize_id: { type: integer, nullable: true }
  *               shipmentWeight_id: { type: integer, nullable: true }
  *               paymentMethod: { type: integer, example: 0, description: "0=cash, or gateway ID" }
+ *               bookingType:
+ *                 type: string
+ *                 nullable: true
+ *                 enum: [normal, special]
+ *                 example: special
+ *                 description: "Optional. If omitted, defaults to normal."
+ *               isSpecial:
+ *                 type: boolean
+ *                 nullable: true
+ *                 example: true
+ *                 description: "Optional legacy flag. true means bookingType=special."
+ *               scheduledAt:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
+ *                 example: "2026-05-01T14:30:00.000Z"
+ *                 description: "For special booking only. Must be >= now + 30 minutes."
+ *               scheduleDatetime:
+ *                 type: string
+ *                 format: date-time
+ *                 nullable: true
+ *                 example: "2026-05-01T14:30:00.000Z"
+ *                 description: "Alias for scheduledAt (for special booking)."
  *               from:
  *                 type: object
  *                 properties:
@@ -834,8 +870,44 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *     responses:
  *       201:
  *         description: Booking created
+ *         content:
+ *           application/json:
+ *             examples:
+ *               normal:
+ *                 summary: Normal (immediate) booking
+ *                 value:
+ *                   success: true
+ *                   message: Booking created
+ *                   data:
+ *                     id: 123
+ *                     status: pending
+ *                     isSchedule: false
+ *                     scheduleDatetime: null
+ *               special:
+ *                 summary: Special (scheduled) booking
+ *                 value:
+ *                   success: true
+ *                   message: Booking scheduled
+ *                   data:
+ *                     id: 124
+ *                     status: scheduled
+ *                     isSchedule: true
+ *                     scheduleDatetime: "2026-05-01T14:30:00.000Z"
  *       400:
  *         description: Missing required fields
+ *       422:
+ *         description: Schedule validation failed (special booking)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               invalidDate:
+ *                 value:
+ *                   success: false
+ *                   message: "Invalid scheduleDatetime/scheduledAt"
+ *               tooSoon:
+ *                 value:
+ *                   success: false
+ *                   message: "Scheduled time must be at least 30 minutes from now"
  */
 router.post('/booking/create', authenticate, createBooking);
 
@@ -955,7 +1027,7 @@ router.post('/booking/create', authenticate, createBooking);
  * /apimobile/user/offers/near-drivers:
  *   post:
  *     tags: [Offers]
- *     summary: Search for nearby drivers (progressive 1→5km). Returns empty with retry message if none found.
+ *     summary: ??? ???? ???????? ????? ?????? ????? ?????? ???? ?????
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -964,7 +1036,7 @@ router.post('/booking/create', authenticate, createBooking);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [booking_location, booking_id]
+ *             required: [booking_id]
  *             properties:
  *               booking_id: { type: string, format: uuid, example: "123e4567-e89b-12d3-a456-426614174000" }
  *               booking_location:
@@ -1149,6 +1221,11 @@ router.post('/offers/cancel-trip', authenticate, cancelTrip);
  *   post:
  *     tags: [Offers]
  *     summary: Mark trip as ended (completed)
+ *     deprecated: true
+ *     description: |
+ *       تنبيه: هذا endpoint قديم (Legacy) وموجود للتوافق فقط.
+ *       في التطبيقات الجديدة استخدم إنهاء الرحلة من جهة السائق عبر
+ *       `/apimobile/driver/rides/complete` لأنه المسار الأكثر اكتمالاً للحالة المالية والتشغيلية.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -1587,6 +1664,29 @@ router.get('/notifications', authenticate, getNotifications);
 
 /**
  * @swagger
+ * components:
+ *   schemas:
+ *     NegotiationRouteStatus:
+ *       type: object
+ *       properties:
+ *         endpoint:
+ *           type: string
+ *           example: /apimobile/user/negotiation/start
+ *         status:
+ *           type: string
+ *           enum: [OFFICIAL, LEGACY, DEPRECATED]
+ *           example: OFFICIAL
+ *         note:
+ *           type: string
+ *           example: "مسار رسمي للتطبيقات الجديدة"
+ *         replacement:
+ *           type: string
+ *           nullable: true
+ *           example: null
+ */
+
+/**
+ * @swagger
  * /apimobile/user/negotiation/settings:
  *   get:
  *     tags: [Negotiation]
@@ -1612,6 +1712,42 @@ router.get('/notifications', authenticate, getNotifications);
  *                     maxPercent: { type: number, example: 20 }
  *                     maxRounds: { type: integer, example: 3 }
  *                     timeoutSeconds: { type: integer, example: 90 }
+ *
+ * /apimobile/user/negotiation/route-status:
+ *   get:
+ *     tags: [Negotiation]
+ *     summary: Route Status Map (خريطة حالة مسارات التفاوض)
+ *     description: |
+ *       تنبيه تنظيمي: هذا endpoint توثيقي فقط داخل Swagger لمساعدة الفريق.
+ *       OFFICIAL = المسار المعتمد للعملاء الجدد.
+ *       LEGACY/DEPRECATED = مسارات قديمة للتوافق ويُفضّل عدم استخدامها في التطوير الجديد.
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Route status list for negotiation-related endpoints
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/NegotiationRouteStatus'
+ *             example:
+ *               items:
+ *                 - endpoint: /apimobile/user/negotiation/start
+ *                   status: OFFICIAL
+ *                   note: "بدء التفاوض من الراكب"
+ *                   replacement: null
+ *                 - endpoint: /apimobile/user/negotiation/counter
+ *                   status: OFFICIAL
+ *                   note: "تبادل عروض السعر للطرفين"
+ *                   replacement: null
+ *                 - endpoint: /apimobile/user/offers/trip-end
+ *                   status: DEPRECATED
+ *                   note: "قديم للتوافق فقط"
+ *                   replacement: /apimobile/driver/rides/complete
  */
 router.get('/negotiation/settings', getNegotiationSettings);
 
@@ -1622,6 +1758,10 @@ router.get('/negotiation/settings', getNegotiationSettings);
  *     tags: [Negotiation]
  *     summary: Start negotiation — rider proposes a new fare
  *     description: |
+ *       ????? ??????: ??? ?? ?????? ?????? ???? ??????? ?? ??? ??????.
+ *       ?? ????? ??? `/apimobile/driver/rides/respond` ?????? ????? ?? ??????? ?????.
+ *
+
  *       Rider proposes a different fare (discount or boost within ±maxPercent of baseFare).
  *       Creates first negotiation round. Returns expiration time.
  *       **Requires negotiation to be enabled in settings.**
@@ -1680,6 +1820,10 @@ router.post('/negotiation/start', authenticate, startNegotiation);
  *     tags: [Negotiation]
  *     summary: Counter-offer — rider or driver proposes a different fare
  *     description: |
+ *       ?????: ??? ?? ?????? ?????? ?????? ?????? (Counter-offer) ???????.
+ *       ?? endpoints ????? ??? bids ????? Legacy ??????? ??? ????????? ?? ??????? ?????.
+ *
+
  *       Either party can submit a counter-offer if it's their turn.
  *       The fare must still be within ±maxPercent of the original baseFare.
  *       Round count increases; if maxRounds is reached, no more counters are allowed.
@@ -2459,3 +2603,9 @@ router.post('/sos-contacts', authenticate, addSosContact);
 router.delete('/sos-contacts/:id', authenticate, deleteSosContact);
 
 export default router;
+
+
+
+
+
+

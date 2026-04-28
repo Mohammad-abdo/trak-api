@@ -36,18 +36,19 @@ export const getNearDrivers = async (req, res) => {
     try {
         const { booking_location, booking_id } = req.body;
 
-        if (
-            !booking_location ||
-            booking_location.lat === undefined ||
-            booking_location.lng === undefined ||
-            !booking_id
-        ) {
-            return res.status(400).json({ success: false, message: 'booking_location (lat/lng) and booking_id are required' });
+        if (!booking_id) {
+            return res.status(400).json({ success: false, message: 'booking_id is required' });
         }
-        const bookingCoords = parseLatLng(booking_location.lat, booking_location.lng);
-        if (!bookingCoords) {
-            return res.status(400).json({ success: false, message: 'booking_location (lat/lng) and booking_id are required' });
+
+        const bookingCoords =
+            booking_location && booking_location.lat !== undefined && booking_location.lng !== undefined
+                ? parseLatLng(booking_location.lat, booking_location.lng)
+                : null;
+
+        if (booking_location && !bookingCoords) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_location lat/lng' });
         }
+
         const rideId = parseRideRequestIdParam(booking_id);
         if (!rideId) {
             return res.status(400).json({ success: false, message: 'Invalid booking_id' });
@@ -55,74 +56,172 @@ export const getNearDrivers = async (req, res) => {
 
         const booking = await prisma.rideRequest.findUnique({
             where: { id: rideId },
-            select: { id: true, vehicleCategoryId: true, totalAmount: true },
+            select: {
+                id: true,
+                vehicleCategoryId: true,
+                totalAmount: true,
+                riderId: true,
+                driverId: true,
+                negotiatedFare: true,
+                updatedAt: true,
+                isSchedule: true,
+                scheduleDatetime: true,
+            },
         });
 
         if (!booking) {
             return res.status(404).json({ success: false, message: 'Booking not found' });
         }
 
-        // Get all online, available drivers (riders with userType=rider are excluded)
-        const drivers = await prisma.user.findMany({
+        if (booking.riderId !== req.user.id) {
+            return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+        }
+
+        // Special/scheduled bookings: do not start driver offer search too early.
+        if (booking.isSchedule && booking.scheduleDatetime) {
+            const now = Date.now();
+            const scheduleAt = new Date(booking.scheduleDatetime).getTime();
+            const openWindowMs = 30 * 60 * 1000; // 30 minutes before scheduled time
+            if (scheduleAt - now > openWindowMs) {
+                return res.json({
+                    success: true,
+                    message: 'Special booking is scheduled for later. Driver offers will open 30 minutes before pickup time.',
+                    data: [],
+                });
+            }
+        }
+
+        // Only show drivers that sent a negotiated/bid price for this booking.
+        const bids = await prisma.rideRequestBid.findMany({
             where: {
-                userType: 'driver',
-                isOnline: true,
-                isAvailable: true,
-                status: 'active',
-                latitude: { not: null },
-                longitude: { not: null },
+                rideRequestId: rideId,
+                bidAmount: { not: null },
             },
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                latitude: true,
-                longitude: true,
-                userDetail: {
-                    select: { carModel: true, carColor: true, carPlateNumber: true },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                driver: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true,
+                        latitude: true,
+                        longitude: true,
+                        status: true,
+                        isOnline: true,
+                        isAvailable: true,
+                        userDetail: {
+                            select: { carModel: true, carColor: true, carPlateNumber: true },
+                        },
+                    },
                 },
             },
         });
 
-        const bLat = bookingCoords.lat;
-        const bLng = bookingCoords.lng;
+        const activeBids = bids.filter(
+            (b) =>
+                b.driver &&
+                b.driver.status === 'active' &&
+                b.driver.isOnline === true &&
+                b.driver.isAvailable === true
+        );
 
-        // Progressive search: 1km, 2km, 3km, 4km, 5km
-        const radii = [1, 2, 3, 4, 5];
-        let nearDrivers = [];
-
-        for (const radius of radii) {
-            nearDrivers = drivers.filter(d => {
-                const dLat = parseFloat(d.latitude);
-                const dLng = parseFloat(d.longitude);
-                if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) return false;
-                return haversineKm(bLat, bLng, dLat, dLng) <= radius;
+        // Fallback: include offer created through driver `/rides/respond` negotiation flow
+        // when ride has a negotiated fare and assigned driver but no explicit bid row.
+        let respondFlowOffer = null;
+        if (booking.negotiatedFare != null && booking.driverId) {
+            const driver = await prisma.user.findUnique({
+                where: { id: booking.driverId },
+                select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true,
+                    latitude: true,
+                    longitude: true,
+                    status: true,
+                    isOnline: true,
+                    isAvailable: true,
+                    userDetail: { select: { carModel: true, carColor: true, carPlateNumber: true } },
+                },
             });
 
-            if (nearDrivers.length > 0) break;
+            if (driver && driver.status === 'active' && driver.isOnline === true && driver.isAvailable === true) {
+                const alreadyInBids = activeBids.some((b) => b.driverId === booking.driverId);
+                if (!alreadyInBids) {
+                    respondFlowOffer = {
+                        id: `respond-${booking.id}-${driver.id}`,
+                        bidAmount: booking.negotiatedFare,
+                        createdAt: booking.updatedAt,
+                        driver,
+                    };
+                }
+            }
         }
 
-        if (nearDrivers.length === 0) {
+        const mergedOffers = respondFlowOffer ? [...activeBids, respondFlowOffer] : activeBids;
+
+        if (mergedOffers.length === 0) {
             return res.json({
-                success: false,
-                message: 'No drivers found within 5km. Please try again.',
+                success: true,
+                message: 'No negotiated offers yet',
                 data: [],
             });
         }
 
-        const data = nearDrivers.map(d => ({
-            id: d.id,
-            name: `${d.firstName || ''} ${d.lastName || ''}`.trim(),
-            avatar: fullImageUrl(req, d.avatar),
-            rate: 4.5, // TODO: calculate from RideRequestRating
-            price: booking.totalAmount,
-            vehicleType: d.userDetail?.carModel ?? 'Vehicle',
-            vehicleImage: null,
-            currentLocation: { lat: d.latitude, lng: d.longitude },
-        }));
+        // Resolve driver ratings in one query (avoid N+1).
+        const driverIds = Array.from(
+            new Set(
+                mergedOffers
+                    .map((b) => b?.driver?.id)
+                    .filter((id) => Number.isInteger(id) && id > 0)
+            )
+        );
 
-        return res.json({ success: true, message: 'Nearby drivers found', data });
+        const ratingByDriverId = new Map();
+        if (driverIds.length > 0) {
+            const stats = await prisma.rideRequestRating.groupBy({
+                by: ['driverId'],
+                where: { driverId: { in: driverIds }, ratingBy: 'rider' },
+                _avg: { rating: true },
+                _count: { rating: true },
+            });
+
+            stats.forEach((s) => {
+                ratingByDriverId.set(s.driverId, {
+                    avg: s._avg.rating != null ? Math.round(Number(s._avg.rating) * 100) / 100 : null,
+                    count: s._count.rating ?? 0,
+                });
+            });
+        }
+
+        const data = mergedOffers.map((b) => {
+            const d = b.driver;
+            const lat = d.latitude;
+            const lng = d.longitude;
+            const distanceKm =
+                bookingCoords && lat != null && lng != null
+                    ? haversineKm(bookingCoords.lat, bookingCoords.lng, parseFloat(lat), parseFloat(lng))
+                    : null;
+
+            return {
+                id: d.id,
+                name: `${d.firstName || ''} ${d.lastName || ''}`.trim(),
+                avatar: fullImageUrl(req, d.avatar),
+                rate: ratingByDriverId.get(d.id)?.avg ?? null,
+                totalRatings: ratingByDriverId.get(d.id)?.count ?? 0,
+                price: b.bidAmount,
+                newPrice: b.bidAmount,
+                basePrice: booking.totalAmount,
+                vehicleType: d.userDetail?.carModel ?? 'Vehicle',
+                vehicleImage: null,
+                currentLocation: { lat, lng },
+                distanceKm: Number.isFinite(distanceKm) ? Math.round(distanceKm * 100) / 100 : null,
+                respondedAt: b.createdAt,
+            };
+        });
+
+        return res.json({ success: true, message: 'Negotiated driver offers found', data });
     } catch (error) {
         console.error('Get near drivers error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to get nearby drivers' });
@@ -210,7 +309,7 @@ export const acceptDriver = async (req, res) => {
                 booking_id: updated.id,
                 trip_code: updated.otp,
                 price: updated.totalAmount,
-                tripStatus: { status: 'pending' },
+                tripStatus: { status: 'accepted' },
                 from: { lat: updated.startLatitude, lng: updated.startLongitude, address: updated.startAddress },
                 to: { lat: updated.endLatitude, lng: updated.endLongitude, address: updated.endAddress },
                 driverInfo: updated.driver ? {
@@ -577,7 +676,7 @@ export const rateDriver = async (req, res) => {
     }
 };
 
-const ACTIVE_RIDE_STATUSES = ['pending', 'accepted', 'arrived', 'arrived_at_pickup', 'in_progress', 'ongoing', 'started'];
+const ACTIVE_RIDE_STATUSES = ['pending', 'accepted', 'arrived', 'arrived_at_pickup', 'in_progress', 'ongoing', 'started', 'negotiating'];
 
 // @desc    Get the rider's currently active (ongoing) ride, if any
 // @route   GET /apimobile/user/offers/active-ride

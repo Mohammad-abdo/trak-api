@@ -16,7 +16,10 @@ import { parseRideRequestIdParam } from "./rideRequestId.js";
 // file needs to change.
 export const CHAT_WRITABLE_STATUSES = new Set([
     "accepted",
+    "negotiating",
+    "counter_offered",
     "arrived",
+    "arrived_at_pickup",
     "started",
     "ongoing",
     "in_progress",
@@ -80,9 +83,13 @@ export async function resolveRideChatAccess(user, rawRideId, opts = {}) {
     }
 
     const status = (ride.status || "").toLowerCase();
+    const hasAssignedDriver = ride.driverId != null;
 
     if (requireWrite) {
-        if (!CHAT_WRITABLE_STATUSES.has(status)) {
+        // Compatibility: some flows keep status as "pending" briefly even after
+        // assigning a driver; allow chat only when both parties are already bound.
+        const pendingButAssigned = status === "pending" && hasAssignedDriver;
+        if (!CHAT_WRITABLE_STATUSES.has(status) && !pendingButAssigned) {
             return {
                 ok: false,
                 statusCode: 403,

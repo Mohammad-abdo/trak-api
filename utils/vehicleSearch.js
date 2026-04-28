@@ -1,7 +1,5 @@
-import Prisma from '@prisma/client';
-const { PrismaClient } = Prisma;
-const prisma = new PrismaClient();
-import { calculateDistance } from './pricingCalculator.js';
+import prisma from "./prisma.js";
+import { calculateDistance } from "./pricingCalculator.js";
 
 /**
  * Check if a point is within a geographic zone
@@ -99,8 +97,10 @@ export const findCategoriesByLocation = async (lat, lng) => {
  * @param {Object} filters - Optional filters (vehicle types, features)
  */
 export const findNearbyDrivers = async (lat, lng, radiusKm = 5, filters = {}) => {
-    // This function would interact with Redis/MongoDB where active driver locations are stored
-    // For this implementation, we'll simulate the logic structure
+    // NOTE:
+    // Driver live location search should ideally use a spatial index (Redis GEO / Mongo / PostGIS).
+    // Until that is integrated, we provide a safe DB fallback (online+available drivers with coords)
+    // and filter in memory. This avoids placeholder behavior that silently returns nothing.
 
     // 1. Define search steps (Expand radius if no drivers found)
     const searchSteps = [
@@ -110,16 +110,52 @@ export const findNearbyDrivers = async (lat, lng, radiusKm = 5, filters = {}) =>
         { radius: 15, timeout: 5000 }  // Maximum expansion
     ];
 
-    /* 
-    Actual implementation would involve:
-    1. Query spatial index for drivers within current radius
-    2. Filter by vehicle category (from filters.categoryIds)
-    3. Filter by status (online, available)
-    4. If count < 1, expand to next radius step
-    */
+    const categoryIds = Array.isArray(filters.categoryIds)
+        ? filters.categoryIds.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0)
+        : [];
 
-    return {
-        // Placeholder implementation
-        message: "Driver search logic ready for integration with spatial DB"
-    };
+    // Fetch a capped set of candidates once (avoid heavy DB work inside the expansion loop).
+    // We only read minimal fields needed for distance filtering.
+    const candidates = await prisma.user.findMany({
+        where: {
+            userType: "driver",
+            status: "active",
+            isOnline: true,
+            isAvailable: true,
+            latitude: { not: null },
+            longitude: { not: null },
+            pushNotificationsEnabled: true,
+            ...(categoryIds.length > 0 ? { serviceId: { in: categoryIds } } : {}),
+        },
+        select: { id: true, latitude: true, longitude: true },
+        take: 2000,
+        orderBy: { id: "desc" },
+    });
+
+    // Try each radius step, return early when we find at least one driver.
+    for (const step of searchSteps) {
+        const radius = step.radius ?? radiusKm;
+        const found = [];
+
+        for (const d of candidates) {
+            const dLat = parseFloat(d.latitude);
+            const dLng = parseFloat(d.longitude);
+            if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) continue;
+            const dist = calculateDistance(lat, lng, dLat, dLng);
+            if (dist <= radius) {
+                found.push({ driverId: d.id, distanceKm: Math.round(dist * 100) / 100 });
+            }
+        }
+
+        if (found.length > 0) {
+            return {
+                success: true,
+                radiusKm: radius,
+                count: found.length,
+                drivers: found,
+            };
+        }
+    }
+
+    return { success: true, radiusKm: searchSteps.at(-1)?.radius ?? radiusKm, count: 0, drivers: [] };
 };

@@ -1,5 +1,6 @@
 import prisma from '../../utils/prisma.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
+import { calculateDistance, calculateTripPrice } from '../../utils/pricingCalculator.js';
 
 // @desc    Get vehicle types by service_id
 // @route   GET /apimobile/user/booking/vehicle-types/:serviceId
@@ -170,6 +171,10 @@ export const createBooking = async (req, res) => {
             paymentMethod,
             from,
             to,
+            bookingType,
+            isSpecial,
+            scheduledAt,
+            scheduleDatetime,
         } = req.body;
 
         if (!vehicle_id || !from || !to) {
@@ -190,17 +195,13 @@ export const createBooking = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Vehicle category not found' });
         }
 
-        // Get pricing rule for this vehicle
-        const pricingRule = await prisma.pricingRule.findFirst({
+        // Resolve an active Service for this vehicle category (RideRequest.serviceId references Service).
+        // Do NOT use serviceCategoryId here.
+        const resolvedService = await prisma.service.findFirst({
             where: { vehicleCategoryId: vehicleId, status: 1 },
-            orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+            select: { id: true, name: true, nameAr: true },
+            orderBy: [{ id: 'asc' }],
         });
-        const resolvedPricingRule = pricingRule || {
-            baseFare: 0,
-            minimumFare: 0,
-            perDistanceAfterBase: 0,
-            perMinuteDrive: 0,
-        };
 
         const tripOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -239,13 +240,63 @@ export const createBooking = async (req, res) => {
             resolvedWeight = weight;
         }
 
-        const calculatedTotal = (resolvedPricingRule.baseFare ?? 0) + sizeModifier + weightModifier;
+        // Build price using the shared pricing calculator (distance-based + minimum fare),
+        // then add shipment modifiers.
+        const distanceKm = calculateDistance(
+            parseFloat(from.lat),
+            parseFloat(from.lng),
+            parseFloat(to.lat),
+            parseFloat(to.lng)
+        );
+
+        const priceResult = await calculateTripPrice(vehicleId, distanceKm, 0, 0);
+        if (!priceResult?.success) {
+            return res.status(422).json({
+                success: false,
+                message: priceResult?.error || 'Unable to calculate trip price for selected vehicle category',
+            });
+        }
+
+        const calculatedTotal = (priceResult.totalAmount ?? 0) + sizeModifier + weightModifier;
+
+        // Backward-compatible booking type handling:
+        // - normal (default): immediate trip
+        // - special: scheduled trip in the future
+        const typeRaw = String(bookingType ?? "").toLowerCase().trim();
+        const specialFlag = isSpecial === true || typeRaw === "special" || typeRaw === "scheduled";
+        const requestedSchedule = scheduledAt ?? scheduleDatetime ?? null;
+        let scheduledDate = null;
+
+        if (specialFlag) {
+            if (!requestedSchedule) {
+                return res.status(400).json({
+                    success: false,
+                    message: "scheduledAt (or scheduleDatetime) is required for special booking",
+                });
+            }
+
+            const parsed = new Date(requestedSchedule);
+            if (Number.isNaN(parsed.getTime())) {
+                return res.status(422).json({ success: false, message: "Invalid scheduleDatetime/scheduledAt" });
+            }
+
+            const now = new Date();
+            const minAdvanceMs = 30 * 60 * 1000; // 30 minutes
+            if (parsed.getTime() - now.getTime() < minAdvanceMs) {
+                return res.status(422).json({
+                    success: false,
+                    message: "Scheduled time must be at least 30 minutes from now",
+                });
+            }
+
+            scheduledDate = parsed;
+        }
 
         const booking = await prisma.rideRequest.create({
             data: {
                 riderId: userId,
                 vehicleCategoryId: vehicleId,
-                serviceId: vehicleCategory.serviceCategoryId,
+                serviceId: resolvedService?.id ?? null,
                 startLatitude: String(from.lat),
                 startLongitude: String(from.lng),
                 startAddress: from.address || '',
@@ -255,24 +306,34 @@ export const createBooking = async (req, res) => {
                 paymentType: paymentMethod === 0 || paymentMethod === 'cash' ? 'cash' : `gateway_${paymentMethod}`,
                 totalAmount: calculatedTotal,
                 subtotal: calculatedTotal,
-                baseFare: resolvedPricingRule.baseFare ?? 0,
-                minimumFare: resolvedPricingRule.minimumFare ?? 0,
-                perDistance: resolvedPricingRule.perDistanceAfterBase ?? 0,
-                perMinuteDrive: resolvedPricingRule.perMinuteDrive ?? 0,
-                status: 'pending',
+                distance: distanceKm,
+                baseFare: priceResult.breakdown?.baseFare ?? 0,
+                minimumFare: priceResult.breakdown?.minimumFare ?? 0,
+                perDistance: priceResult.breakdown?.perKmRate ?? 0,
+                perMinuteDrive: 0,
+                status: specialFlag ? 'scheduled' : 'pending',
+                isSchedule: specialFlag,
+                scheduleDatetime: specialFlag ? scheduledDate : null,
+                datetime: specialFlag ? scheduledDate : new Date(),
                 otp: tripOtp,
                 serviceData: {
                     vehicleCategoryId: vehicleId,
                     vehicleCategoryName: vehicleCategory.name,
                     serviceCategoryId: vehicleCategory.serviceCategoryId,
                     serviceCategoryName: vehicleCategory.serviceCategory?.name || null,
+                    resolvedServiceId: resolvedService?.id ?? null,
                     shipmentSizeId: shipmentSize_id ?? null,
                     shipmentWeightId: shipmentWeight_id ?? null,
+                    bookingType: specialFlag ? 'special' : 'normal',
+                    distanceKm,
+                    pricing: priceResult.breakdown ?? null,
                 },
             },
             select: {
                 id: true,
                 status: true,
+                isSchedule: true,
+                scheduleDatetime: true,
                 totalAmount: true,
                 baseFare: true,
                 minimumFare: true,
@@ -294,10 +355,14 @@ export const createBooking = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: 'Booking created successfully',
+            message: specialFlag ? "Booking scheduled" : "Booking created",
             data: {
                 booking_id: booking.id,
                 status: booking.status,
+                bookingType: specialFlag ? 'special' : 'normal',
+                isSpecial: specialFlag,
+                isScheduled: booking.isSchedule,
+                scheduledAt: booking.scheduleDatetime,
                 totalAmount: booking.totalAmount,
                 paymentType: booking.paymentType,
                 tripOtp: booking.otp,
@@ -311,8 +376,8 @@ export const createBooking = async (req, res) => {
                 },
                 service: {
                     id: booking.serviceId,
-                    name: vehicleCategory.serviceCategory?.name || null,
-                    nameAr: vehicleCategory.serviceCategory?.nameAr || null,
+                    name: resolvedService?.name || null,
+                    nameAr: resolvedService?.nameAr || null,
                 },
                 pricing: {
                     baseFare: booking.baseFare,
@@ -322,6 +387,9 @@ export const createBooking = async (req, res) => {
                     shipmentSizeModifier: sizeModifier,
                     shipmentWeightModifier: weightModifier,
                     totalAmount: booking.totalAmount,
+                    currency: priceResult.currency ?? null,
+                    distanceKm,
+                    breakdown: priceResult.breakdown ?? null,
                 },
                 shipment: {
                     shipmentSize_id: resolvedSize?.id ?? (shipmentSize_id ? parseInt(shipmentSize_id, 10) : null),

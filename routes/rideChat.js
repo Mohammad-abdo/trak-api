@@ -16,7 +16,10 @@ const router = express.Router();
  *     description: |
  *       1-to-1 chat between the rider (client) and the assigned driver of a
  *       ride. Chat becomes available **after the driver accepts the trip**
- *       (`status` in `accepted`, `arrived`, `started`, `ongoing`, `in_progress`).
+ *       (`status` in `accepted`, `negotiating`, `counter_offered`, `arrived`,
+ *       `arrived_at_pickup`, `started`, `ongoing`, `in_progress`).
+ *       Compatibility rule: if status is still `pending` but `driverId` is
+ *       already assigned, sending is allowed.
  *       History remains readable after `completed` / `cancelled` but new
  *       messages are rejected with **403 `CHAT_NOT_OPEN`**.
  *
