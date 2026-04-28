@@ -2603,8 +2603,8 @@ router.post('/offers/tip', authenticate, tipDriver);
  * @swagger
  * /apimobile/user/complaints:
  *   post:
- *     tags: [Complaints]
- *     summary: File a complaint
+ *     tags: [شكاوى الرحلة]
+ *     summary: تقديم شكوى خلال الرحلة — File a trip complaint
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -2624,8 +2624,8 @@ router.post('/offers/tip', authenticate, tipDriver);
  *       400: { description: Validation error }
  *       404: { description: Ride not found or not yours }
  *   get:
- *     tags: [Complaints]
- *     summary: List my complaints
+ *     tags: [شكاوى الرحلة]
+ *     summary: عرض شكاواي — List my trip complaints
  *     security:
  *       - bearerAuth: []
  *     parameters:

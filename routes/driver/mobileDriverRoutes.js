@@ -1272,8 +1272,8 @@ router.post("/withdrawals", authenticate, saveWithdrawRequest);
 /** @swagger
  * /apimobile/driver/complaints:
  *   post:
- *     tags: [Driver Complaints]
- *     summary: File a complaint about a ride or rider
+ *     tags: [شكاوى الرحلة — Driver]
+ *     summary: تقديم شكوى على الراكب — File a complaint about a rider
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1295,8 +1295,8 @@ router.post("/complaints", authenticate, saveComplaint);
 /** @swagger
  * /apimobile/driver/complaints/{id}:
  *   get:
- *     tags: [Driver Complaints]
- *     summary: Get complaint detail with comments
+ *     tags: [شكاوى الرحلة — Driver]
+ *     summary: عرض تفاصيل الشكوى — Get complaint detail with admin comments
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
