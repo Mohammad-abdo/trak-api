@@ -926,20 +926,28 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  * /apimobile/user/booking/create:
  *   post:
  *     tags: [Booking]
- *     summary: Create a new booking
+ *     summary: Create a booking (normal or scheduled) — server calculates total price
  *     description: |
- *       Supports two booking types **without breaking old clients**:
+ *       Creates a ride/shipment request. The server calculates `totalAmount` automatically
+ *       from the vehicle category's pricing rules — **do not send a price from the client**.
  *
- *       - **normal**: immediate booking (default)
- *       - **special**: scheduled booking (must be in the future, minimum 30 minutes from now)
+ *       ### Supported categories
+ *       | Category type | Extra fields needed |
+ *       |--------------|-------------------|
+ *       | Passenger (taxi/ride) | none |
+ *       | Shipment / freight | `shipmentSize_id` and/or `shipmentWeight_id` (optional, add price modifiers) |
  *
- *       To create **special** booking send either:
- *       - `bookingType: "special"` OR
- *       - `isSpecial: true`
+ *       ### Booking types
+ *       | Type | `bookingType` | `scheduledAt` required? | Status |
+ *       |------|--------------|------------------------|--------|
+ *       | Immediate | `normal` (or omit) | No | `pending` |
+ *       | Scheduled | `special` | Yes — min 30 min from now | `scheduled` |
  *
- *       And provide schedule time via:
- *       - `scheduledAt` OR
- *       - `scheduleDatetime`
+ *       ### What to do after you get `booking_id` + `totalAmount`
+ *       - Show the price to the user
+ *       - If happy → call `POST /apimobile/user/offers/near-drivers` with `booking_id`
+ *       - If user wants to negotiate → call `POST /apimobile/user/negotiation/start`
+ *         with `{ rideRequestId: booking_id, proposedFare: <desired price> }`
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -950,83 +958,154 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *             type: object
  *             required: [vehicle_id, from, to]
  *             properties:
- *               vehicle_id: { type: integer, example: 1 }
- *               shipmentSize_id: { type: integer, nullable: true }
- *               shipmentWeight_id: { type: integer, nullable: true }
- *               paymentMethod: { type: integer, example: 0, description: "0=cash, or gateway ID" }
+ *               vehicle_id:
+ *                 type: integer
+ *                 example: 1
+ *                 description: From GET /booking/vehicle-types/:serviceId → field `vehicle_id`
+ *               paymentMethod:
+ *                 type: integer
+ *                 example: 0
+ *                 description: "0 = cash. Use `payment_id` from GET /booking/payment-methods for gateway."
  *               bookingType:
  *                 type: string
- *                 nullable: true
  *                 enum: [normal, special]
- *                 example: special
- *                 description: "Optional. If omitted, defaults to normal."
- *               isSpecial:
- *                 type: boolean
- *                 nullable: true
- *                 example: true
- *                 description: "Optional legacy flag. true means bookingType=special."
+ *                 example: normal
+ *                 description: "Omit or send `normal` for immediate. Send `special` for scheduled."
  *               scheduledAt:
  *                 type: string
  *                 format: date-time
- *                 nullable: true
- *                 example: "2026-05-01T14:30:00.000Z"
- *                 description: "For special booking only. Must be >= now + 30 minutes."
- *               scheduleDatetime:
- *                 type: string
- *                 format: date-time
- *                 nullable: true
- *                 example: "2026-05-01T14:30:00.000Z"
- *                 description: "Alias for scheduledAt (for special booking)."
+ *                 example: "2026-05-10T14:30:00.000Z"
+ *                 description: "Required only when bookingType=special. Must be ≥ 30 min from now."
+ *               shipmentSize_id:
+ *                 type: integer
+ *                 example: 2
+ *                 description: "Shipment category only. From GET /booking/shipment-sizes. Adds a price modifier."
+ *               shipmentWeight_id:
+ *                 type: integer
+ *                 example: 3
+ *                 description: "Shipment category only. From GET /booking/shipment-weights. Adds a price modifier."
  *               from:
  *                 type: object
+ *                 required: [lat, lng]
  *                 properties:
- *                   lat: { type: number, example: 30.0444 }
- *                   lng: { type: number, example: 31.2357 }
- *                   address: { type: string }
+ *                   lat:     { type: number, example: 24.7136 }
+ *                   lng:     { type: number, example: 46.6753 }
+ *                   address: { type: string, example: "King Fahd Road, Riyadh" }
  *               to:
  *                 type: object
+ *                 required: [lat, lng]
  *                 properties:
- *                   lat: { type: number, example: 30.1 }
- *                   lng: { type: number, example: 31.3 }
- *                   address: { type: string }
- *               totalPrice: { type: number, nullable: true, description: "Override total if provided" }
+ *                   lat:     { type: number, example: 24.7800 }
+ *                   lng:     { type: number, example: 46.7200 }
+ *                   address: { type: string, example: "Olaya District, Riyadh" }
  *     responses:
  *       201:
- *         description: Booking created
+ *         description: Booking created — use `booking_id` and `totalAmount` for next steps
  *         content:
  *           application/json:
  *             examples:
- *               normal:
- *                 summary: Normal (immediate) booking
+ *               passenger_normal:
+ *                 summary: Passenger — immediate booking
  *                 value:
  *                   success: true
  *                   message: Booking created
  *                   data:
- *                     id: 123
+ *                     booking_id: 123
  *                     status: pending
- *                     isSchedule: false
- *                     scheduleDatetime: null
- *               special:
- *                 summary: Special (scheduled) booking
+ *                     bookingType: normal
+ *                     scheduledAt: null
+ *                     totalAmount: 32.50
+ *                     currency: SAR
+ *                     distanceKm: 9.0
+ *                     paymentType: cash
+ *                     tripOtp: "4821"
+ *                     vehicleCategory:
+ *                       id: 1
+ *                       name: Sedan
+ *                       nameAr: سيدان
+ *                     from:
+ *                       lat: "24.7136"
+ *                       lng: "46.6753"
+ *                       address: "King Fahd Road, Riyadh"
+ *                     to:
+ *                       lat: "24.7800"
+ *                       lng: "46.7200"
+ *                       address: "Olaya District, Riyadh"
+ *                     createdAt: "2026-04-29T00:00:00.000Z"
+ *               shipment_normal:
+ *                 summary: Shipment — immediate booking (with size + weight)
+ *                 value:
+ *                   success: true
+ *                   message: Booking created
+ *                   data:
+ *                     booking_id: 125
+ *                     status: pending
+ *                     bookingType: normal
+ *                     scheduledAt: null
+ *                     totalAmount: 55.00
+ *                     currency: SAR
+ *                     distanceKm: 12.5
+ *                     paymentType: cash
+ *                     tripOtp: "3391"
+ *                     vehicleCategory:
+ *                       id: 4
+ *                       name: Truck
+ *                       nameAr: شاحنة
+ *                     from:
+ *                       lat: "24.7136"
+ *                       lng: "46.6753"
+ *                       address: "Industrial Area, Riyadh"
+ *                     to:
+ *                       lat: "24.8100"
+ *                       lng: "46.8000"
+ *                       address: "Warehouse District, Riyadh"
+ *                     createdAt: "2026-04-29T00:00:00.000Z"
+ *               scheduled:
+ *                 summary: Scheduled booking
  *                 value:
  *                   success: true
  *                   message: Booking scheduled
  *                   data:
- *                     id: 124
+ *                     booking_id: 124
  *                     status: scheduled
- *                     isSchedule: true
- *                     scheduleDatetime: "2026-05-01T14:30:00.000Z"
+ *                     bookingType: special
+ *                     scheduledAt: "2026-05-10T14:30:00.000Z"
+ *                     totalAmount: 32.50
+ *                     currency: SAR
+ *                     distanceKm: 9.0
+ *                     paymentType: cash
+ *                     tripOtp: "7392"
+ *                     vehicleCategory:
+ *                       id: 1
+ *                       name: Sedan
+ *                       nameAr: سيدان
+ *                     from:
+ *                       lat: "24.7136"
+ *                       lng: "46.6753"
+ *                       address: "King Fahd Road, Riyadh"
+ *                     to:
+ *                       lat: "24.7800"
+ *                       lng: "46.7200"
+ *                       address: "Olaya District, Riyadh"
+ *                     createdAt: "2026-04-29T00:00:00.000Z"
  *       400:
- *         description: Missing required fields
+ *         description: Missing required fields or invalid IDs
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: "vehicle_id, from and to are required"
+ *       404:
+ *         description: Vehicle category not found
  *       422:
- *         description: Schedule validation failed (special booking)
+ *         description: Price calculation failed or scheduled time too soon
  *         content:
  *           application/json:
  *             examples:
- *               invalidDate:
+ *               noPrice:
  *                 value:
  *                   success: false
- *                   message: "Invalid scheduleDatetime/scheduledAt"
+ *                   message: "Unable to calculate trip price for selected vehicle category"
  *               tooSoon:
  *                 value:
  *                   success: false
