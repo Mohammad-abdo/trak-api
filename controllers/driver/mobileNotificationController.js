@@ -38,12 +38,40 @@ export const getDriverNotifications = asyncHandler(async (req, res) => {
     });
 });
 
+export const getDriverUnreadCount = asyncHandler(async (req, res) => {
+    const count = await prisma.notification.count({
+        where: {
+            OR: [
+                { notifiableType: "Driver", notifiableId: req.user.id },
+                { notifiableType: "driver", notifiableId: req.user.id },
+            ],
+            isRead: false,
+        },
+    });
+    return successResponse(res, { unreadCount: count }, "Unread notifications count retrieved");
+});
+
 export const markNotificationAsRead = asyncHandler(async (req, res) => {
-    const notification = await prisma.notification.update({
-        where: { id: req.params.id },
+    const id = parseInt(req.params.id, 10);
+    if (!id) return errorResponse(res, "Invalid notification id", 400);
+
+    const notif = await prisma.notification.findFirst({
+        where: {
+            id,
+            OR: [
+                { notifiableType: "Driver", notifiableId: req.user.id },
+                { notifiableType: "driver", notifiableId: req.user.id },
+            ],
+        },
+        select: { id: true },
+    });
+    if (!notif) return errorResponse(res, "Notification not found", 404);
+
+    const updated = await prisma.notification.update({
+        where: { id },
         data: { isRead: true, readAt: new Date() },
     });
-    return successResponse(res, notification, "Notification marked as read");
+    return successResponse(res, updated, "Notification marked as read");
 });
 
 export const markAllNotificationsAsRead = asyncHandler(async (req, res) => {

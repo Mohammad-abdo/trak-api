@@ -37,6 +37,7 @@ import {
     changePassword,
     createComplaint,
     listMyComplaints,
+    getMyComplaintDetail,
     validateCoupon,
     getMyReferral,
     listSosContacts,
@@ -2659,6 +2660,47 @@ router.post('/offers/tip', authenticate, tipDriver);
  */
 router.post('/complaints', authenticate, createComplaint);
 router.get('/complaints', authenticate, listMyComplaints);
+
+/**
+ * @swagger
+ * /apimobile/user/complaints/{id}:
+ *   get:
+ *     tags: [شكاوى الرحلة]
+ *     summary: عرض تفاصيل الشكوى مع ردود الإدارة — Get complaint detail + admin replies
+ *     description: |
+ *       Returns the full complaint including all admin comments/replies.
+ *       Use the `id` returned from `POST /complaints` or `GET /complaints`.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *         description: Complaint ID
+ *     responses:
+ *       200:
+ *         description: Complaint detail with admin replies
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data:
+ *                 id: 1
+ *                 subject: "السائق كان وقحاً"
+ *                 description: "تصرف السائق بشكل سيء خلال الرحلة"
+ *                 status: in_progress
+ *                 rideRequestId: 123
+ *                 driverId: 22
+ *                 createdAt: "2026-04-29T00:00:00.000Z"
+ *                 complaintComments:
+ *                   - id: 1
+ *                     comment: "تم مراجعة الشكوى وتحذير السائق"
+ *                     user: { id: 5, firstName: "Admin", lastName: "" }
+ *                     createdAt: "2026-04-29T01:00:00.000Z"
+ *       404: { description: Complaint not found or not yours }
+ */
+router.get('/complaints/:id', authenticate, getMyComplaintDetail);
 
 // =============================================
 // COUPONS - VALIDATE

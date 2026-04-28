@@ -51,6 +51,36 @@ export const saveComplaint = async (req, res) => {
     }
 };
 
+// @desc    List complaints filed by this driver
+// @route   GET /apimobile/driver/complaints
+// @access  Private (driver)
+export const listDriverComplaints = async (req, res) => {
+    try {
+        const driverId = req.user.id;
+        const page = Math.max(1, parseInt(req.query.page || '1', 10));
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '20', 10)));
+
+        const [items, total] = await Promise.all([
+            prisma.complaint.findMany({
+                where: { driverId, complaintBy: 'driver' },
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+                select: {
+                    id: true, subject: true, description: true, status: true,
+                    rideRequestId: true, riderId: true, createdAt: true, updatedAt: true,
+                },
+            }),
+            prisma.complaint.count({ where: { driverId, complaintBy: 'driver' } }),
+        ]);
+
+        res.json({ success: true, message: 'Complaints retrieved', data: { total, page, limit, items } });
+    } catch (error) {
+        console.error('List driver complaints error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Get complaint list
 // @route   GET /api/complaints
 // @access  Private (Admin)

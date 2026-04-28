@@ -58,10 +58,10 @@ import { topupWallet, getWalletBalance } from "../../controllers/wallet/walletTo
 import { getWithdrawRequestList, saveWithdrawRequest } from "../../controllers/withdrawRequestController.js";
 
 // ─── Complaints ──────────────────────────────────────────────────────────────
-import { saveComplaint, getComplaintDetail } from "../../controllers/complaintController.js";
+import { saveComplaint, listDriverComplaints, getComplaintDetail } from "../../controllers/complaintController.js";
 
 // ─── Notifications ───────────────────────────────────────────────────────────
-import { getDriverNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "../../controllers/driver/mobileNotificationController.js";
+import { getDriverNotifications, getDriverUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from "../../controllers/driver/mobileNotificationController.js";
 import {
     getMyPushNotificationPreference,
     setMyPushNotificationPreference,
@@ -1293,10 +1293,45 @@ router.post("/withdrawals", authenticate, saveWithdrawRequest);
 router.post("/complaints", authenticate, saveComplaint);
 
 /** @swagger
+ * /apimobile/driver/complaints:
+ *   get:
+ *     tags: [شكاوى الرحلة — Driver]
+ *     summary: عرض شكاواي — List all my complaints
+ *     description: Returns all complaints filed by this driver, paginated. Check `status` to see if admin resolved them.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Driver complaints list
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Complaints retrieved
+ *               data:
+ *                 total: 1
+ *                 page: 1
+ *                 limit: 20
+ *                 items:
+ *                   - id: 2
+ *                     subject: "الراكب كان وقحاً"
+ *                     status: in_progress
+ *                     rideRequestId: 123
+ *                     createdAt: "2026-04-29T00:00:00.000Z"
+ */
+router.get("/complaints", authenticate, listDriverComplaints);
+
+/** @swagger
  * /apimobile/driver/complaints/{id}:
  *   get:
  *     tags: [شكاوى الرحلة — Driver]
- *     summary: عرض تفاصيل الشكوى — Get complaint detail with admin comments
+ *     summary: عرض تفاصيل الشكوى مع ردود الإدارة — Get complaint detail + admin replies
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -1304,7 +1339,22 @@ router.post("/complaints", authenticate, saveComplaint);
  *         required: true
  *         schema: { type: integer }
  *     responses:
- *       200: { description: Complaint detail }
+ *       200:
+ *         description: Complaint detail with admin comments
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data:
+ *                 id: 2
+ *                 subject: "الراكب كان وقحاً"
+ *                 status: in_progress
+ *                 complaintComments:
+ *                   - id: 1
+ *                     comment: "تم مراجعة الشكوى وتحذير الراكب"
+ *                     user: { id: 5, firstName: "Admin" }
+ *                     createdAt: "2026-04-29T01:00:00.000Z"
+ *       404: { description: Complaint not found }
  */
 router.get("/complaints/:id", authenticate, getComplaintDetail);
 
@@ -1438,18 +1488,37 @@ router.get("/negotiation/status/:rideRequestId", authenticate, checkNegotiationS
 router.get("/notifications", authenticate, getDriverNotifications);
 
 /** @swagger
+ * /apimobile/driver/notifications/unread-count:
+ *   get:
+ *     tags: [Driver Notifications]
+ *     summary: عدد الإشعارات غير المقروءة — Get unread notifications count (badge)
+ *     description: Use this to show a badge number on the notifications icon without fetching the full list.
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Unread count
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data: { unreadCount: 3 }
+ */
+router.get("/notifications/unread-count", authenticate, getDriverUnreadCount);
+
+/** @swagger
  * /apimobile/driver/notifications/{id}/read:
  *   put:
  *     tags: [Driver Notifications]
- *     summary: Mark a notification as read
+ *     summary: Mark a single notification as read
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema: { type: integer }
  *     responses:
- *       200: { description: Marked as read }
+ *       200: { description: Notification marked as read }
+ *       404: { description: Notification not found }
  */
 router.put("/notifications/:id/read", authenticate, markNotificationAsRead);
 

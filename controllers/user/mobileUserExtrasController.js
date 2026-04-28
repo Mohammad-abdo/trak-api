@@ -135,6 +135,30 @@ export const listMyComplaints = asyncHandler(async (req, res) => {
     return successResponse(res, { total, page, limit, items }, 'Complaints retrieved');
 });
 
+// @desc    Get single complaint detail + admin comments (user)
+// @route   GET /apimobile/user/complaints/:id
+// @access  Private
+export const getMyComplaintDetail = asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const id = parseInt(req.params.id, 10);
+    if (!id) return errorResponse(res, 'Invalid complaint id', 400);
+
+    const complaint = await prisma.complaint.findFirst({
+        where: { id, riderId: userId },
+        include: {
+            complaintComments: {
+                orderBy: { createdAt: 'asc' },
+                include: {
+                    user: { select: { id: true, firstName: true, lastName: true } },
+                },
+            },
+        },
+    });
+    if (!complaint) return errorResponse(res, 'Complaint not found', 404);
+
+    return successResponse(res, complaint, 'Complaint retrieved');
+});
+
 // =============================================
 // COUPONS
 // =============================================
