@@ -15,7 +15,7 @@ import { getAllServices, chooseService } from '../../controllers/user/mobileServ
 // Booking
 import { serviceVehicleTypes, getShipmentSizes, getShipmentWeights, getPaymentMethods, createBooking, cancelBooking } from '../../controllers/user/mobileBookingController.js';
 // Offers
-import { getNearDrivers, acceptDriver, cancelDriverOffer, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
+import { getNearDrivers, pollNearDrivers, acceptDriver, cancelDriverOffer, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
 // Offers (extended: active ride / SOS / tip)
 import { getActiveRide, triggerSosAlert, tipDriver } from '../../controllers/user/mobileOfferController.js';
 // User Bookings
@@ -1358,6 +1358,87 @@ router.post('/booking/cancel', authenticate, cancelBooking);
  *                           lng: { type: string }
  */
 router.post('/offers/near-drivers', authenticate, getNearDrivers);
+
+/**
+ * @swagger
+ * /apimobile/user/offers/near-drivers/{bookingId}:
+ *   get:
+ *     tags: [Offers]
+ *     summary: "[Polling] Get driver offers for a booking (GET version)"
+ *     description: |
+ *       **Polling-friendly GET alias** of `POST /offers/near-drivers`.
+ *
+ *       ### Polling strategy (5-second interval)
+ *       ```
+ *       while (noOfferYet && withinTimeout) {
+ *         GET /apimobile/user/offers/near-drivers/{bookingId}?lat=24.71&lng=46.67
+ *         if (data.length > 0) → show offers, stop polling
+ *         await 5 seconds
+ *       }
+ *       ```
+ *
+ *       ### WebSocket (instant, no polling needed)
+ *       Connect with JWT, listen for:
+ *       - **`driver-offer-received`** — fires immediately when any driver sends an offer or accepts.
+ *         On receipt, call this endpoint once to get full offer details.
+ *
+ *       ### Socket.IO connection
+ *       ```js
+ *       const socket = io(BASE_URL, { auth: { token: JWT } })
+ *       socket.on('driver-offer-received', ({ rideRequestId }) => {
+ *         // fetch full offers
+ *       })
+ *       ```
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: bookingId
+ *         required: true
+ *         schema: { type: integer }
+ *         example: 42
+ *         description: The booking ID from POST /booking/create
+ *       - in: query
+ *         name: lat
+ *         schema: { type: number }
+ *         example: 24.7136
+ *         description: Rider's current latitude (optional, used to compute driver distance)
+ *       - in: query
+ *         name: lng
+ *         schema: { type: number }
+ *         example: 46.6753
+ *         description: Rider's current longitude
+ *     responses:
+ *       200:
+ *         description: List of driver offers (empty when no offers yet)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               no_offers_yet:
+ *                 summary: No offers yet — keep polling
+ *                 value:
+ *                   success: true
+ *                   message: No driver offers yet. Waiting for drivers to respond.
+ *                   data: []
+ *               offers_ready:
+ *                 summary: Driver made an offer
+ *                 value:
+ *                   success: true
+ *                   message: Driver offers received
+ *                   data:
+ *                     - id: 7
+ *                       name: Ahmed Hassan
+ *                       offeredPrice: 25.00
+ *                       basePrice: 32.50
+ *                       isDirectAccept: false
+ *                       rate: 4.8
+ *                       totalRatings: 120
+ *                       vehicleType: Toyota Camry
+ *                       carColor: White
+ *                       carPlate: ABC 1234
+ *                       distanceKm: 1.2
+ */
+router.get('/offers/near-drivers/:bookingId', authenticate, pollNearDrivers);
 
 /**
  * @swagger

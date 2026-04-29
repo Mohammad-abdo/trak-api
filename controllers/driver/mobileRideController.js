@@ -251,17 +251,23 @@ export const respondToRide = asyncHandler(async (req, res) => {
                 }),
             ]);
 
-            // Notify rider about the counter offer
+            // Notify rider: counter offer + unified "driver offer" event for polling fallback
             try {
                 const { emitToUser } = await import("../../utils/socketService.js");
                 const io = req.app.get("io") || global.io;
-                if (io) emitToUser(io, ride.riderId, "ride-negotiation-offer", {
-                    rideRequestId: ride.id,
-                    driverId: req.user.id,
-                    proposedFare: parsedFare,
-                    originalFare: ride.totalAmount,
-                    expiresAt,
-                });
+                if (io) {
+                    const offerPayload = {
+                        rideRequestId: ride.id,
+                        driverId: req.user.id,
+                        proposedFare: parsedFare,
+                        originalFare: ride.totalAmount,
+                        expiresAt,
+                        offerType: 'negotiation',
+                    };
+                    emitToUser(io, ride.riderId, "ride-negotiation-offer", offerPayload);
+                    // Unified event — rider app listens to this to trigger near-drivers refresh
+                    emitToUser(io, ride.riderId, "driver-offer-received", offerPayload);
+                }
             } catch (_) {}
 
             return successResponse(res, {
@@ -277,9 +283,19 @@ export const respondToRide = asyncHandler(async (req, res) => {
             });
 
             try {
-                const { emitToRide } = await import("../../utils/socketService.js");
+                const { emitToRide, emitToUser } = await import("../../utils/socketService.js");
                 const io = req.app.get("io") || global.io;
-                if (io) emitToRide(io, ride.id, "ride-request-accepted", { driverId: req.user.id, rideRequestId: ride.id });
+                if (io) {
+                    emitToRide(io, ride.id, "ride-request-accepted", { driverId: req.user.id, rideRequestId: ride.id });
+                    // Unified event — rider app triggers near-drivers refresh on this
+                    emitToUser(io, ride.riderId, "driver-offer-received", {
+                        rideRequestId: ride.id,
+                        driverId: req.user.id,
+                        proposedFare: parseFloat(ride.totalAmount),
+                        originalFare: parseFloat(ride.totalAmount),
+                        offerType: 'direct_accept',
+                    });
+                }
             } catch (_) {}
 
             return successResponse(res, {
@@ -537,6 +553,69 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
         total: formattedRides.length,
         searchRadius,
         driverLocation: { latitude: driverLat, longitude: driverLng }
+    });
+});
+
+/**
+ * GET /apimobile/driver/rides/available/poll?latitude=...&longitude=...
+ *
+ * Ultra-lightweight polling endpoint.
+ * Returns only { count, rideIds[] } instead of full ride objects so mobile apps
+ * can poll every 5 s cheaply and only fetch full details when `count > 0`.
+ *
+ * Shares the same purge + distance logic as getAvailableRides but skips
+ * ratings, price estimation, and response formatting.
+ */
+export const pollAvailableRides = asyncHandler(async (req, res) => {
+    const driverId = req.user.id;
+    const { latitude, longitude } = req.query;
+    if (!latitude || !longitude) {
+        return errorResponse(res, "latitude and longitude are required", 400);
+    }
+
+    const blockStatus = await checkDriverRejectionBlock(driverId);
+    if (blockStatus.isBlocked) {
+        return res.json({ success: true, data: { count: 0, rideIds: [], isBlocked: true, remainingMinutes: blockStatus.remainingMinutes } });
+    }
+
+    await purgeExpiredUnacceptedRegularRides();
+
+    const driverLat = parseFloat(latitude);
+    const driverLng = parseFloat(longitude);
+    const searchRadius = await getDriverSearchRadius();
+    const now = new Date();
+    const scheduleOpenAt = new Date(now.getTime() + 30 * 60 * 1000);
+
+    const pendingRides = await prisma.rideRequest.findMany({
+        where: {
+            driverId: null,
+            startLatitude: { not: null },
+            startLongitude: { not: null },
+            payments: { none: {} },
+            OR: [
+                { status: "pending", isSchedule: false },
+                { status: "pending", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
+                { status: "scheduled", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
+            ],
+        },
+        select: { id: true, startLatitude: true, startLongitude: true, cancelledDriverIds: true },
+        take: 100,
+    });
+
+    const nearby = pendingRides.filter((r) => {
+        const cancelledIds = r.cancelledDriverIds ? JSON.parse(r.cancelledDriverIds) : [];
+        if (cancelledIds.includes(driverId)) return false;
+        const dist = calculateDistance(driverLat, driverLng, parseFloat(r.startLatitude), parseFloat(r.startLongitude));
+        return dist <= searchRadius;
+    });
+
+    return res.json({
+        success: true,
+        data: {
+            count: nearby.length,
+            rideIds: nearby.map((r) => r.id),
+            isBlocked: false,
+        },
     });
 });
 
@@ -909,14 +988,20 @@ export const driverProposeNegotiation = asyncHandler(async (req, res) => {
     try {
         const { emitToUser } = await import("../../utils/socketService.js");
         const io = req.app.get("io") || global.io;
-        if (io) emitToUser(io, ride.riderId, "ride-negotiation-offer", {
-            rideRequestId: ride.id,
-            driverId: req.user.id,
-            proposedFare: parsedFare,
-            realPrice,
-            originalFare: parseFloat(ride.totalAmount),
-            expiresAt,
-        });
+        if (io) {
+            const payload = {
+                rideRequestId: ride.id,
+                driverId: req.user.id,
+                proposedFare: parsedFare,
+                realPrice,
+                originalFare: parseFloat(ride.totalAmount),
+                expiresAt,
+                offerType: 'negotiation',
+            };
+            emitToUser(io, ride.riderId, "ride-negotiation-offer", payload);
+            // Unified event — rider app triggers near-drivers refresh on this
+            emitToUser(io, ride.riderId, "driver-offer-received", payload);
+        }
     } catch (_) {}
 
     return successResponse(res, {

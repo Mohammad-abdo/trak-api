@@ -45,6 +45,7 @@ import {
     getEarningsSummary,
     updateLocation,
     getAvailableRides,
+    pollAvailableRides,
     driverProposeNegotiation,
     checkNegotiationStatus,
 } from "../../controllers/driver/mobileRideController.js";
@@ -880,6 +881,88 @@ router.get("/rides", authenticate, getMyRides);
  *                     searchRadius: { type: number }
  */
 router.get("/rides/available", authenticate, getAvailableRides);
+
+/**
+ * @swagger
+ * /apimobile/driver/rides/available/poll:
+ *   get:
+ *     tags: [Driver Rides]
+ *     summary: "[Polling] Lightweight ride availability check (poll every 5 s)"
+ *     description: |
+ *       Returns only `{ count, rideIds[] }` — much lighter than the full
+ *       `/rides/available` endpoint. The driver app polls this every **5 seconds**
+ *       and calls the full `/rides/available` only when `count > 0`.
+ *
+ *       ### Polling strategy
+ *       ```
+ *       while (driverIsOnline) {
+ *         const { count, rideIds } = await GET /apimobile/driver/rides/available/poll
+ *         if (count > 0) {
+ *           rides = await GET /apimobile/driver/rides/available  // fetch full details
+ *         }
+ *         await 5 seconds
+ *       }
+ *       ```
+ *
+ *       ### WebSocket (instant, skip polling)
+ *       Listen for **`new-ride-available`** — the server emits this to nearby online
+ *       drivers the moment a user creates a booking. On receipt, call `/rides/available`
+ *       immediately for full details.
+ *
+ *       ### Socket.IO connection
+ *       ```js
+ *       const socket = io(BASE_URL, { auth: { token: DRIVER_JWT } })
+ *       socket.on('new-ride-available', (ride) => {
+ *         // new ride just appeared — refresh the list
+ *       })
+ *       ```
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: latitude
+ *         required: true
+ *         schema: { type: number }
+ *         example: 24.7136
+ *       - in: query
+ *         name: longitude
+ *         required: true
+ *         schema: { type: number }
+ *         example: 46.6753
+ *     responses:
+ *       200:
+ *         description: Ride count + IDs (empty when no rides near driver)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               no_rides:
+ *                 summary: No rides nearby — keep polling
+ *                 value:
+ *                   success: true
+ *                   data:
+ *                     count: 0
+ *                     rideIds: []
+ *                     isBlocked: false
+ *               rides_available:
+ *                 summary: Rides found — fetch full list
+ *                 value:
+ *                   success: true
+ *                   data:
+ *                     count: 2
+ *                     rideIds: [42, 43]
+ *                     isBlocked: false
+ *               driver_blocked:
+ *                 summary: Driver is currently blocked
+ *                 value:
+ *                   success: true
+ *                   data:
+ *                     count: 0
+ *                     rideIds: []
+ *                     isBlocked: true
+ *                     remainingMinutes: 47
+ */
+router.get("/rides/available/poll", authenticate, pollAvailableRides);
+
 router.get("/rides/:id", authenticate, getRideDetail);
 
 /** @swagger

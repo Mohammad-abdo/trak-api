@@ -1,6 +1,7 @@
 import prisma from '../../utils/prisma.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
 import { calculateDistance, calculateTripPrice } from '../../utils/pricingCalculator.js';
+import { getDriverSearchRadius } from '../../utils/settingsHelper.js';
 
 // @desc    Cancel a booking — ride disappears from all driver listings immediately
 // @route   POST /apimobile/user/booking/cancel
@@ -442,6 +443,56 @@ export const createBooking = async (req, res) => {
                 createdAt: true,
             },
         });
+
+        // ── Real-time: notify nearby online drivers via Socket.IO ──────────────
+        // Fire-and-forget — never block the HTTP response on socket work.
+        (async () => {
+            try {
+                const io = req.app?.get('io') || global.io;
+                if (!io) return;
+
+                const searchRadius = await getDriverSearchRadius();
+                const pickupLat = parseFloat(from.lat);
+                const pickupLng = parseFloat(from.lng);
+
+                // Find online+available drivers with a known location
+                const onlineDrivers = await prisma.user.findMany({
+                    where: {
+                        userType: 'driver',
+                        status: 'active',
+                        isOnline: true,
+                        isAvailable: true,
+                        latitude: { not: null },
+                        longitude: { not: null },
+                    },
+                    select: { id: true, latitude: true, longitude: true },
+                });
+
+                const ridePayload = {
+                    booking_id: booking.id,
+                    vehicleCategoryId: vehicleId,
+                    totalAmount: parseFloat(booking.totalAmount),
+                    userRequestedPrice: userRequestedPrice ?? parseFloat(booking.totalAmount),
+                    pickup: { lat: from.lat, lng: from.lng, address: from.address || '' },
+                    dropoff: { lat: to.lat, lng: to.lng, address: to.address || '' },
+                    paymentType: booking.paymentType,
+                    isScheduled: specialFlag,
+                    distanceKm: parseFloat(distanceKm.toFixed(2)),
+                };
+
+                const { emitToDriver } = await import('../../utils/socketService.js');
+
+                for (const driver of onlineDrivers) {
+                    const dLat = parseFloat(driver.latitude);
+                    const dLng = parseFloat(driver.longitude);
+                    if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) continue;
+                    const dist = calculateDistance(pickupLat, pickupLng, dLat, dLng);
+                    if (dist <= searchRadius) {
+                        emitToDriver(io, driver.id, 'new-ride-available', ridePayload);
+                    }
+                }
+            } catch (_) {}
+        })();
 
         return res.status(201).json({
             success: true,

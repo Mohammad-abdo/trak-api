@@ -233,6 +233,25 @@ export const getNearDrivers = async (req, res) => {
     }
 };
 
+/**
+ * GET /apimobile/user/offers/near-drivers/:bookingId?lat=...&lng=...
+ *
+ * Polling-friendly alias of POST /offers/near-drivers.
+ * The mobile app calls this every 5 s until `data.length > 0` or the timeout expires.
+ * All params come from the URL so the client can use a plain XMLHttpRequest / fetch GET.
+ */
+export const pollNearDrivers = async (req, res) => {
+    // Delegate to the same logic by faking the body shape getNearDrivers expects
+    req.body = {
+        booking_id: req.params.bookingId,
+        booking_location:
+            req.query.lat && req.query.lng
+                ? { lat: parseFloat(req.query.lat), lng: parseFloat(req.query.lng) }
+                : undefined,
+    };
+    return getNearDrivers(req, res);
+};
+
 // @desc    Accept a driver for a booking
 // @route   POST /apimobile/user/offers/accept-driver
 // @access  Private
