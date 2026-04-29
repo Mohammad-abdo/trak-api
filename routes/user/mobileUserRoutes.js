@@ -13,7 +13,7 @@ import { sliderOffers, getAllServices as homeGetAllServices, getLastCurrentUserB
 // Services
 import { getAllServices, chooseService } from '../../controllers/user/mobileServiceController.js';
 // Booking
-import { serviceVehicleTypes, getShipmentSizes, getShipmentWeights, getPaymentMethods, createBooking } from '../../controllers/user/mobileBookingController.js';
+import { serviceVehicleTypes, getShipmentSizes, getShipmentWeights, getPaymentMethods, createBooking, cancelBooking } from '../../controllers/user/mobileBookingController.js';
 // Offers
 import { getNearDrivers, acceptDriver, cancelDriverOffer, trackDriver, getTripStatus, cancelTrip, tripEnd, rateDriver } from '../../controllers/user/mobileOfferController.js';
 // Offers (extended: active ride / SOS / tip)
@@ -1113,6 +1113,69 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *                   message: "Scheduled time must be at least 30 minutes from now"
  */
 router.post('/booking/create', authenticate, createBooking);
+
+/**
+ * @swagger
+ * /apimobile/user/booking/cancel:
+ *   post:
+ *     tags: [Booking]
+ *     summary: إلغاء الحجز — Cancel a booking
+ *     description: |
+ *       Cancels the booking immediately. The ride disappears from all driver listings right away.
+ *
+ *       ### Rules
+ *       | Ride status | Can cancel? |
+ *       |------------|------------|
+ *       | `pending` | ✅ Yes |
+ *       | `scheduled` | ✅ Yes |
+ *       | `accepted` | ✅ Yes (driver is notified via socket) |
+ *       | `started` | ❌ No — trip already in progress |
+ *       | `completed` | ❌ No |
+ *       | `cancelled` | ❌ Already cancelled |
+ *
+ *       If a driver was assigned, they receive a `trip-cancelled` socket event automatically.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [booking_id]
+ *             properties:
+ *               booking_id:
+ *                 type: integer
+ *                 example: 123
+ *                 description: The booking ID returned from POST /booking/create
+ *     responses:
+ *       200:
+ *         description: Booking cancelled successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Booking cancelled successfully
+ *               data:
+ *                 booking_id: 123
+ *                 status: cancelled
+ *       400:
+ *         description: Cannot cancel (already started, completed, or cancelled)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               started:
+ *                 value:
+ *                   success: false
+ *                   message: "Cannot cancel a trip that has already started"
+ *               completed:
+ *                 value:
+ *                   success: false
+ *                   message: "Cannot cancel a completed trip"
+ *       404:
+ *         description: Booking not found or not yours
+ */
+router.post('/booking/cancel', authenticate, cancelBooking);
 
 /**
  * @swagger

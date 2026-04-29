@@ -2,6 +2,78 @@ import prisma from '../../utils/prisma.js';
 import { fullImageUrl } from '../../utils/imageUrl.js';
 import { calculateDistance, calculateTripPrice } from '../../utils/pricingCalculator.js';
 
+// @desc    Cancel a booking — ride disappears from all driver listings immediately
+// @route   POST /apimobile/user/booking/cancel
+// @access  Private
+export const cancelBooking = async (req, res) => {
+    try {
+        const riderId = req.user.id;
+        const { booking_id } = req.body;
+
+        if (!booking_id) {
+            return res.status(400).json({ success: false, message: 'booking_id is required' });
+        }
+
+        const rideId = parseInt(booking_id, 10);
+        if (Number.isNaN(rideId) || rideId <= 0) {
+            return res.status(400).json({ success: false, message: 'Invalid booking_id' });
+        }
+
+        const booking = await prisma.rideRequest.findFirst({
+            where: { id: rideId, riderId },
+            select: { id: true, status: true, driverId: true },
+        });
+
+        if (!booking) {
+            return res.status(404).json({ success: false, message: 'Booking not found' });
+        }
+
+        if (booking.status === 'completed') {
+            return res.status(400).json({ success: false, message: 'Cannot cancel a completed trip' });
+        }
+
+        if (booking.status === 'cancelled') {
+            return res.status(400).json({ success: false, message: 'Booking is already cancelled' });
+        }
+
+        if (booking.status === 'started') {
+            return res.status(400).json({ success: false, message: 'Cannot cancel a trip that has already started' });
+        }
+
+        // Cancel: set status + clear driverId so it vanishes from all driver listings
+        await prisma.rideRequest.update({
+            where: { id: rideId },
+            data: {
+                status: 'cancelled',
+                cancelBy: 'rider',
+                driverId: null,
+            },
+        });
+
+        // Notify assigned driver via socket (if any)
+        try {
+            if (booking.driverId) {
+                const io = req.app.get('io');
+                if (io) {
+                    io.to(`driver-${booking.driverId}`).emit('trip-cancelled', {
+                        booking_id: rideId,
+                        cancelled_by: 'rider',
+                    });
+                }
+            }
+        } catch (_) {}
+
+        return res.json({
+            success: true,
+            message: 'Booking cancelled successfully',
+            data: { booking_id: rideId, status: 'cancelled' },
+        });
+    } catch (error) {
+        console.error('Cancel booking error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to cancel booking' });
+    }
+};
+
 // @desc    Get vehicle types by service_id
 // @route   GET /apimobile/user/booking/vehicle-types/:serviceId
 // @access  Private
