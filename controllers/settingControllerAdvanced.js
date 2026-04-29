@@ -241,6 +241,60 @@ export const updateMailTemplateSettings = async (req, res) => {
     }
 };
 
+// @desc    Update driver rejection block settings
+// @route   POST /api/settings/driver-rejection
+// @access  Private (Admin)
+export const updateDriverRejectionSettings = async (req, res) => {
+    try {
+        const { enabled, maxCount, cooldownHours } = req.body;
+        const updates = [];
+
+        if (enabled !== undefined) {
+            if (typeof enabled !== "boolean" && enabled !== 0 && enabled !== 1 && enabled !== "0" && enabled !== "1") {
+                return res.status(400).json({ success: false, message: "`enabled` must be a boolean or 0/1" });
+            }
+            const val = enabled === true || enabled === 1 || enabled === "1" ? "1" : "0";
+            updates.push({ key: "driver_rejection_block_enabled", value: val });
+        }
+
+        if (maxCount !== undefined) {
+            const parsed = parseInt(maxCount, 10);
+            if (Number.isNaN(parsed) || parsed < 1 || parsed > 50) {
+                return res.status(400).json({ success: false, message: "`maxCount` must be an integer between 1 and 50" });
+            }
+            updates.push({ key: "driver_rejection_max_count", value: String(parsed) });
+        }
+
+        if (cooldownHours !== undefined) {
+            const parsed = parseFloat(cooldownHours);
+            if (Number.isNaN(parsed) || parsed <= 0 || parsed > 720) {
+                return res.status(400).json({ success: false, message: "`cooldownHours` must be a number between 0.5 and 720" });
+            }
+            updates.push({ key: "driver_rejection_cooldown_duration", value: String(parsed) });
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No valid fields provided. Send at least one of: enabled, maxCount, cooldownHours",
+            });
+        }
+
+        for (const { key, value } of updates) {
+            await prisma.setting.upsert({
+                where: { key },
+                update: { value },
+                create: { key, value },
+            });
+        }
+
+        res.json({ success: true, message: "Driver rejection settings updated successfully" });
+    } catch (error) {
+        console.error("Update driver rejection settings error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Get settings by category
 // @route   GET /api/settings/category/:category
 // @access  Private (Admin)
@@ -254,6 +308,7 @@ export const getSettingsByCategory = async (req, res) => {
             notification: ['IS_ONESIGNAL', 'ONESIGNAL_APP_ID', 'ONESIGNAL_REST_API_KEY', 'FIREBASE_SERVER_KEY', 'FIREBASE_SENDER_ID'],
             sms: ['SMS_'],
             'mail-template': ['new_ride_requested', 'accepted', 'bid_placed', 'bid_accepted', 'bid_rejected', 'arriving', 'arrived', 'in_progress', 'canceled', 'driver_canceled', 'rider_canceled', 'completed', 'payment_status_message', 'otp_verification_mail'],
+            'driver-rejection': ['driver_rejection_block_enabled', 'driver_rejection_max_count', 'driver_rejection_cooldown_duration'],
         };
 
         const keys = categoryMap[category] || [];
@@ -267,6 +322,23 @@ export const getSettingsByCategory = async (req, res) => {
                 }
             }
         });
+
+        // For driver-rejection: return a structured object with defaults for missing keys
+        if (category === 'driver-rejection') {
+            const structured = {
+                enabled: settingsObj['driver_rejection_block_enabled'] !== undefined
+                    ? settingsObj['driver_rejection_block_enabled'] === '1'
+                    : true,
+                maxCount: settingsObj['driver_rejection_max_count'] !== undefined
+                    ? parseInt(settingsObj['driver_rejection_max_count'], 10)
+                    : 3,
+                cooldownHours: settingsObj['driver_rejection_cooldown_duration'] !== undefined
+                    ? parseFloat(settingsObj['driver_rejection_cooldown_duration'])
+                    : 24,
+                _raw: settingsObj,
+            };
+            return res.json({ success: true, data: structured });
+        }
 
         res.json({
             success: true,
