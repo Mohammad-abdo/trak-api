@@ -289,7 +289,27 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
                 { status: "scheduled", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
             ],
         },
-        include: {
+        select: {
+            id: true,
+            riderId: true,
+            vehicleCategoryId: true,
+            totalAmount: true,
+            baseFare: true,
+            paymentType: true,
+            startLatitude: true,
+            startLongitude: true,
+            startAddress: true,
+            endLatitude: true,
+            endLongitude: true,
+            endAddress: true,
+            distance: true,
+            duration: true,
+            status: true,
+            isSchedule: true,
+            scheduleDatetime: true,
+            cancelledDriverIds: true,
+            pricingData: true,
+            createdAt: true,
             rider: {
                 select: {
                     id: true,
@@ -367,6 +387,14 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
         // Real system-calculated price (km × service rate). Falls back to stored amount.
         const realPrice = estimatedPrice?.estimatedTotal ?? parseFloat(ride.totalAmount);
 
+        // userRequestedPrice: what the user said they want to pay.
+        // Stored in pricingData during booking creation when the user passes `requestedPrice`.
+        // Falls back to the system price when the user did not specify a custom price.
+        const storedPricing = ride.pricingData
+            ? (typeof ride.pricingData === 'string' ? JSON.parse(ride.pricingData) : ride.pricingData)
+            : null;
+        const userRequestedPrice = storedPricing?.userRequestedPrice ?? parseFloat(ride.totalAmount);
+
         return {
             id: ride.id,
             rider: {
@@ -398,12 +426,13 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
                 capacity: ride.service.vehicleCategory.capacity
             } : null,
             pricing: {
-                realPrice,                        // km × service rate (the authoritative price)
-                userRequestedPrice: parseFloat(ride.totalAmount),
+                realPrice,             // fresh km × service-rate calculation (authoritative)
+                userRequestedPrice,    // what the user wants to pay (may differ when requestedPrice was sent)
+                isNegotiable: userRequestedPrice < realPrice, // quick flag for driver UX
                 breakdown: estimatedPrice?.breakdown ?? null,
-                currency: estimatedPrice?.currency ?? "SAR",
+                currency: storedPricing?.currency ?? estimatedPrice?.currency ?? "SAR",
                 baseFare: ride.baseFare,
-                tripDistanceKm: estimatedPrice?.breakdown?.distance ?? null,
+                tripDistanceKm: estimatedPrice?.breakdown?.distance ?? storedPricing?.distanceKm ?? null,
                 perKmRate: estimatedPrice?.breakdown?.perKmRate ?? null,
                 duration: ride.duration,
                 paymentType: ride.paymentType

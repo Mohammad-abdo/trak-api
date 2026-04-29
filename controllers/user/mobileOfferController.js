@@ -118,17 +118,18 @@ export const getNearDrivers = async (req, res) => {
             },
         });
 
+        // Keep bids from any driver who isn't banned/deleted.
+        // We intentionally drop the isOnline/isAvailable gate here: once a driver
+        // has submitted a bid they are an active participant, even if they momentarily
+        // go offline while waiting for the rider's decision.
         const activeBids = bids.filter(
-            (b) =>
-                b.driver &&
-                b.driver.status === 'active' &&
-                b.driver.isOnline === true &&
-                b.driver.isAvailable === true
+            (b) => b.driver && b.driver.status !== 'banned' && b.driver.status !== 'inactive'
         );
 
-        // Fallback: include driver who responded via `/rides/respond`
+        // Fallback: include driver who responded via `/rides/respond` or `/negotiation/propose`.
+        // These flows set driverId directly on the ride without creating a RideRequestBid row.
         // Covers two sub-cases:
-        //   A) Driver counter-offered (negotiatedFare != null, status = negotiating)
+        //   A) Driver counter-offered (negotiatedFare != null, status = negotiating / pending)
         //   B) Driver directly accepted (status = accepted, driverId set, no bid row)
         let respondFlowOffer = null;
         if (booking.driverId) {
@@ -150,7 +151,10 @@ export const getNearDrivers = async (req, res) => {
                     },
                 });
 
-                if (driver && driver.status === 'active') {
+                // Show any driver who has explicitly set themselves on this ride,
+                // as long as they are not banned or deleted. The system already allowed
+                // them to send the offer, so their profile status is not a blocker here.
+                if (driver && driver.status !== 'banned' && driver.status !== 'inactive') {
                     respondFlowOffer = {
                         id: `respond-${booking.id}-${driver.id}`,
                         // For direct-accept: show original fare; for negotiation: show proposed fare

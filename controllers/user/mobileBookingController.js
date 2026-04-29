@@ -247,6 +247,7 @@ export const createBooking = async (req, res) => {
             isSpecial,
             scheduledAt,
             scheduleDatetime,
+            requestedPrice,   // optional: price the user wants to pay (shown to driver alongside realPrice)
         } = req.body;
 
         if (!vehicle_id || !from || !to) {
@@ -331,6 +332,16 @@ export const createBooking = async (req, res) => {
 
         const calculatedTotal = (priceResult.totalAmount ?? 0) + sizeModifier + weightModifier;
 
+        // Validate the optional user-requested price (must be positive; cannot exceed system price)
+        let userRequestedPrice = null;
+        if (requestedPrice !== undefined && requestedPrice !== null && requestedPrice !== '') {
+            const parsed = parseFloat(requestedPrice);
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                return res.status(400).json({ success: false, message: 'requestedPrice must be a positive number' });
+            }
+            userRequestedPrice = parsed;
+        }
+
         // Backward-compatible booking type handling:
         // - normal (default): immediate trip
         // - special: scheduled trip in the future
@@ -400,6 +411,13 @@ export const createBooking = async (req, res) => {
                     distanceKm,
                     pricing: priceResult.breakdown ?? null,
                 },
+                pricingData: {
+                    systemPrice: calculatedTotal,
+                    userRequestedPrice: userRequestedPrice ?? calculatedTotal,
+                    currency: priceResult.currency ?? 'SAR',
+                    distanceKm,
+                    breakdown: priceResult.breakdown ?? null,
+                },
             },
             select: {
                 id: true,
@@ -434,6 +452,7 @@ export const createBooking = async (req, res) => {
                 bookingType: specialFlag ? 'special' : 'normal',
                 scheduledAt: booking.scheduleDatetime ?? null,
                 totalAmount: parseFloat(booking.totalAmount),
+                userRequestedPrice: userRequestedPrice ?? parseFloat(booking.totalAmount),
                 currency: priceResult.currency ?? "SAR",
                 distanceKm: parseFloat(distanceKm.toFixed(2)),
                 paymentType: booking.paymentType,

@@ -930,7 +930,17 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *     summary: Create a booking (normal or scheduled) — server calculates total price
  *     description: |
  *       Creates a ride/shipment request. The server calculates `totalAmount` automatically
- *       from the vehicle category's pricing rules — **do not send a price from the client**.
+ *       from the vehicle category's pricing rules.
+ *
+ *       ### Optional user-requested price (`requestedPrice`)
+ *       If the user wants to propose a lower price than the system calculates, pass
+ *       `requestedPrice` in the body. The server stores both values:
+ *       - `totalAmount` — authoritative system price (km × rate)
+ *       - `userRequestedPrice` — the user's proposed price
+ *
+ *       Drivers see both values in `GET /driver/rides/available` so they can decide
+ *       whether to accept at the user's price or negotiate.  
+ *       If `requestedPrice` is **not** sent, both values are the same.
  *
  *       ### Supported categories
  *       | Category type | Extra fields needed |
@@ -947,7 +957,8 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *       ### What to do after you get `booking_id` + `totalAmount`
  *       - Show the price to the user
  *       - If happy → call `POST /apimobile/user/offers/near-drivers` with `booking_id`
- *       - If user wants to negotiate → call `POST /apimobile/user/negotiation/start`
+ *       - If user wants to negotiate → pass `requestedPrice` during booking creation,
+ *         or call `POST /apimobile/user/negotiation/start`
  *         with `{ rideRequestId: booking_id, proposedFare: <desired price> }`
  *     security:
  *       - bearerAuth: []
@@ -985,6 +996,14 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *                 type: integer
  *                 example: 3
  *                 description: "Shipment category only. From GET /booking/shipment-weights. Adds a price modifier."
+ *               requestedPrice:
+ *                 type: number
+ *                 example: 25.00
+ *                 description: |
+ *                   Optional. Price the user wants to pay (must be > 0).
+ *                   Shown to drivers as `userRequestedPrice` alongside the system `realPrice`.
+ *                   Drivers see `isNegotiable: true` when this is lower than the system price.
+ *                   If omitted, `userRequestedPrice` equals the system-calculated `totalAmount`.
  *               from:
  *                 type: object
  *                 required: [lat, lng]
@@ -1016,6 +1035,7 @@ router.post('/payments/paysky-simulate', authenticate, payskySimulateTripPayment
  *                     bookingType: normal
  *                     scheduledAt: null
  *                     totalAmount: 32.50
+ *                     userRequestedPrice: 25.00
  *                     currency: SAR
  *                     distanceKm: 9.0
  *                     paymentType: cash
