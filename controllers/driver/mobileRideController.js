@@ -2,7 +2,12 @@ import prisma from "../../utils/prisma.js";
 import { parseRideRequestIdParam, pickRideRequestIdFromBody } from "../../utils/rideRequestId.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
-import { getDriverAndSystemShare, getDriverSearchRadius, getDriverRejectionSettings } from "../../utils/settingsHelper.js";
+import {
+    getDriverAndSystemShare,
+    getDriverSearchRadius,
+    getDriverRejectionSettings,
+    getRegularRideFindDriverTimeoutMinutes,
+} from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
 
@@ -58,6 +63,56 @@ async function checkDriverRejectionBlock(driverId) {
     // Block window has expired → auto-reset the counter
     await prisma.user.update({ where: { id: driverId }, data: { driverRejectionCount: 0 } });
     return { isBlocked: false, remainingMinutes: 0, enabled, rejectionCount: 0, maxCount, cooldownHours };
+}
+
+/**
+ * Auto-remove expired regular rides that were never accepted by any driver.
+ * This enforces: if no driver accepts in X minutes, ride is deleted permanently.
+ * Returns number of deleted rides.
+ */
+async function purgeExpiredUnacceptedRegularRides() {
+    const timeoutMinutes = await getRegularRideFindDriverTimeoutMinutes();
+    const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+
+    // "Unaccepted" here means still pending/negotiating (not accepted/started/completed)
+    // and no payment record.
+    const expiredRides = await prisma.rideRequest.findMany({
+        where: {
+            isSchedule: false,
+            createdAt: { lte: cutoff },
+            status: { in: ["pending", "negotiating"] },
+            payments: { none: {} },
+        },
+        select: { id: true },
+        take: 300,
+    });
+
+    const rideIds = expiredRides.map((r) => r.id);
+    if (rideIds.length === 0) return 0;
+
+    // Complaints may have child comments; delete comments first.
+    const complaints = await prisma.complaint.findMany({
+        where: { rideRequestId: { in: rideIds } },
+        select: { id: true },
+    });
+    const complaintIds = complaints.map((c) => c.id);
+
+    await prisma.$transaction([
+        ...(complaintIds.length > 0
+            ? [prisma.complaintComment.deleteMany({ where: { complaintId: { in: complaintIds } } })]
+            : []),
+        prisma.complaint.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideNegotiation.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideRequestBid.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideRequestRating.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideRequestHistory.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.walletHistory.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.payment.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideChatMessage.deleteMany({ where: { rideRequestId: { in: rideIds } } }),
+        prisma.rideRequest.deleteMany({ where: { id: { in: rideIds } } }),
+    ]);
+
+    return rideIds.length;
 }
 
 // Driver's ride history with pagination and filters
@@ -321,6 +376,9 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
     const searchRadius = await getDriverSearchRadius();
     const now = new Date();
     const scheduleOpenAt = new Date(now.getTime() + 30 * 60 * 1000); // show scheduled rides in next 30 min
+
+    // Auto-clean expired unaccepted regular rides before serving availability.
+    await purgeExpiredUnacceptedRegularRides();
 
     // Get pending ride requests
     const pendingRides = await prisma.rideRequest.findMany({

@@ -167,3 +167,27 @@ export async function getDriverRejectionSettings() {
     ]);
     return { enabled, maxCount, cooldownHours };
 }
+
+/**
+ * Max minutes to keep a regular ride open while searching for drivers.
+ * After this window, unaccepted regular rides can be auto-removed.
+ * Uses setting key: max_time_for_find_drivers_for_regular_ride_in_minute
+ * Default: 10 minutes.
+ */
+export async function getRegularRideFindDriverTimeoutMinutes() {
+    let row = await prisma.setting.findUnique({
+        where: { key: "max_time_for_find_drivers_for_regular_ride_in_minute" },
+    });
+    if (!row || row.value == null || String(row.value).trim() === "") {
+        await prisma.setting.upsert({
+            where: { key: "max_time_for_find_drivers_for_regular_ride_in_minute" },
+            update: { value: "10" },
+            create: { key: "max_time_for_find_drivers_for_regular_ride_in_minute", value: "10" },
+        });
+        return 10;
+    }
+
+    const minutes = parseFloat(row.value);
+    if (Number.isNaN(minutes) || minutes <= 0) return 10;
+    return Math.min(180, minutes); // cap at 3 hours
+}

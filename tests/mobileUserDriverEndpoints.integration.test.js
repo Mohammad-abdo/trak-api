@@ -97,6 +97,7 @@ describe.skipIf(process.env.SKIP_MOBILE_ENDPOINTS_E2E === "1")(
         let driverToken;
         let vehicleCategoryId;
         let rideIdNormal;
+        let rideIdNegotiation;
         let rideIdSpecialFuture;
 
         beforeAll(async () => {
@@ -155,10 +156,16 @@ describe.skipIf(process.env.SKIP_MOBILE_ENDPOINTS_E2E === "1")(
         });
 
         afterAll(async () => {
-            const ids = [rideIdNormal, rideIdSpecialFuture].filter(Boolean);
+            const ids = [rideIdNormal, rideIdNegotiation, rideIdSpecialFuture].filter(Boolean);
             if (ids.length) {
                 await prisma.payment.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
                 await prisma.walletHistory.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.rideNegotiation.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.rideRequestBid.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.rideRequestRating.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.rideRequestHistory.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.rideChatMessage.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
+                await prisma.complaint.deleteMany({ where: { rideRequestId: { in: ids } } }).catch(() => {});
                 await prisma.rideRequest.deleteMany({ where: { id: { in: ids } } }).catch(() => {});
             }
             await prisma.$disconnect();
@@ -278,6 +285,81 @@ describe.skipIf(process.env.SKIP_MOBILE_ENDPOINTS_E2E === "1")(
             const rides = res.body.data?.rides || [];
             const ids = Array.isArray(rides) ? rides.map((r) => r.id) : [];
             expect(ids).toContain(rideIdNormal);
+        });
+
+        it("Auto-deletes expired unaccepted regular rides", async () => {
+            // 1) Create a fresh normal ride
+            const created = await request(app)
+                .post("/apimobile/user/booking/create")
+                .set("Authorization", `Bearer ${riderToken}`)
+                .send({
+                    vehicle_id: vehicleCategoryId,
+                    paymentMethod: 0,
+                    from: { lat: 30.0444, lng: 31.2357, address: "Pickup Expired" },
+                    to: { lat: 30.0595, lng: 31.2234, address: "Dropoff Expired" },
+                });
+            expect(created.status).toBe(201);
+            const staleRideId = created.body.data.booking_id;
+
+            // 2) Force it to be old enough to expire (default timeout is 10 min)
+            await prisma.rideRequest.update({
+                where: { id: staleRideId },
+                data: { createdAt: new Date(Date.now() - 12 * 60 * 1000) },
+            });
+
+            // 3) Trigger available-rides endpoint (this runs purge first)
+            const avail = await request(app)
+                .get("/apimobile/driver/rides/available")
+                .set("Authorization", `Bearer ${driverToken}`)
+                .query({ latitude: 30.0444, longitude: 31.2357 });
+            expect(avail.status).toBe(200);
+            expect(avail.body.success).toBe(true);
+
+            // 4) Ensure ride was physically deleted from DB
+            const deleted = await prisma.rideRequest.findUnique({ where: { id: staleRideId } });
+            expect(deleted).toBeNull();
+        });
+
+        it("Driver negotiation appears in User: POST /offers/near-drivers", async () => {
+            // 1) Create a fresh pending ride for negotiation scenario
+            const created = await request(app)
+                .post("/apimobile/user/booking/create")
+                .set("Authorization", `Bearer ${riderToken}`)
+                .send({
+                    vehicle_id: vehicleCategoryId,
+                    paymentMethod: 0,
+                    from: { lat: 30.0444, lng: 31.2357, address: "Pickup N" },
+                    to: { lat: 30.0595, lng: 31.2234, address: "Dropoff N" },
+                });
+            expect(created.status).toBe(201);
+            rideIdNegotiation = created.body.data.booking_id;
+
+            // 2) Driver sends negotiation
+            const propose = await request(app)
+                .post("/apimobile/driver/negotiation/propose")
+                .set("Authorization", `Bearer ${driverToken}`)
+                .send({ rideRequestId: rideIdNegotiation, proposedFare: 25 });
+            expect(propose.status).toBe(200);
+            expect(propose.body.success).toBe(true);
+
+            // 3) User checks near drivers for that booking
+            const near = await request(app)
+                .post("/apimobile/user/offers/near-drivers")
+                .set("Authorization", `Bearer ${riderToken}`)
+                .send({
+                    booking_id: rideIdNegotiation,
+                    booking_location: { lat: 30.0444, lng: 31.2357 },
+                });
+
+            expect(near.status).toBe(200);
+            expect(near.body.success).toBe(true);
+            expect(Array.isArray(near.body.data)).toBe(true);
+            expect(near.body.data.length).toBeGreaterThan(0);
+
+            const offer = near.body.data.find((d) => d.id === driverId);
+            expect(offer).toBeTruthy();
+            expect(Number(offer.offeredPrice)).toBeCloseTo(25, 2);
+            expect(Number(offer.basePrice)).toBeGreaterThan(0);
         });
 
         it("Driver: POST /rides/respond accept works", async () => {
