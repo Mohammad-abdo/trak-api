@@ -2,36 +2,62 @@ import prisma from "../../utils/prisma.js";
 import { parseRideRequestIdParam, pickRideRequestIdFromBody } from "../../utils/rideRequestId.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
-import { getDriverAndSystemShare } from "../../utils/settingsHelper.js";
+import { getDriverAndSystemShare, getDriverSearchRadius, getDriverRejectionSettings } from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
-import { getDriverSearchRadius, getDriverRejectionCooldownDuration } from "../../utils/settingsHelper.js";
 import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
 
 /**
- * Check if driver is currently blocked from rejecting rides
- * Returns { isBlocked: boolean, remainingMinutes: number }
+ * Check if driver is currently blocked from rejecting/viewing rides.
+ *
+ * Logic:
+ *  1. If the feature is disabled by admin → never blocked.
+ *  2. A block starts when driverRejectionCount >= maxCount.
+ *  3. The block lasts for `cooldownHours` starting from `lastRejectionAt`
+ *     (the timestamp of the rejection that crossed the limit).
+ *  4. Once the block expires the count is automatically reset to 0.
+ *
+ * Returns { isBlocked, remainingMinutes, rejectionCount, maxCount, cooldownHours, enabled }
  */
 async function checkDriverRejectionBlock(driverId) {
+    const { enabled, maxCount, cooldownHours } = await getDriverRejectionSettings();
+
+    // Feature off → drivers can reject freely
+    if (!enabled) {
+        return { isBlocked: false, remainingMinutes: 0, enabled: false, maxCount, cooldownHours };
+    }
+
     const driver = await prisma.user.findUnique({
         where: { id: driverId },
-        select: { lastRejectionAt: true }
+        select: { lastRejectionAt: true, driverRejectionCount: true },
     });
 
-    if (!driver?.lastRejectionAt) {
-        return { isBlocked: false, remainingMinutes: 0 };
+    const rejectionCount = driver?.driverRejectionCount ?? 0;
+
+    // Not yet at the limit → no block
+    if (rejectionCount < maxCount) {
+        return { isBlocked: false, remainingMinutes: 0, enabled, rejectionCount, maxCount, cooldownHours };
     }
 
-    const cooldownHours = await getDriverRejectionCooldownDuration();
-    const cooldownMs = cooldownHours * 60 * 60 * 1000; // Convert hours to milliseconds
-    const timeSinceLastRejection = Date.now() - new Date(driver.lastRejectionAt).getTime();
+    // Count is at/over limit — check whether the block window is still active
+    const lastRejectionAt = driver?.lastRejectionAt;
+    if (!lastRejectionAt) {
+        // Inconsistent state — reset and allow
+        await prisma.user.update({ where: { id: driverId }, data: { driverRejectionCount: 0 } });
+        return { isBlocked: false, remainingMinutes: 0, enabled, rejectionCount: 0, maxCount, cooldownHours };
+    }
 
-    if (timeSinceLastRejection < cooldownMs) {
-        const remainingMs = cooldownMs - timeSinceLastRejection;
+    const cooldownMs = cooldownHours * 60 * 60 * 1000;
+    const elapsed = Date.now() - new Date(lastRejectionAt).getTime();
+
+    if (elapsed < cooldownMs) {
+        const remainingMs = cooldownMs - elapsed;
         const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
-        return { isBlocked: true, remainingMinutes };
+        return { isBlocked: true, remainingMinutes, enabled, rejectionCount, maxCount, cooldownHours };
     }
 
-    return { isBlocked: false, remainingMinutes: 0 };
+    // Block window has expired → auto-reset the counter
+    await prisma.user.update({ where: { id: driverId }, data: { driverRejectionCount: 0 } });
+    return { isBlocked: false, remainingMinutes: 0, enabled, rejectionCount: 0, maxCount, cooldownHours };
 }
 
 // Driver's ride history with pagination and filters
@@ -111,6 +137,16 @@ export const respondToRide = asyncHandler(async (req, res) => {
         include: { rider: { select: { id: true, firstName: true, lastName: true } } }
     });
     if (!ride) return errorResponse(res, "Ride request not found", 404);
+
+    // Guard: another driver may have already claimed this ride
+    if (ride.driverId && ride.driverId !== req.user.id) {
+        return errorResponse(res, "This ride has already been taken by another driver", 409);
+    }
+
+    // Guard: ride must still be actionable
+    if (!["pending", "scheduled", "negotiating"].includes(ride.status)) {
+        return errorResponse(res, `Cannot respond to a ride with status '${ride.status}'`, 400);
+    }
 
     if (accept) {
         // Check if driver proposed a different fare (negotiation)
@@ -201,28 +237,42 @@ export const respondToRide = asyncHandler(async (req, res) => {
         // Check if driver is currently blocked from rejecting
         const blockStatus = await checkDriverRejectionBlock(req.user.id);
         if (blockStatus.isBlocked) {
-            return errorResponse(res, `You are blocked from rejecting rides. Try again in ${blockStatus.remainingMinutes} minutes.`, 429);
+            return errorResponse(
+                res,
+                `You are blocked from rejecting rides for ${blockStatus.remainingMinutes} more minute(s) ` +
+                `because you rejected ${blockStatus.maxCount} ride(s) in a row. ` +
+                `The block lasts ${blockStatus.cooldownHours} hour(s).`,
+                429
+            );
         }
 
         const cancelledIds = ride.cancelledDriverIds ? JSON.parse(ride.cancelledDriverIds) : [];
         cancelledIds.push(req.user.id);
 
-        // Update rejection tracking
-        await prisma.user.update({
+        // Read the driver's current rejection count BEFORE incrementing
+        const driverRow = await prisma.user.findUnique({
             where: { id: req.user.id },
-            data: {
-                lastRejectionAt: new Date(),
-                driverRejectionCount: {
-                    increment: 1
-                }
-            }
+            select: { driverRejectionCount: true },
         });
+        const currentCount = driverRow?.driverRejectionCount ?? 0;
+        const newCount = currentCount + 1;
+        const { enabled, maxCount } = blockStatus;
+
+        // Only update lastRejectionAt (block start) when the count actually hits the limit.
+        // This means the block window starts from the moment the driver crosses the threshold,
+        // not from every individual rejection.
+        const updateData = {
+            driverRejectionCount: newCount,
+            ...(enabled && newCount >= maxCount ? { lastRejectionAt: new Date() } : {}),
+        };
+
+        await prisma.user.update({ where: { id: req.user.id }, data: updateData });
 
         await prisma.rideRequest.update({
             where: { id: ride.id },
             data: {
                 cancelledDriverIds: JSON.stringify(cancelledIds),
-                driverNote: rejectReason || null
+                driverNote: rejectReason || null,
             },
         });
 
@@ -289,27 +339,7 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
                 { status: "scheduled", isSchedule: true, scheduleDatetime: { lte: scheduleOpenAt } },
             ],
         },
-        select: {
-            id: true,
-            riderId: true,
-            vehicleCategoryId: true,
-            totalAmount: true,
-            baseFare: true,
-            paymentType: true,
-            startLatitude: true,
-            startLongitude: true,
-            startAddress: true,
-            endLatitude: true,
-            endLongitude: true,
-            endAddress: true,
-            distance: true,
-            duration: true,
-            status: true,
-            isSchedule: true,
-            scheduleDatetime: true,
-            cancelledDriverIds: true,
-            pricingData: true,
-            createdAt: true,
+        include: {
             rider: {
                 select: {
                     id: true,

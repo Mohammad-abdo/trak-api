@@ -96,7 +96,7 @@ export async function getDriverSearchRadius() {
 /**
  * Get driver rejection cooldown duration from settings (in hours).
  * Default is 24 hours if not set.
- * This is the time a driver is blocked after rejection before they can apply again.
+ * This is the time a driver is blocked after hitting the max rejection count.
  */
 export async function getDriverRejectionCooldownDuration() {
     let row = await prisma.setting.findUnique({
@@ -111,5 +111,59 @@ export async function getDriverRejectionCooldownDuration() {
         return 24;
     }
     const duration = parseFloat(row.value);
-    return Number.isNaN(duration) || duration <= 0 ? 24 : Math.min(720, duration); // Max 30 days (720 hours), min 1 hour
+    return Number.isNaN(duration) || duration <= 0 ? 24 : Math.min(720, duration);
+}
+
+/**
+ * Whether the driver rejection block feature is enabled.
+ * When disabled drivers can reject any number of rides without being blocked.
+ * Stored as "1" (enabled) or "0" (disabled). Default: enabled.
+ */
+export async function getDriverRejectionBlockEnabled() {
+    let row = await prisma.setting.findUnique({
+        where: { key: "driver_rejection_block_enabled" },
+    });
+    if (!row || row.value == null || String(row.value).trim() === "") {
+        await prisma.setting.upsert({
+            where: { key: "driver_rejection_block_enabled" },
+            update: { value: "1" },
+            create: { key: "driver_rejection_block_enabled", value: "1" },
+        });
+        return true;
+    }
+    return String(row.value).trim() === "1";
+}
+
+/**
+ * Maximum number of ride rejections a driver is allowed before being blocked.
+ * After this many rejections the driver cannot see new rides for `cooldownDuration` hours.
+ * Default: 3 rejections.
+ */
+export async function getDriverRejectionMaxCount() {
+    let row = await prisma.setting.findUnique({
+        where: { key: "driver_rejection_max_count" },
+    });
+    if (!row || row.value == null || String(row.value).trim() === "") {
+        await prisma.setting.upsert({
+            where: { key: "driver_rejection_max_count" },
+            update: { value: "3" },
+            create: { key: "driver_rejection_max_count", value: "3" },
+        });
+        return 3;
+    }
+    const count = parseInt(row.value, 10);
+    return Number.isNaN(count) || count < 1 ? 3 : Math.min(50, count);
+}
+
+/**
+ * Convenience: fetch all three driver-rejection settings in one call.
+ * Returns { enabled, maxCount, cooldownHours }
+ */
+export async function getDriverRejectionSettings() {
+    const [enabled, maxCount, cooldownHours] = await Promise.all([
+        getDriverRejectionBlockEnabled(),
+        getDriverRejectionMaxCount(),
+        getDriverRejectionCooldownDuration(),
+    ]);
+    return { enabled, maxCount, cooldownHours };
 }
