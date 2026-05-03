@@ -78,13 +78,20 @@ const router = express.Router();
 // ── Multer ───────────────────────────────────────────────────────────────────
 const driverStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const dir = file.fieldname === "documents" || file.fieldname === "document"
+        const isDriverDoc =
+            file.fieldname === "documents" ||
+            file.fieldname === "document" ||
+            file.fieldname === "files";
+        const dir = isDriverDoc
             ? path.join(__dirname, "../../uploads/driver-documents")
             : path.join(__dirname, "../../uploads/drivers");
         cb(null, dir);
     },
     filename: (req, file, cb) => {
-        const prefix = file.fieldname === "documents" || file.fieldname === "document" ? "doc" : file.fieldname;
+        const prefix =
+            file.fieldname === "documents" || file.fieldname === "document" || file.fieldname === "files"
+                ? "doc"
+                : file.fieldname;
         cb(null, `${prefix}_${Date.now()}_${Math.round(Math.random() * 1e4)}${path.extname(file.originalname)}`);
     },
 });

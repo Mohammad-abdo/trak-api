@@ -69,7 +69,7 @@ function formatDriverResponse(driver, req) {
                   carImage: driver.userDetail.carImage ? fullImageUrl(req, driver.userDetail.carImage) : null,
               }
             : null,
-        driverDocuments: (driver.driverDocuments || []).map((dd) => ({
+        driverDocuments: dedupeDriverDocumentsByType(driver.driverDocuments || []).map((dd) => ({
             ...dd,
             documentImage: dd.documentImage ? fullImageUrl(req, dd.documentImage) : null,
         })),
@@ -184,11 +184,11 @@ export const registerDriver = asyncHandler(async (req, res) => {
     const docFiles = req.files?.documents || [];
     const fileList = Array.isArray(docFiles) ? docFiles : [docFiles];
 
-    // Get or create a default "General" document type
-    let generalDoc = await prisma.document.findFirst();
+    // Get or create a default "General" document type (schema: Document uses status, not isActive)
+    let generalDoc = await prisma.document.findFirst({ where: { status: 1 } });
     if (!generalDoc) {
         generalDoc = await prisma.document.create({
-            data: { name: 'General', isActive: true }
+            data: { name: "General", nameAr: "عام", status: 1 },
         });
     }
 
@@ -339,21 +339,42 @@ export const updateVehicle = asyncHandler(async (req, res) => {
 function collectDriverUploadFiles(req) {
     const f = req.files;
     if (!f) return [];
-    const raw = f.files || f.documents || f.document;
-    if (!raw) return [];
-    return Array.isArray(raw) ? raw : [raw];
+    const chunks = [];
+    for (const key of ["files", "documents", "document"]) {
+        const raw = f[key];
+        if (!raw) continue;
+        if (Array.isArray(raw)) chunks.push(...raw);
+        else chunks.push(raw);
+    }
+    const seen = new Set();
+    const out = [];
+    for (const file of chunks) {
+        if (file?.filename && !seen.has(file.filename)) {
+            seen.add(file.filename);
+            out.push(file);
+        }
+    }
+    return out;
 }
 
 /** Parse document type IDs from multipart body (JSON string or comma-separated). */
 function parseDocumentIdList(body) {
-    const { documentIds, documentId, document_id } = body;
-    if (documentIds != null) {
-        if (Array.isArray(documentIds)) {
-            return documentIds.map((x) => parseInt(String(x), 10)).filter((n) => !Number.isNaN(n));
+    if (!body || typeof body !== "object") return [];
+    const rawIds =
+        body.documentIds ??
+        body.document_ids ??
+        body["documentIds[]"] ??
+        body["document_ids[]"];
+    const documentId = body.documentId ?? body.document_id;
+    if (rawIds != null) {
+        if (Array.isArray(rawIds)) {
+            return rawIds.map((x) => parseInt(String(x), 10)).filter((n) => !Number.isNaN(n));
         }
-        if (typeof documentIds === "string") {
-            const s = documentIds.trim();
-            if (s.startsWith("[")) {
+        if (typeof rawIds === "string") {
+            const s = rawIds.trim();
+            if (!s) {
+                /* fall through to single documentId */
+            } else if (s.startsWith("[")) {
                 try {
                     const arr = JSON.parse(s);
                     if (Array.isArray(arr)) {
@@ -362,11 +383,12 @@ function parseDocumentIdList(body) {
                 } catch {
                     /* fall through */
                 }
+            } else {
+                return s.split(/[,;]/).map((x) => parseInt(x.trim(), 10)).filter((n) => !Number.isNaN(n));
             }
-            return s.split(/[,;]/).map((x) => parseInt(x.trim(), 10)).filter((n) => !Number.isNaN(n));
         }
     }
-    const one = parseInt(String(documentId ?? document_id ?? ""), 10);
+    const one = parseInt(String(documentId ?? ""), 10);
     return Number.isNaN(one) ? [] : [one];
 }
 
@@ -400,6 +422,39 @@ const driverDocInclude = {
     document: { select: { id: true, name: true, nameAr: true, type: true, isRequired: true, hasExpiryDate: true } },
 };
 
+/** Keeps one row per document type (newest wins); removes legacy duplicates from races / old clients. */
+async function mergeDuplicateDriverDocuments(driverId) {
+    const rows = await prisma.driverDocument.findMany({
+        where: { driverId },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    });
+    const seenDocType = new Set();
+    const deleteIds = [];
+    for (const row of rows) {
+        if (!seenDocType.has(row.documentId)) seenDocType.add(row.documentId);
+        else deleteIds.push(row.id);
+    }
+    if (deleteIds.length) {
+        await prisma.driverDocument.deleteMany({ where: { id: { in: deleteIds } } });
+    }
+}
+
+/** For API lists: one entry per document type (newest row). */
+function dedupeDriverDocumentsByType(documents) {
+    const byType = new Map();
+    for (const d of documents) {
+        const prev = byType.get(d.documentId);
+        if (!prev) {
+            byType.set(d.documentId, d);
+            continue;
+        }
+        const prevT = new Date(prev.updatedAt).getTime();
+        const curT = new Date(d.updatedAt).getTime();
+        if (curT > prevT || (curT === prevT && d.id > prev.id)) byType.set(d.documentId, d);
+    }
+    return Array.from(byType.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 // ─── Upload Multiple Documents ───────────────────────────────────────────────
 export const uploadDocuments = asyncHandler(async (req, res) => {
     const fileList = collectDriverUploadFiles(req);
@@ -419,14 +474,14 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
     if (idList.length === 0) {
         return errorResponse(
             res,
-            "documentId or documentIds is required (IDs from GET /apimobile/driver/documents/required). Required when uploading more than one file.",
+            "documentId or documentIds is required (IDs from GET /apimobile/driver/documents/required). Send documentId (one file) or documentIds as JSON e.g. [1,2] matching file order. Required when uploading more than one file.",
             400
         );
     }
 
     const expireList = parseExpireDateList(req.body, fileList.length);
     const driverId = req.user.id;
-    const uploadedDocs = [];
+    const uploadedByDocType = new Map();
 
     for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
@@ -482,13 +537,19 @@ export const uploadDocuments = asyncHandler(async (req, res) => {
             });
         }
 
-        uploadedDocs.push({
+        uploadedByDocType.set(docTypeId, {
             ...driverDoc,
             documentImage: driverDoc.documentImage ? fullImageUrl(req, driverDoc.documentImage) : null,
         });
     }
 
-    return successResponse(res, uploadedDocs, "Documents uploaded successfully");
+    await mergeDuplicateDriverDocuments(driverId);
+
+    return successResponse(
+        res,
+        Array.from(uploadedByDocType.values()),
+        "Documents uploaded successfully"
+    );
 });
 
 // ─── Get My Documents ──────────────────────────────────────────────────────────
@@ -501,7 +562,8 @@ export const getMyDocuments = asyncHandler(async (req, res) => {
         orderBy: { createdAt: "desc" },
     });
 
-    const formatted = documents.map((dd) => ({
+    const uniqueByType = dedupeDriverDocumentsByType(documents);
+    const formatted = uniqueByType.map((dd) => ({
         ...dd,
         documentImage: dd.documentImage ? fullImageUrl(req, dd.documentImage) : null,
     }));
