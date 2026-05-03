@@ -10,6 +10,7 @@ import {
 } from "../../utils/settingsHelper.js";
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
+import { emitDriverTripSyncFromReq } from "../../utils/driverTripSocketSync.js";
 
 /**
  * Check if driver is currently blocked from rejecting/viewing rides.
@@ -270,6 +271,8 @@ export const respondToRide = asyncHandler(async (req, res) => {
                 }
             } catch (_) {}
 
+            emitDriverTripSyncFromReq(req, ride.id, "respond_negotiation");
+
             return successResponse(res, {
                 rideRequestId: ride.id,
                 status: "negotiating",
@@ -297,6 +300,8 @@ export const respondToRide = asyncHandler(async (req, res) => {
                     });
                 }
             } catch (_) {}
+
+            emitDriverTripSyncFromReq(req, ride.id, "respond_direct_accept");
 
             return successResponse(res, {
                 rideRequestId: ride.id,
@@ -357,6 +362,8 @@ export const respondToRide = asyncHandler(async (req, res) => {
                 reason: rejectReason
             });
         } catch (_) {}
+
+        emitDriverTripSyncFromReq(req, ride.id, "respond_reject", req.user.id);
 
         return successResponse(res, {
             rideRequestId: ride.id,
@@ -696,6 +703,8 @@ export const updateRideStatus = asyncHandler(async (req, res) => {
         if (io) emitToRide(io, ride.id, `ride-${status}`, { rideRequestId: ride.id, driverId: req.user.id, status });
     } catch (_) {}
 
+    emitDriverTripSyncFromReq(req, ride.id, `ride_status_${status}`);
+
     return successResponse(res, updated, `Ride status updated to ${status}`);
 });
 
@@ -755,6 +764,8 @@ export const completeRide = asyncHandler(async (req, res) => {
         if (io) emitToRide(io, ride.id, "trip-completed", { rideRequestId: ride.id, driverId: req.user.id, totalAmount });
     } catch (_) {}
 
+    emitDriverTripSyncFromReq(req, ride.id, "ride_completed");
+
     const updated = await prisma.rideRequest.findUnique({ where: { id: ride.id } });
     return successResponse(res, updated, "Ride completed successfully");
 });
@@ -800,6 +811,8 @@ export const cancelRide = asyncHandler(async (req, res) => {
         const io = req.app.get("io") || global.io;
         if (io) emitToRide(io, ride.id, "trip-cancelled", { rideRequestId: ride.id, cancelBy: "driver", reason });
     } catch (_) {}
+
+    emitDriverTripSyncFromReq(req, ride.id, "ride_cancelled_driver");
 
     return successResponse(res, null, "Ride cancelled");
 });
@@ -1004,6 +1017,8 @@ export const driverProposeNegotiation = asyncHandler(async (req, res) => {
         }
     } catch (_) {}
 
+    emitDriverTripSyncFromReq(req, ride.id, "negotiation_propose");
+
     return successResponse(res, {
         rideRequestId: ride.id,
         proposedFare: parsedFare,
@@ -1041,14 +1056,20 @@ export const checkNegotiationStatus = asyncHandler(async (req, res) => {
     if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
 
     let currentStatus = ride.negotiationStatus;
+    let didAutoExpire = false;
 
     // Auto-expire if window passed without rider response
     if (currentStatus === "pending" && ride.negotiationExpiresAt && new Date() > new Date(ride.negotiationExpiresAt)) {
         currentStatus = "expired";
+        didAutoExpire = true;
         await prisma.rideRequest.update({
             where: { id: ride.id },
             data: { negotiationStatus: "expired", driverId: null },
         });
+    }
+
+    if (didAutoExpire) {
+        emitDriverTripSyncFromReq(req, ride.id, "negotiation_expired_auto", req.user.id);
     }
 
     return successResponse(res, {

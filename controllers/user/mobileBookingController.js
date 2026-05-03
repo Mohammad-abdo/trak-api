@@ -52,15 +52,23 @@ export const cancelBooking = async (req, res) => {
         });
 
         // Notify assigned driver via socket (if any)
+        const assignedDriverId = booking.driverId;
         try {
-            if (booking.driverId) {
+            if (assignedDriverId) {
                 const io = req.app.get('io');
                 if (io) {
-                    io.to(`driver-${booking.driverId}`).emit('trip-cancelled', {
+                    io.to(`driver-${assignedDriverId}`).emit('trip-cancelled', {
                         booking_id: rideId,
                         cancelled_by: 'rider',
                     });
                 }
+            }
+        } catch (_) {}
+
+        try {
+            if (assignedDriverId) {
+                const { emitDriverTripSyncFromReq } = await import('../../utils/driverTripSocketSync.js');
+                emitDriverTripSyncFromReq(req, rideId, 'rider_cancel_booking', assignedDriverId);
             }
         } catch (_) {}
 

@@ -334,6 +334,11 @@ export const acceptDriver = async (req, res) => {
             });
         }
 
+        try {
+            const { emitDriverTripSyncFromReq } = await import("../../utils/driverTripSocketSync.js");
+            emitDriverTripSyncFromReq(req, rideId, "rider_accept_driver");
+        } catch (_) {}
+
         return res.json({
             success: true,
             message: 'Driver accepted successfully',
@@ -417,6 +422,11 @@ export const cancelDriverOffer = async (req, res) => {
                 rider_id: riderId,
             });
         }
+
+        try {
+            const { emitDriverTripSyncFromReq } = await import("../../utils/driverTripSocketSync.js");
+            emitDriverTripSyncFromReq(req, rideId, "rider_cancel_driver_offer", driverId);
+        } catch (_) {}
 
         return res.json({
             success: true,

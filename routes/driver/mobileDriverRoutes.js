@@ -1514,13 +1514,17 @@ router.post("/negotiation/propose", authenticate, driverProposeNegotiation);
  *     tags: [Driver Negotiation]
  *     summary: Check if rider accepted or rejected the driver's offer
  *     description: |
- *       **Preferred:** connect Socket.IO, authenticate, emit `join-driver-room` with your driver user id.
- *       Listen for real-time negotiation events (same payload shape as this GET response fields where applicable):
- *       - `ride-negotiation-accepted` — rider (or driver) accepted; `negotiationStatus: accepted`, `negotiatedFare`, `acceptedBy`
- *       - `ride-negotiation-rejected` — negotiation ended; `rejectedBy`, `negotiationStatus: rejected`
- *       - `ride-negotiation-counter` — other party sent a counter-offer; `proposedFare`, `expiresAt`, `proposedBy`
+ *       **Preferred:** connect Socket.IO, authenticate, emit `join-driver-room` with your driver user id,
+ *       and `subscribe-ride` with the ride id during an active trip.
+ *       **Unified snapshot (matches this GET `data` shape + `syncReason`):**
+ *       - `driver-trip-sync` — to your `driver-{id}` room on every trip/negotiation change (no polling needed).
+ *       - `trip-sync` — same payload to `ride-{rideRequestId}` for rider + driver if subscribed.
+ *       **Granular negotiation events:**
+ *       - `ride-negotiation-accepted` — `negotiationStatus: accepted`, `negotiatedFare`, `acceptedBy`
+ *       - `ride-negotiation-rejected` — `rejectedBy`, `negotiationStatus: rejected`
+ *       - `ride-negotiation-counter` — counter-offer; `proposedFare`, `expiresAt`, `proposedBy`
  *
- *       **Fallback:** poll this endpoint after `POST /negotiation/propose` or `POST /rides/respond` with a counter-offer.
+ *       **Fallback:** poll this endpoint only if the socket dropped; prefer `driver-trip-sync` / `trip-sync`.
  *       Returns the current `negotiationStatus`:
  *       - `pending` — rider has not responded yet
  *       - `accepted` — rider accepted; proceed to pick up the ride

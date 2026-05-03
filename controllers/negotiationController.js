@@ -6,6 +6,7 @@ import {
     computeExpiresAt,
 } from "../utils/negotiationHelper.js";
 import { emitToUser, emitToDriver } from "../utils/socketService.js";
+import { emitDriverTripSyncFromReq } from "../utils/driverTripSocketSync.js";
 
 /** Notify driver/rider rooms only (avoids duplicate delivery if a socket joined both driver-* and ride-*). */
 function emitNegotiationSocket(req, event, payload) {
@@ -97,6 +98,8 @@ export const startNegotiation = async (req, res) => {
             }),
         ]);
 
+        emitDriverTripSyncFromReq(req, ride.id, "negotiation_start_rider");
+
         res.json({
             success: true,
             message: "Negotiation started",
@@ -161,6 +164,7 @@ export const counterOffer = async (req, res) => {
                 where: { id: ride.id },
                 data: { negotiationStatus: "expired" },
             });
+            emitDriverTripSyncFromReq(req, ride.id, "negotiation_expired_on_action", ride.driverId);
             return res.status(400).json({ success: false, message: "Negotiation has expired" });
         }
 
@@ -211,6 +215,8 @@ export const counterOffer = async (req, res) => {
             round: newRound,
             maxRounds: settings.maxRounds,
         });
+
+        emitDriverTripSyncFromReq(req, ride.id, "negotiation_counter");
 
         res.json({
             success: true,
@@ -264,6 +270,7 @@ export const acceptNegotiation = async (req, res) => {
                 where: { id: ride.id },
                 data: { negotiationStatus: "expired" },
             });
+            emitDriverTripSyncFromReq(req, ride.id, "negotiation_expired_on_action", ride.driverId);
             return res.status(400).json({ success: false, message: "Negotiation has expired" });
         }
 
@@ -302,6 +309,8 @@ export const acceptNegotiation = async (req, res) => {
             percentChange: Math.round(percentChange * 100) / 100,
             acceptedBy: accepterRole,
         });
+
+        emitDriverTripSyncFromReq(req, ride.id, "negotiation_accept");
 
         res.json({
             success: true,
@@ -379,6 +388,8 @@ export const rejectNegotiation = async (req, res) => {
             baseFare: ride.totalAmount != null ? parseFloat(ride.totalAmount) : null,
             rejectedBy: rejecterRole,
         });
+
+        emitDriverTripSyncFromReq(req, ride.id, "negotiation_reject");
 
         res.json({
             success: true,
