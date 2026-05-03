@@ -292,6 +292,19 @@ app.use('/api/negotiations', negotiationRoutes);
 // Ride chat (rider <-> driver, available after ride acceptance)
 app.use('/apimobile/chat', rideChatRoutes);
 
+// Site root (GET /) — proves the API host responds (DNS/SSL/load balancer checks)
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'OfferGo API',
+    status: 'OK',
+    message: 'Backend is running.',
+    apiIndex: '/api',
+    health: '/api/health',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Root under /api (GET /api) — avoids "Cannot GET /api"; use for health / baseUrl checks
 app.get('/api', (req, res) => {
   res.json({
@@ -299,6 +312,7 @@ app.get('/api', (req, res) => {
     service: 'OfferGo API',
     message: 'Use the health paths below for probes.',
     endpoints: {
+      root: '/',
       health: '/api/health',
       healthLive: '/api/health/live',
       healthReady: '/api/health/ready',
@@ -315,16 +329,75 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
 
-// Socket.IO reachability probe — helps verify the reverse proxy forwards
-// requests to Socket.IO correctly. If this returns 200, HTTP routing is OK
-// and only the WebSocket upgrade still needs to be validated from the client.
-app.get('/api/health/socket', (req, res) => {
+async function probeEngineIoPolling(baseUrl) {
+  const url = `${baseUrl}${SOCKET_PATH}/?EIO=4&transport=polling`;
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 4000);
+  try {
+    const r = await fetch(url, { signal: controller.signal, headers: { Accept: '*/*' } });
+    const text = await r.text();
+    const valid = r.ok && typeof text === 'string' && text.length > 0 && /^[0-6]/.test(text[0]);
+    return { ok: valid, url, httpStatus: r.status, enginePrefix: text.slice(0, 48) };
+  } catch (e) {
+    const msg = e?.name === 'AbortError' ? 'timeout' : String(e?.message || e);
+    return { ok: false, url, error: msg };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Socket.IO health: config + live counts + Engine.IO polling probes (HTTP layer of Socket.IO).
+// A real WebSocket upgrade must still be tested from the app/browser; see `clientHint`.
+app.get('/api/health/socket', async (req, res) => {
+  let connectedClients = null;
+  let namespaceSockets = null;
+  try {
+    connectedClients = typeof io.engine?.clientsCount === 'number' ? io.engine.clientsCount : null;
+  } catch (_) {
+    connectedClients = null;
+  }
+  try {
+    namespaceSockets = typeof io.of('/').sockets?.size === 'number' ? io.of('/').sockets.size : null;
+  } catch (_) {
+    namespaceSockets = null;
+  }
+
+  const port = Number(process.env.PORT) || 5000;
+  const localProbe = await probeEngineIoPolling(`http://127.0.0.1:${port}`);
+
+  let publicProbe = null;
+  try {
+    const host = req.get('host');
+    if (host) {
+      const xfProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+      const scheme = xfProto === 'https' || req.secure ? 'https' : 'http';
+      publicProbe = await probeEngineIoPolling(`${scheme}://${host}`);
+    }
+  } catch (_) {
+    publicProbe = { ok: false, error: 'public_probe_failed' };
+  }
+
+  const engineReachable = Boolean(localProbe?.ok || publicProbe?.ok);
+  const status = engineReachable ? 'OK' : 'DEGRADED';
+
+  // Always HTTP 200 so uptime checks still parse JSON; use `engineReachable` / `status` for logic.
   res.json({
-    status: 'OK',
+    status,
+    socketServer: 'initialized',
+    engineReachable,
+    connectedClients,
+    namespaceSockets,
     path: SOCKET_PATH,
     transports: SOCKET_TRANSPORTS,
     allowedOrigins,
-    handshakeProbe: `${SOCKET_PATH}/?EIO=4&transport=polling`,
+    handshakeProbeUrl: `${SOCKET_PATH}/?EIO=4&transport=polling`,
+    probes: {
+      local: localProbe,
+      public: publicProbe,
+    },
+    clientHint:
+      'Use socket.io-client with the same base URL, path option matching `path`, and JWT in auth/handshake. ' +
+      'If `public.ok` is false behind nginx, check proxy_pass for /socket.io/ and WebSocket upgrade headers.',
   });
 });
 
