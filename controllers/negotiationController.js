@@ -5,6 +5,20 @@ import {
     validateFareBounds,
     computeExpiresAt,
 } from "../utils/negotiationHelper.js";
+import { emitToUser, emitToDriver } from "../utils/socketService.js";
+
+/** Notify driver/rider rooms only (avoids duplicate delivery if a socket joined both driver-* and ride-*). */
+function emitNegotiationSocket(req, event, payload) {
+    try {
+        const io = req.app?.get?.("io") || global.io;
+        if (!io) return;
+        const { driverId, riderId } = payload;
+        if (driverId) emitToDriver(io, driverId, event, payload);
+        if (riderId) emitToUser(io, riderId, event, payload);
+    } catch (_) {
+        /* non-fatal */
+    }
+}
 
 // ---------------------------------------------------------------------------
 // @desc    Get negotiation settings (public — mobile apps use this)
@@ -184,6 +198,20 @@ export const counterOffer = async (req, res) => {
             }),
         ]);
 
+        emitNegotiationSocket(req, "ride-negotiation-counter", {
+            rideRequestId: ride.id,
+            driverId: ride.driverId,
+            riderId: ride.riderId,
+            negotiationStatus: updatedRide.negotiationStatus,
+            proposedBy: proposerRole,
+            proposedFare: updatedRide.negotiatedFare != null ? parseFloat(updatedRide.negotiatedFare) : null,
+            baseFare: baseFare != null ? parseFloat(baseFare) : null,
+            percentChange,
+            expiresAt,
+            round: newRound,
+            maxRounds: settings.maxRounds,
+        });
+
         res.json({
             success: true,
             message: "Counter-offer submitted",
@@ -264,6 +292,17 @@ export const acceptNegotiation = async (req, res) => {
             }),
         ]);
 
+        emitNegotiationSocket(req, "ride-negotiation-accepted", {
+            rideRequestId: ride.id,
+            driverId: ride.driverId,
+            riderId: ride.riderId,
+            negotiationStatus: "accepted",
+            negotiatedFare: finalFare != null ? parseFloat(finalFare) : null,
+            baseFare: ride.totalAmount != null ? parseFloat(ride.totalAmount) : null,
+            percentChange: Math.round(percentChange * 100) / 100,
+            acceptedBy: accepterRole,
+        });
+
         res.json({
             success: true,
             message: "Negotiation accepted",
@@ -330,6 +369,16 @@ export const rejectNegotiation = async (req, res) => {
                 },
             }),
         ]);
+
+        emitNegotiationSocket(req, "ride-negotiation-rejected", {
+            rideRequestId: ride.id,
+            driverId: ride.driverId,
+            riderId: ride.riderId,
+            negotiationStatus: "rejected",
+            negotiatedFare: null,
+            baseFare: ride.totalAmount != null ? parseFloat(ride.totalAmount) : null,
+            rejectedBy: rejecterRole,
+        });
 
         res.json({
             success: true,

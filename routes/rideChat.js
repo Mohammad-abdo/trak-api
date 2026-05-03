@@ -16,15 +16,22 @@ const router = express.Router();
  *     description: |
  *       1-to-1 chat between the rider (client) and the assigned driver of a
  *       ride. Chat becomes available **after the driver accepts the trip**
- *       (`status` in `accepted`, `negotiating`, `counter_offered`, `arrived`,
+ *       (`status` in `accepted`, `scheduled`, `negotiating`, `counter_offered`, `arrived`,
  *       `arrived_at_pickup`, `started`, `ongoing`, `in_progress`).
  *       Compatibility rule: if status is still `pending` but `driverId` is
  *       already assigned, sending is allowed.
  *       History remains readable after `completed` / `cancelled` but new
  *       messages are rejected with **403 `CHAT_NOT_OPEN`**.
  *
- *       **Real-time:** subscribe to the existing Socket.IO room
- *       `ride-{rideId}` (via `subscribe-ride`) to receive:
+ *       **During an active trip, messaging must go through Socket.IO** so the
+ *       other party receives instantly: connect with the same JWT as REST,
+ *       emit `subscribe-ride` with the numeric ride id, then emit `chat:send`
+ *       `{ rideRequestId, message, attachmentUrl? }` and listen for `chat:message`,
+ *       `chat:read`, `chat:typing`, and `chat:error`. REST `POST .../messages` is a
+ *       supported fallback (it persists and broadcasts `chat:message` too) — use
+ *       **GET** mainly for initial history and offline catch-up.
+ *
+ *       **Real-time (same connection):** room `ride-{rideId}` via `subscribe-ride`:
  *       - `chat:message` — new message persisted
  *       - `chat:read`    — someone read your messages
  *       - `chat:typing`  — typing indicator (ephemeral)
@@ -140,9 +147,12 @@ const router = express.Router();
  *     summary: Send a chat message in a ride
  *     description: |
  *       Persists the message and broadcasts `chat:message` to the Socket.IO
- *       room `ride-{rideId}`. Rate-limited to **20 messages / 10 seconds**
- *       per user per ride. Message length capped at **2000** chars (longer
- *       messages are truncated).
+ *       room `ride-{rideId}`. **While the trip is active, prefer emitting
+ *       `chat:send` on Socket.IO** (same persistence + broadcast) so the other
+ *       party gets the message without polling.
+ *       Rate-limited to **20 messages / 10 seconds** per user per ride (REST
+ *       and socket share the same limiter key). Message length capped at **2000**
+ *       chars (longer messages are truncated).
  *     security:
  *       - bearerAuth: []
  *     parameters:

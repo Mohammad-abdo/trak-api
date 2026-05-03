@@ -2250,6 +2250,8 @@ router.post('/negotiation/counter', authenticate, counterOffer);
  *       Either rider or driver can accept the last proposed fare.
  *       Sets negotiationStatus = "accepted" and locks the negotiatedFare.
  *       Commission will be calculated on this final fare at ride completion.
+ *
+ *       **WebSocket:** server emits `ride-negotiation-accepted` to the driver and rider rooms (`join-driver-room` / `join-user-room`) so the driver app can update without polling.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -2299,6 +2301,8 @@ router.post('/negotiation/accept', authenticate, acceptNegotiation);
  *     description: |
  *       Either party can reject the negotiation. The ride reverts to the
  *       original totalAmount (baseFare). negotiatedFare is cleared.
+ *
+ *       **WebSocket:** server emits `ride-negotiation-rejected` with `rejectedBy` to driver and rider rooms.
  *     security:
  *       - bearerAuth: []
  *     requestBody:

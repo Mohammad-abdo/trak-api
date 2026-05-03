@@ -15,9 +15,9 @@
  *   - "chat:typing"  { senderId, senderType, isTyping }
  *   - "chat:read"    { rideRequestId, readerId, readerType, count, readAt }
  *
- * Note: REST endpoints already handle persistence and emission. The socket
- * send path is a convenience for low-latency delivery — it does the same
- * thing but over Socket.IO.
+ * **Mobile apps:** use this socket path as the **primary** way to send/receive
+ * chat while the trip is open, so UI updates in real time. REST `POST .../messages`
+ * remains a fallback; both paths persist and emit `chat:message` to `ride-{id}`.
  */
 
 import prisma from "./prisma.js";

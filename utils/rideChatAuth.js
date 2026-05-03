@@ -16,6 +16,7 @@ import { parseRideRequestIdParam } from "./rideRequestId.js";
 // file needs to change.
 export const CHAT_WRITABLE_STATUSES = new Set([
     "accepted",
+    "scheduled",
     "negotiating",
     "counter_offered",
     "arrived",
