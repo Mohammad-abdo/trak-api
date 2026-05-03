@@ -292,6 +292,24 @@ app.use('/api/negotiations', negotiationRoutes);
 // Ride chat (rider <-> driver, available after ride acceptance)
 app.use('/apimobile/chat', rideChatRoutes);
 
+// Root under /api (GET /api) — avoids "Cannot GET /api"; use for health / baseUrl checks
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    service: 'OfferGo API',
+    message: 'Use the health paths below for probes.',
+    endpoints: {
+      health: '/api/health',
+      healthLive: '/api/health/live',
+      healthReady: '/api/health/ready',
+      healthSocket: '/api/health/socket',
+      mobileUser: '/apimobile/user',
+      mobileDriver: '/apimobile/driver',
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
