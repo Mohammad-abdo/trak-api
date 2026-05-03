@@ -11,6 +11,7 @@ import {
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
 import { emitDriverTripSyncFromReq } from "../../utils/driverTripSocketSync.js";
+import { replayPendingRidesForDriver } from "../../utils/replayPendingRidesForDriver.js";
 
 /**
  * Check if driver is currently blocked from rejecting/viewing rides.
@@ -555,12 +556,23 @@ export const getAvailableRides = asyncHandler(async (req, res) => {
         };
     }));
 
-    return successResponse(res, {
+    const responseBody = {
         rides: formattedRides,
         total: formattedRides.length,
         searchRadius,
-        driverLocation: { latitude: driverLat, longitude: driverLng }
-    });
+        driverLocation: { latitude: driverLat, longitude: driverLng },
+    };
+
+    try {
+        const io = req.app.get("io") || global.io;
+        if (io) {
+            setImmediate(() => {
+                replayPendingRidesForDriver(io, driverId, driverLat, driverLng).catch(() => {});
+            });
+        }
+    } catch (_) {}
+
+    return successResponse(res, responseBody);
 });
 
 /**
@@ -615,6 +627,15 @@ export const pollAvailableRides = asyncHandler(async (req, res) => {
         const dist = calculateDistance(driverLat, driverLng, parseFloat(r.startLatitude), parseFloat(r.startLongitude));
         return dist <= searchRadius;
     });
+
+    try {
+        const io = req.app.get("io") || global.io;
+        if (io) {
+            setImmediate(() => {
+                replayPendingRidesForDriver(io, driverId, driverLat, driverLng).catch(() => {});
+            });
+        }
+    } catch (_) {}
 
     return res.json({
         success: true,
@@ -1097,6 +1118,9 @@ export const updateLocation = asyncHandler(async (req, res) => {
         },
     });
 
+    const driverLat = parseFloat(latitude);
+    const driverLng = parseFloat(longitude);
+
     try {
         const { emitDriverLocationUpdate, emitToRide } = await import("../../utils/socketService.js");
         const io = req.app.get("io") || global.io;
@@ -1123,6 +1147,18 @@ export const updateLocation = asyncHandler(async (req, res) => {
             for (const r of activeRides) {
                 emitToRide(io, r.id, "driver-location-for-ride", { ...payload, rideRequestId: r.id });
             }
+
+            prisma.user
+                .findUnique({
+                    where: { id: req.user.id },
+                    select: { isOnline: true, isAvailable: true },
+                })
+                .then((u) => {
+                    if (u?.isOnline && u?.isAvailable) {
+                        return replayPendingRidesForDriver(io, req.user.id, driverLat, driverLng);
+                    }
+                })
+                .catch(() => {});
         }
     } catch (_) {}
 

@@ -5,6 +5,10 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { successResponse, errorResponse } from '../../utils/serverResponse.js';
 import { emitToDriver, emitToRide } from '../../utils/socketService.js';
 
+/** Throttle socket nudges when rider polls near-drivers (avoid flooding drivers). */
+const NEAR_DRIVERS_PULSE_MS = 12_000;
+const nearDriversPulseAt = new Map();
+
 // Helper: Calculate distance between two coordinates (Haversine formula)
 const haversineKm = (lat1, lng1, lat2, lng2) => {
     const R = 6371;
@@ -66,6 +70,8 @@ export const getNearDrivers = async (req, res) => {
                 updatedAt: true,
                 isSchedule: true,
                 scheduleDatetime: true,
+                startLatitude: true,
+                startLongitude: true,
             },
         });
 
@@ -90,6 +96,49 @@ export const getNearDrivers = async (req, res) => {
                 });
             }
         }
+
+        // Nudge nearby online drivers (throttled) so they refresh available rides without manual reload.
+        try {
+            const pulseLat = bookingCoords?.lat ?? parseFloat(booking.startLatitude);
+            const pulseLng = bookingCoords?.lng ?? parseFloat(booking.startLongitude);
+            if (Number.isFinite(pulseLat) && Number.isFinite(pulseLng)) {
+                const now = Date.now();
+                const last = nearDriversPulseAt.get(rideId) || 0;
+                if (now - last >= NEAR_DRIVERS_PULSE_MS) {
+                    nearDriversPulseAt.set(rideId, now);
+                    const io = req.app.get("io") || global.io;
+                    if (io) {
+                        const { getDriverSearchRadius } = await import("../../utils/settingsHelper.js");
+                        const { calculateDistance } = await import("../../utils/pricingCalculator.js");
+                        const searchRadius = await getDriverSearchRadius();
+                        const onlineDrivers = await prisma.user.findMany({
+                            where: {
+                                userType: "driver",
+                                status: "active",
+                                isOnline: true,
+                                isAvailable: true,
+                                latitude: { not: null },
+                                longitude: { not: null },
+                            },
+                            select: { id: true, latitude: true, longitude: true },
+                        });
+                        for (const d of onlineDrivers) {
+                            const dLat = parseFloat(d.latitude);
+                            const dLng = parseFloat(d.longitude);
+                            if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) continue;
+                            const dist = calculateDistance(pulseLat, pulseLng, dLat, dLng);
+                            if (dist <= searchRadius) {
+                                emitToDriver(io, d.id, "rider-awaiting-offers", {
+                                    booking_id: rideId,
+                                    lat: pulseLat,
+                                    lng: pulseLng,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
 
         // Only show drivers that sent a negotiated/bid price for this booking.
         const bids = await prisma.rideRequestBid.findMany({

@@ -8,6 +8,7 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
 import { fullImageUrl } from "../../utils/imageUrl.js";
 import { saveAdminNotification } from "../../utils/notificationService.js";
+import { replayPendingRidesForDriver } from "../../utils/replayPendingRidesForDriver.js";
 
 const driverProfileSelect = {
     id: true,
@@ -852,6 +853,25 @@ export const goOnlineOffline = asyncHandler(async (req, res) => {
             isAvailable: true,
         },
     });
+
+    if (newStatus) {
+        try {
+            const io = req.app.get("io") || global.io;
+            if (io) {
+                const loc = await prisma.user.findUnique({
+                    where: { id: req.user.id },
+                    select: { latitude: true, longitude: true },
+                });
+                const lat = loc?.latitude != null ? parseFloat(loc.latitude) : NaN;
+                const lng = loc?.longitude != null ? parseFloat(loc.longitude) : NaN;
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    setImmediate(() => {
+                        replayPendingRidesForDriver(io, req.user.id, lat, lng).catch(() => {});
+                    });
+                }
+            }
+        } catch (_) {}
+    }
 
     const message = newStatus ? "You are now online" : "You are now offline";
     return successResponse(res, updated, message);
