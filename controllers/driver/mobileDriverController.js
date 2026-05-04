@@ -840,13 +840,26 @@ export const goOnlineOffline = asyncHandler(async (req, res) => {
 
     const newStatus = !driver.isOnline;
 
+    const bodyLat = req.body?.latitude ?? req.body?.lat;
+    const bodyLng = req.body?.longitude ?? req.body?.lng;
+    const parsedLat = bodyLat != null ? parseFloat(bodyLat) : NaN;
+    const parsedLng = bodyLng != null ? parseFloat(bodyLng) : NaN;
+    const hasBodyGps = Number.isFinite(parsedLat) && Number.isFinite(parsedLng);
+
+    const updateData = {
+        isOnline: newStatus,
+        isAvailable: newStatus,
+        lastActivedAt: newStatus ? new Date() : undefined,
+    };
+    if (newStatus && hasBodyGps) {
+        updateData.latitude = String(parsedLat);
+        updateData.longitude = String(parsedLng);
+        updateData.lastLocationUpdateAt = new Date();
+    }
+
     const updated = await prisma.user.update({
         where: { id: req.user.id },
-        data: {
-            isOnline: newStatus,
-            isAvailable: newStatus,
-            lastActivedAt: newStatus ? new Date() : undefined,
-        },
+        data: updateData,
         select: {
             id: true,
             isOnline: true,

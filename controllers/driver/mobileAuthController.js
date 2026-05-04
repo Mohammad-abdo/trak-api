@@ -45,9 +45,10 @@ export const login = asyncHandler(async (req, res) => {
         return errorResponse(res, `Account is ${user.status}. Contact support.`, 403);
     }
 
+    // Must match go-online: nearby-ride broadcast + replay require BOTH flags (see mobileBookingController).
     await prisma.user.update({
         where: { id: user.id },
-        data: { lastActivedAt: new Date(), isOnline: true },
+        data: { lastActivedAt: new Date(), isOnline: true, isAvailable: true },
     });
 
     const token = generateToken(user.id);
