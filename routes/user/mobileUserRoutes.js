@@ -1314,6 +1314,10 @@ router.post('/booking/cancel', authenticate, cancelBooking);
  *   post:
  *     tags: [Offers]
  *     summary: ??? ???? ???????? ????? ?????? ????? ?????? ???? ?????
+ *     description: |
+ *       HTTP returns the current offer list. For **real-time** updates, use Socket.IO and listen for
+ *       **`driver-offer-received`** (fires on bid, negotiation, or direct accept) — then call this
+ *       route again for full driver details. Same pattern as the GET polling alias.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -1379,7 +1383,8 @@ router.post('/offers/near-drivers', authenticate, getNearDrivers);
  *
  *       ### WebSocket (instant, no polling needed)
  *       Connect with JWT, listen for:
- *       - **`driver-offer-received`** — fires immediately when any driver sends an offer or accepts.
+ *       - **`driver-offer-received`** — fires immediately when a driver applies a **bid** (`POST /api/ride-requests/apply-bid`),
+ *         negotiates, **or** accepts. Payload includes `offerType`: `bid` | `negotiation` | `direct_accept`.
  *         On receipt, call this endpoint once to get full offer details.
  *
  *       ### Socket.IO connection

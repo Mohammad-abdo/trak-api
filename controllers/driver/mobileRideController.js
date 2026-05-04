@@ -940,6 +940,22 @@ export const applyBid = asyncHandler(async (req, res) => {
     await prisma.rideRequestBid.create({ data: { rideRequestId: ride.id, driverId: req.user.id, bidAmount: parseFloat(bidAmount) } });
     await prisma.rideRequest.update({ where: { id: ride.id }, data: { rideHasBid: true } });
 
+    try {
+        const { emitToUser } = await import("../../utils/socketService.js");
+        const io = req.app.get("io") || global.io;
+        const amt = parseFloat(bidAmount);
+        if (io && ride.riderId && Number.isFinite(amt)) {
+            emitToUser(io, ride.riderId, "driver-offer-received", {
+                rideRequestId: ride.id,
+                driverId: req.user.id,
+                proposedFare: amt,
+                bidAmount: amt,
+                originalFare: parseFloat(ride.totalAmount),
+                offerType: "bid",
+            });
+        }
+    } catch (_) {}
+
     return successResponse(res, null, "Bid applied successfully");
 });
 

@@ -1120,6 +1120,10 @@ router.post("/rides/complete", authenticate, completeRide);
  *               reason: { type: string }
  *     responses:
  *       200: { description: Cancelled }
+ *       400: { description: Missing or invalid ride id }
+ *       401: { description: Missing or invalid bearer token }
+ *       403: { description: Ride exists but is not assigned to this driver (often mistaken for “unauthorized”) }
+ *       404: { description: Ride not found }
  */
 router.post("/rides/cancel", authenticate, cancelRide);
 

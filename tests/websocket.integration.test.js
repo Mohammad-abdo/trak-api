@@ -288,6 +288,26 @@ describe.skipIf(process.env.SKIP_WS_E2E === "1")(
             expect(res.body.data.length).toBe(0);
         });
 
+        it("User receives 'driver-offer-received' when driver applies a bid (apply-bid API)", async () => {
+            const offerPromise = waitForEvent(riderSocket, "driver-offer-received");
+
+            const res = await request(app)
+                .post("/api/ride-requests/apply-bid")
+                .set("Authorization", `Bearer ${driverToken}`)
+                .send({ rideRequestId: rideId, bidAmount: 42.5 });
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+
+            const offerEvent = await offerPromise;
+            expect(offerEvent).toMatchObject({
+                rideRequestId: rideId,
+                driverId,
+                offerType: "bid",
+            });
+            expect(Number(offerEvent.proposedFare)).toBeCloseTo(42.5, 2);
+        });
+
         // ─────────────────────────────────────────────────────────────────────
         // TEST 3 — driver-offer-received + ride-request-accepted
         // ─────────────────────────────────────────────────────────────────────
