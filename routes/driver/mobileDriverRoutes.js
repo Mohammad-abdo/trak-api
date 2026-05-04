@@ -745,7 +745,19 @@ router.get("/status", authenticate, getMyStatus);
  *       Toggles driver status between online and offline.
  *       - If currently offline → goes online (isOnline=true, isAvailable=true)
  *       - If currently online → goes offline (isOnline=false, isAvailable=false)
+ *
+ *       Optional body **`latitude` / `longitude`** (or `lat` / `lng`) when going **online**:
+ *       saves GPS to the profile so pending rides can be replayed immediately (same as `location/update`).
  *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               latitude: { type: number, example: 24.7136 }
+ *               longitude: { type: number, example: 46.6753 }
  *     responses:
  *       200:
  *         description: Status toggled successfully
