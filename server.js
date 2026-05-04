@@ -609,6 +609,15 @@ io.on('connection', async (socket) => {
   const socketUser = await resolveSocketUser(socket);
   if (socketUser) {
     socket.data.user = socketUser;
+    // Auto-join rooms so mobile apps receive emits even if the client never sends
+    // `join-user-room` / `join-driver-room` (backend-only contract fix).
+    if (socketUser.status === 'active') {
+      socket.join(`user-${socketUser.id}`);
+      const ut = String(socketUser.userType || '').toLowerCase();
+      if (ut === 'driver') {
+        socket.join(`driver-${socketUser.id}`);
+      }
+    }
   } else if (socketAuthEnforced) {
     socket.emit('socket-auth-error', { success: false, message: 'Socket authentication required' });
     socket.disconnect(true);

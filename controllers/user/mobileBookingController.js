@@ -490,6 +490,8 @@ export const createBooking = async (req, res) => {
 
                 const { emitToDriver } = await import('../../utils/socketService.js');
 
+                const notifiedIds = new Set();
+
                 for (const driver of onlineDrivers) {
                     const dLat = parseFloat(driver.latitude);
                     const dLng = parseFloat(driver.longitude);
@@ -497,7 +499,29 @@ export const createBooking = async (req, res) => {
                     const dist = calculateDistance(pickupLat, pickupLng, dLat, dLng);
                     if (dist <= searchRadius) {
                         emitToDriver(io, driver.id, 'new-ride-available', ridePayload);
+                        notifiedIds.add(driver.id);
                     }
+                }
+
+                // Online drivers with no GPS stored yet never match the geo filter above; still notify
+                // so they can refetch /rides/available with live device coordinates.
+                const onlineNoGps = await prisma.user.findMany({
+                    where: {
+                        userType: 'driver',
+                        status: 'active',
+                        isOnline: true,
+                        isAvailable: true,
+                        OR: [{ latitude: null }, { longitude: null }],
+                    },
+                    select: { id: true },
+                    take: 400,
+                });
+                for (const d of onlineNoGps) {
+                    if (notifiedIds.has(d.id)) continue;
+                    emitToDriver(io, d.id, 'new-ride-available', {
+                        ...ridePayload,
+                        serverHint: 'no_db_location',
+                    });
                 }
             } catch (_) {}
         })();
