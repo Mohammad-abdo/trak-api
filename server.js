@@ -676,6 +676,13 @@ io.on('connection', async (socket) => {
     console.log(`Subscribed to ride ${rideId}`);
   });
 
+  socket.on('unsubscribe-ride', (rideId) => {
+    const rideIdInt = parseInt(String(rideId), 10);
+    if (!Number.isNaN(rideIdInt)) {
+      socket.leave(`ride-${rideIdInt}`);
+    }
+  });
+
   registerDedicatedBookingHandlers(socket, io);
   registerRideChatHandlers(socket, io);
 

@@ -98,6 +98,20 @@ export const startNegotiation = async (req, res) => {
             }),
         ]);
 
+        emitNegotiationSocket(req, "ride-negotiation-offer", {
+            rideRequestId: ride.id,
+            driverId: ride.driverId,
+            riderId: ride.riderId,
+            negotiationStatus: updatedRide.negotiationStatus,
+            proposedBy: "rider",
+            proposedFare: updatedRide.negotiatedFare != null ? parseFloat(updatedRide.negotiatedFare) : null,
+            baseFare: baseFare != null ? parseFloat(baseFare) : null,
+            percentChange,
+            expiresAt,
+            round: 1,
+            maxRounds: settings.maxRounds,
+        });
+
         emitDriverTripSyncFromReq(req, ride.id, "negotiation_start_rider");
 
         res.json({
