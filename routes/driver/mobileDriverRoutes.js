@@ -857,6 +857,13 @@ router.get("/rides", authenticate, getMyRides);
  *     description: |
  *       Returns a list of pending ride requests within the specified radius
  *       that the driver can accept. Excludes rides previously rejected by this driver.
+ *
+ *       ### Realtime integration (recommended)
+ *       1. Connect **Socket.IO** with the driver JWT (`auth.token`). Active drivers are auto-joined to `driver-{id}` on the server.
+ *       2. Listen for **`new-ride-available`** (mobile booking) and **`new_ride_request`** (legacy paths). On either event, **debounce** (~300–500ms) then call **this same GET** with **current** device `latitude` / `longitude` — the socket payload is a hint only; this endpoint returns the authoritative list.
+ *       3. **Fallback:** poll **`GET /apimobile/driver/rides/available/poll`** every ~5s while the screen is open; when `data.count > 0`, call this full endpoint.
+ *       4. Send **`POST /apimobile/driver/location/update`** periodically so DB coordinates match the device (improves matching and server-side replay).
+ *       5. Reference: run `npm run driver:available-smoke` from the backend folder (see `docs/driver-available-rides-realtime.md`).
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
