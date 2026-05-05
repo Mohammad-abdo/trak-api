@@ -1,4 +1,4 @@
-// This is your Prisma schema file,
+ // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -1506,6 +1506,8 @@ model UserBankCard {
   expiryMonth    Int?     @map("expiry_month")
   expiryYear     Int?     @map("expiry_year")
   isDefault      Boolean  @default(false) @map("is_default")
+  token          String?  @db.Text
+  encryptedData  String?  @db.Text // for any securely encrypted sensitive info
   createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 
