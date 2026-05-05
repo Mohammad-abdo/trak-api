@@ -498,12 +498,13 @@ try {
         { name: 'Wallet', description: 'Wallet' },
         { name: 'Profile', description: 'Profile & addresses' },
         { name: 'Cards', description: 'Saved payment cards (add, list, delete)' },
+        { name: 'Mobile Dedicated Bookings', description: 'Dedicated/private booking endpoints for the mobile app: pricing, create booking, booking history, invoice, driver availability/acceptance, and lifecycle actions.' },
         { name: 'Static', description: 'Static pages & notifications' },
         { name: 'Negotiation', description: 'Ride fare negotiation between rider & driver (up to ±20%). Feature must be enabled in Settings.' },
         { name: 'Ride Chat', description: '1-to-1 chat between rider and the assigned driver. Enabled after the driver accepts the trip (status = accepted/arrived/started/ongoing/in_progress). History stays readable after the trip ends.' },
       ],
     },
-    apis: ['./routes/user/mobileUserRoutes.js', './routes/rideChat.js'],
+    apis: ['./routes/user/mobileUserRoutes.js', './routes/dedicatedBookings.js', './routes/rideChat.js'],
   };
 
   const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -570,6 +571,7 @@ try {
         { name: 'Driver Documents', description: 'Upload and manage driver documents/licenses' },
         { name: 'Driver Status', description: 'Online/offline, availability, GPS location updates' },
         { name: 'Driver Rides', description: 'Core ride operations: accept/reject, arrive, start, complete, cancel, rate, bid' },
+        { name: 'Mobile Dedicated Bookings', description: 'Dedicated/private booking endpoints relevant to drivers: available bookings, accept booking, start/end/cancel, details, and invoice.' },
         { name: 'Driver Ratings', description: 'View ratings received from riders' },
         { name: 'Driver Wallet', description: 'Wallet balance, transaction history, earnings summary, withdrawals' },
         { name: 'Driver Complaints', description: 'File and view complaints' },
@@ -579,7 +581,7 @@ try {
         { name: 'Ride Chat', description: '1-to-1 chat with the assigned rider. Enabled once you accept the trip (status = accepted/arrived/started/ongoing/in_progress). History stays readable after the trip ends.' },
       ],
     },
-    apis: ['./routes/driver/mobileDriverRoutes.js', './routes/rideChat.js'],
+    apis: ['./routes/driver/mobileDriverRoutes.js', './routes/dedicatedBookings.js', './routes/rideChat.js'],
   };
 
   const driverSwaggerSpec = swaggerJsdoc(driverSwaggerOptions);
