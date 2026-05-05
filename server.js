@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
@@ -92,6 +93,42 @@ const __dirname = dirname(__filename);
 
 const app = express();
 app.disable('x-powered-by');
+
+// ─── Socket logging (env-controlled; safe for production) ───────────────────
+// SOCKET_LOG_LEVEL: "off" | "error" | "info" | "debug"  (default: "info" in production, "debug" otherwise)
+// SOCKET_LOG_PAYLOAD: "1" to include payload in logs (default: "0")
+const SOCKET_LOG_LEVEL = String(
+  process.env.SOCKET_LOG_LEVEL ||
+    (process.env.NODE_ENV === 'production' ? 'info' : 'debug')
+).toLowerCase();
+const SOCKET_LOG_PAYLOAD = process.env.SOCKET_LOG_PAYLOAD === '1';
+
+function socketLog(level, message, meta) {
+  const order = { off: 99, error: 0, info: 1, debug: 2 };
+  const current = order[SOCKET_LOG_LEVEL] ?? 1;
+  const target = order[level] ?? 1;
+  if (current === 99 || target > current) return;
+
+  const body = meta ? { ...meta } : undefined;
+  if (body) {
+    // Never log tokens
+    if (body.token) body.token = '[REDACTED]';
+    if (body.authorization) body.authorization = '[REDACTED]';
+  }
+
+  const line = body
+    ? `[socket:${level}] ${message} ${JSON.stringify(body)}`
+    : `[socket:${level}] ${message}`;
+
+  if (level === 'error') console.error(line);
+  else console.log(line);
+}
+
+function socketPeerIp(socket) {
+  const xf = socket?.handshake?.headers?.['x-forwarded-for'];
+  if (typeof xf === 'string' && xf.trim()) return xf.split(',')[0].trim();
+  return socket?.handshake?.address || null;
+}
 
 function parseAllowedOrigins() {
   const envOrigins = String(process.env.FRONTEND_URL || '').trim();
@@ -212,6 +249,16 @@ app.use(['/api/auth', '/apimobile/user/auth', '/apimobile/driver/auth'], authRat
 app.use('/uploads', publicUploadsResourcePolicy);
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
+// Dev-only test pages (manual Socket.IO verification)
+const testPagesDir = join(__dirname, 'test-pages');
+if (process.env.NODE_ENV !== 'production' && existsSync(testPagesDir)) {
+  app.use('/test', express.static(testPagesDir));
+  // Friendly alias (so /test/driver-socket works without .html)
+  app.get('/test/driver-socket', (req, res) => {
+    res.sendFile(join(testPagesDir, 'driver-socket.html'));
+  });
+}
+
 // Test database connection
 prisma.$connect()
   .then(() => console.log('Database connected successfully'))
@@ -328,6 +375,38 @@ app.get('/api', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server is running' });
 });
+
+// Dev-only helpers for socket manual testing from the browser.
+// Guarded so it never exists in production deployments.
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/api/test/socket/emit-driver-ride', (req, res) => {
+    const body = req.body || {};
+    const driverId = parseInt(String(body.driverId ?? ''), 10);
+    if (!Number.isFinite(driverId)) {
+      return res.status(400).json({ success: false, message: 'driverId is required (number)' });
+    }
+
+    const event = String(body.event || 'new-ride-available');
+    if (!['new-ride-available', 'new_ride_request'].includes(event)) {
+      return res.status(400).json({ success: false, message: 'event must be new-ride-available or new_ride_request' });
+    }
+
+    const payload =
+      body.payload && typeof body.payload === 'object'
+        ? body.payload
+        : {
+            booking_id: body.booking_id ?? body.rideId ?? body.rideRequestId ?? Date.now(),
+            pickup_latitude: body.pickup_latitude ?? body.lat ?? 24.7136,
+            pickup_longitude: body.pickup_longitude ?? body.lng ?? 46.6753,
+            createdAt: new Date().toISOString(),
+            serverHint: 'test_page',
+          };
+
+    const room = `driver-${driverId}`;
+    io.to(room).emit(event, payload);
+    return res.json({ success: true, room, event, payload });
+  });
+}
 
 async function probeEngineIoPolling(baseUrl) {
   const url = `${baseUrl}${SOCKET_PATH}/?EIO=4&transport=polling`;
@@ -606,7 +685,12 @@ try {
 
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
-  console.log('Client connected:', socket.id);
+  socketLog('info', 'client_connected', {
+    socketId: socket.id,
+    ip: socketPeerIp(socket),
+    ua: socket?.handshake?.headers?.['user-agent'],
+    hasAuthToken: Boolean(extractSocketToken(socket)),
+  });
 
   const socketUser = await resolveSocketUser(socket);
   if (socketUser) {
@@ -619,8 +703,15 @@ io.on('connection', async (socket) => {
       if (ut === 'driver') {
         socket.join(`driver-${socketUser.id}`);
       }
+      socketLog('info', 'auth_ok_auto_join', {
+        socketId: socket.id,
+        userId: socketUser.id,
+        userType: socketUser.userType,
+        rooms: [`user-${socketUser.id}`, ut === 'driver' ? `driver-${socketUser.id}` : null].filter(Boolean),
+      });
     }
   } else if (socketAuthEnforced) {
+    socketLog('error', 'auth_required_disconnect', { socketId: socket.id, ip: socketPeerIp(socket) });
     socket.emit('socket-auth-error', { success: false, message: 'Socket authentication required' });
     socket.disconnect(true);
     return;
@@ -631,12 +722,17 @@ io.on('connection', async (socket) => {
     if (socketAuthEnforced) {
       const currentUser = socket.data.user;
       if (!currentUser || Number(userId) !== Number(currentUser.id)) {
+        socketLog('error', 'join_user_room_denied', {
+          socketId: socket.id,
+          requestedUserId: userId,
+          authedUserId: currentUser?.id,
+        });
         socket.emit('socket-auth-error', { success: false, message: 'Not authorized for user room' });
         return;
       }
     }
     socket.join(`user-${userId}`);
-    console.log(`User ${userId} joined their room`);
+    socketLog('info', 'join_user_room', { socketId: socket.id, room: `user-${userId}` });
   });
 
   // Join driver room
@@ -644,12 +740,18 @@ io.on('connection', async (socket) => {
     if (socketAuthEnforced) {
       const currentUser = socket.data.user;
       if (!currentUser || currentUser.userType !== 'driver' || Number(driverId) !== Number(currentUser.id)) {
+        socketLog('error', 'join_driver_room_denied', {
+          socketId: socket.id,
+          requestedDriverId: driverId,
+          authedUserId: currentUser?.id,
+          authedUserType: currentUser?.userType,
+        });
         socket.emit('socket-auth-error', { success: false, message: 'Not authorized for driver room' });
         return;
       }
     }
     socket.join(`driver-${driverId}`);
-    console.log(`Driver ${driverId} joined their room`);
+    socketLog('info', 'join_driver_room', { socketId: socket.id, room: `driver-${driverId}` });
   });
 
   // Handle ride request updates
@@ -657,12 +759,14 @@ io.on('connection', async (socket) => {
     if (socketAuthEnforced) {
       const currentUser = socket.data.user;
       if (!currentUser) {
+        socketLog('error', 'subscribe_ride_denied_no_auth', { socketId: socket.id, rideId });
         socket.emit('socket-auth-error', { success: false, message: 'Authentication required' });
         return;
       }
 
       const rideIdInt = parseInt(String(rideId), 10);
       if (Number.isNaN(rideIdInt)) {
+        socketLog('error', 'subscribe_ride_invalid_id', { socketId: socket.id, rideId });
         socket.emit('socket-auth-error', { success: false, message: 'Invalid ride id' });
         return;
       }
@@ -678,19 +782,26 @@ io.on('connection', async (socket) => {
           !!ride &&
           (Number(ride.riderId) === Number(currentUser.id) || Number(ride.driverId) === Number(currentUser.id));
         if (!allowed) {
+          socketLog('error', 'subscribe_ride_denied', {
+            socketId: socket.id,
+            rideId: rideIdInt,
+            userId: currentUser.id,
+            userType: currentUser.userType,
+          });
           socket.emit('socket-auth-error', { success: false, message: 'Not authorized for ride room' });
           return;
         }
       }
     }
     socket.join(`ride-${rideId}`);
-    console.log(`Subscribed to ride ${rideId}`);
+    socketLog('info', 'subscribe_ride', { socketId: socket.id, room: `ride-${rideId}` });
   });
 
   socket.on('unsubscribe-ride', (rideId) => {
     const rideIdInt = parseInt(String(rideId), 10);
     if (!Number.isNaN(rideIdInt)) {
       socket.leave(`ride-${rideIdInt}`);
+      socketLog('info', 'unsubscribe_ride', { socketId: socket.id, room: `ride-${rideIdInt}` });
     }
   });
 
@@ -698,7 +809,11 @@ io.on('connection', async (socket) => {
   registerRideChatHandlers(socket, io);
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    socketLog('info', 'client_disconnected', {
+      socketId: socket.id,
+      userId: socket.data?.user?.id,
+      userType: socket.data?.user?.userType,
+    });
   });
 });
 

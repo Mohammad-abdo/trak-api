@@ -2724,7 +2724,7 @@ async function main() {
   console.log('   Admin: admin@alaelsareea.com / password123')
   console.log('   Fleet: fleet@alaelsareea.com / password123')
   console.log('   Rider: ahmed@example.com / password123')
-  console.log('   Driver: khalid@example.com / password123')
+  console.log('   Driver: khalid@example.com /    ')
   console.log('')
   console.log('💳 PaySky payment-test rides (completed, card, payment pending):')
   payTestRides.forEach((r, i) => {

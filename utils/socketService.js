@@ -3,6 +3,19 @@
  * This service provides helper functions to emit events via Socket.IO
  */
 
+function shouldLogSocketEmits() {
+    const lvl = String(process.env.SOCKET_LOG_LEVEL || (process.env.NODE_ENV === "production" ? "info" : "debug")).toLowerCase();
+    return lvl !== "off";
+}
+
+function logEmit(scope, room, event, data) {
+    if (!shouldLogSocketEmits()) return;
+    const logPayload = process.env.SOCKET_LOG_PAYLOAD === "1";
+    const meta = { scope, room, event };
+    if (logPayload) meta.payload = data;
+    console.log(`[socket:emit] ${JSON.stringify(meta)}`);
+}
+
 /**
  * Emit event to specific user
  */
@@ -11,7 +24,9 @@ export const emitToUser = (io, userId, event, data) => {
         console.warn("Socket.IO not initialized");
         return;
     }
-    io.to(`user-${userId}`).emit(event, data);
+    const room = `user-${userId}`;
+    logEmit("user", room, event, data);
+    io.to(room).emit(event, data);
 };
 
 /**
@@ -22,7 +37,9 @@ export const emitToDriver = (io, driverId, event, data) => {
         console.warn("Socket.IO not initialized");
         return;
     }
-    io.to(`driver-${driverId}`).emit(event, data);
+    const room = `driver-${driverId}`;
+    logEmit("driver", room, event, data);
+    io.to(room).emit(event, data);
 };
 
 /**
@@ -33,7 +50,9 @@ export const emitToRide = (io, rideId, event, data) => {
         console.warn("Socket.IO not initialized");
         return;
     }
-    io.to(`ride-${rideId}`).emit(event, data);
+    const room = `ride-${rideId}`;
+    logEmit("ride", room, event, data);
+    io.to(room).emit(event, data);
 };
 
 /**
@@ -44,6 +63,7 @@ export const emitToAll = (io, event, data) => {
         console.warn("Socket.IO not initialized");
         return;
     }
+    logEmit("all", "*", event, data);
     io.emit(event, data);
 };
 
@@ -57,6 +77,7 @@ export const emitToAllDrivers = (io, event, data) => {
     }
     // This would require tracking which sockets are drivers
     // For now, emit to all and let clients filter
+    logEmit("allDrivers", "*", event, data);
     io.emit(event, data);
 };
 
@@ -69,7 +90,9 @@ export const emitRideRequestToDrivers = (io, driverIds, rideRequest) => {
         return;
     }
     driverIds.forEach((driverId) => {
-        io.to(`driver-${driverId}`).emit("new_ride_request", rideRequest);
+        const room = `driver-${driverId}`;
+        logEmit("driver", room, "new_ride_request", rideRequest);
+        io.to(room).emit("new_ride_request", rideRequest);
     });
 };
 
