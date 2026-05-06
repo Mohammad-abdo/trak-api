@@ -26,7 +26,8 @@
     "test:user-api": "node scripts/testUserEndpoints.js",
     "test:user-api:lenient": "node scripts/runUserApiLenient.mjs",
     "test:e2e": "node scripts/seedE2ETest.js && node scripts/testUserEndpoints.js",
-    "driver:available-smoke": "node scripts/driver-available-rides-smoke.mjs"
+    "driver:available-smoke": "node scripts/driver-available-rides-smoke.mjs",
+    "trip:socket:e2e:prod": "node scripts/trip-socket-e2e-prod.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
