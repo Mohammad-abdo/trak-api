@@ -32,6 +32,16 @@ const SOCKET_PATH = (process.env.SOCKET_PATH || "/socket.io").trim() || "/socket
 const RIDER_JWT = process.env.RIDER_JWT || process.env.USER_JWT;
 const DRIVER_JWT = process.env.DRIVER_JWT;
 
+// Force polling-first when reverse proxies block WebSocket upgrade.
+// Examples:
+//   CLIENT_TRANSPORTS="polling"            (diagnostic)
+//   CLIENT_TRANSPORTS="polling,websocket"  (recommended fallback)
+//   CLIENT_TRANSPORTS="websocket,polling"  (default)
+const CLIENT_TRANSPORTS = String(process.env.CLIENT_TRANSPORTS || "websocket,polling")
+  .split(",")
+  .map((t) => t.trim())
+  .filter(Boolean);
+
 const VEHICLE_ID = parseInt(process.env.VEHICLE_ID || "", 10);
 const LAT = parseFloat(process.env.LAT || "30.0444");
 const LNG = parseFloat(process.env.LNG || "31.2357");
@@ -132,7 +142,7 @@ function connectSocket(who, token) {
   const socket = io(BASE_URL, {
     auth: { token },
     path: SOCKET_PATH.startsWith("/") ? SOCKET_PATH : `/${SOCKET_PATH}`,
-    transports: ["websocket", "polling"],
+    transports: CLIENT_TRANSPORTS,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
@@ -140,7 +150,13 @@ function connectSocket(who, token) {
   });
 
   socket.on("connect", () => log(who, "connect", socket.id));
-  socket.on("connect_error", (err) => log(who, "connect_error", err?.message || err));
+  socket.on("connect_error", (err) =>
+    log(who, "connect_error", {
+      message: err?.message || String(err),
+      description: err?.description,
+      context: err?.context,
+    })
+  );
   socket.on("disconnect", (reason) => log(who, "disconnect", reason));
 
   bindLogs(who, socket);
@@ -148,7 +164,7 @@ function connectSocket(who, token) {
 }
 
 async function main() {
-  log("main", "BASE_URL=", BASE_URL, "SOCKET_PATH=", SOCKET_PATH);
+  log("main", "BASE_URL=", BASE_URL, "SOCKET_PATH=", SOCKET_PATH, "CLIENT_TRANSPORTS=", CLIENT_TRANSPORTS.join(","));
 
   const riderSocket = connectSocket("rider", RIDER_JWT);
   const driverSocket = connectSocket("driver", DRIVER_JWT);
