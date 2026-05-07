@@ -131,6 +131,11 @@ function socketPeerIp(socket) {
 }
 
 function parseAllowedOrigins() {
+  // Allow ALL origins by default (mobile + web).
+  // Set CORS_STRICT=1 in env to honor FRONTEND_URL allow-list instead.
+  const strict = String(process.env.CORS_STRICT || '').trim() === '1';
+  if (!strict) return '*';
+
   const envOrigins = String(process.env.FRONTEND_URL || '').trim();
   if (!envOrigins) return '*';
   if (envOrigins === '*') return '*';
@@ -162,9 +167,10 @@ const SOCKET_PING_TIMEOUT = parseInt(process.env.SOCKET_PING_TIMEOUT || '60000',
 const allowedOrigins = parseAllowedOrigins();
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
+    origin: allowedOrigins === '*' ? true : allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
     credentials: allowedOrigins !== '*',
+    allowedHeaders: ["Authorization", "Content-Type", "X-Requested-With"],
   },
   path: SOCKET_PATH,
   transports: SOCKET_TRANSPORTS,
@@ -235,7 +241,13 @@ app.set('trust proxy', parseTrustProxy());
 
 // Middleware
 app.use(requestContextMiddleware);
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins === '*' ? true : allowedOrigins,
+  credentials: allowedOrigins !== '*',
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"],
+  exposedHeaders: ["Content-Length", "Content-Range"],
+}));
 app.use(securityHeaders);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
