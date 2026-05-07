@@ -24,11 +24,32 @@ export const deleteRideRequest = async (req, res) => {
     try {
         const rideId = parseRideRequestIdParam(req.params.id);
         if (!rideId) return res.status(400).json({ success: false, message: "Invalid ride id" });
-        await prisma.rideRequest.delete({ where: { id: rideId } });
+        // RideRequest has multiple dependent tables that may not be configured
+        // with DB-level cascading deletes. Delete dependents first to avoid FK errors.
+        await prisma.$transaction([
+            prisma.payment.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.rideRequestBid.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.rideRequestRating.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.rideRequestHistory.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.rideNegotiation.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.walletHistory.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.complaint.deleteMany({ where: { rideRequestId: rideId } }),
+            // RideChatMessage is configured with onDelete: Cascade in Prisma schema,
+            // but deleting explicitly is safe across DBs/migrations.
+            prisma.rideChatMessage.deleteMany({ where: { rideRequestId: rideId } }),
+            prisma.rideRequest.delete({ where: { id: rideId } }),
+        ]);
+
         res.json({ success: true, message: "Ride request deleted successfully" });
     } catch (error) {
         console.error("Delete ride request error:", error);
         if (error.code === "P2025") return res.status(404).json({ success: false, message: "Ride request not found" });
+        if (error.code === "P2003") {
+            return res.status(409).json({
+                success: false,
+                message: "Cannot delete this ride request because it is referenced by other records",
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };
