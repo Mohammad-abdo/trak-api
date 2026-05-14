@@ -124,10 +124,21 @@ function bindLogs(who, socket) {
     "sos:alert",
     "ride:tip",
 
-    // chat
+    // chat (legacy + Flutter dual names)
     "chat:message",
+    "newMessage",
+    "newAttachment",
     "chat:typing",
+    "userTyping",
     "chat:read",
+    "messageSeenUpdated",
+    "messageDeleted",
+    "chat:message-deleted",
+    "messageDeliveredUpdated",
+    "chat:message-delivered",
+    "onlineStatusChanged",
+    "userOnline",
+    "userOffline",
     "chat:error",
   ];
 

@@ -1578,6 +1578,9 @@ model RideChatMessage {
   attachmentUrl String?   @map("attachment_url") @db.Text
   isRead        Boolean   @default(false) @map("is_read")
   readAt        DateTime? @map("read_at") @db.Timestamp
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamp
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamp
+  deletedByUserId Int?    @map("deleted_by_user_id")
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(6)
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(6)
 

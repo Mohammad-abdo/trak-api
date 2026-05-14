@@ -1,7 +1,7 @@
 import prisma from "../../utils/prisma.js";
 import asyncHandler from "../../utils/asyncHandler.js";
 import { successResponse, errorResponse } from "../../utils/serverResponse.js";
-import { emitToRide } from "../../utils/socketService.js";
+import { emitNewChatMessage, emitChatRead } from "../../utils/rideChatBroadcast.js";
 import {
     resolveRideChatAccess,
     checkChatRateLimit,
@@ -18,6 +18,9 @@ const SELECT_MESSAGE = {
     attachmentUrl: true,
     isRead: true,
     readAt: true,
+    deliveredAt: true,
+    deletedAt: true,
+    deletedByUserId: true,
     createdAt: true,
 };
 
@@ -35,7 +38,7 @@ export const getMessages = asyncHandler(async (req, res) => {
     const cursorId = cursorRaw != null ? parseInt(String(cursorRaw), 10) : null;
 
     const messages = await prisma.rideChatMessage.findMany({
-        where: { rideRequestId: access.ride.id },
+        where: { rideRequestId: access.ride.id, deletedAt: null },
         orderBy: { id: "desc" },
         take: limit + 1,
         ...(cursorId && !Number.isNaN(cursorId) ? { cursor: { id: cursorId }, skip: 1 } : {}),
@@ -68,7 +71,15 @@ export const sendMessage = asyncHandler(async (req, res) => {
     const access = await resolveRideChatAccess(req.user, req.params.rideId, { requireWrite: true });
     if (!access.ok) return errorResponse(res, access.message, access.statusCode);
 
-    const message = sanitizeChatMessage(req.body?.message);
+    const attachmentUrl =
+        typeof req.body?.attachmentUrl === "string" && req.body.attachmentUrl.trim()
+            ? req.body.attachmentUrl.trim()
+            : null;
+
+    let message = sanitizeChatMessage(req.body?.message);
+    if (!message && attachmentUrl) {
+        message = "[attachment]";
+    }
     if (!message) {
         return errorResponse(
             res,
@@ -82,11 +93,6 @@ export const sendMessage = asyncHandler(async (req, res) => {
         return errorResponse(res, "Too many messages, please slow down", 429);
     }
 
-    const attachmentUrl =
-        typeof req.body?.attachmentUrl === "string" && req.body.attachmentUrl.trim()
-            ? req.body.attachmentUrl.trim()
-            : null;
-
     const saved = await prisma.rideChatMessage.create({
         data: {
             rideRequestId: access.ride.id,
@@ -99,7 +105,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     });
 
     const io = getIo(req);
-    if (io) emitToRide(io, access.ride.id, "chat:message", saved);
+    if (io) emitNewChatMessage(io, access.ride.id, saved);
 
     return successResponse(res, saved, "Message sent", 201);
 });
@@ -119,13 +125,14 @@ export const markRead = asyncHandler(async (req, res) => {
             rideRequestId: access.ride.id,
             senderType: otherSenderType,
             isRead: false,
+            deletedAt: null,
         },
         data: { isRead: true, readAt: now },
     });
 
     const io = getIo(req);
     if (io && result.count > 0) {
-        emitToRide(io, access.ride.id, "chat:read", {
+        emitChatRead(io, access.ride.id, {
             rideRequestId: access.ride.id,
             readerId: req.user.id,
             readerType: access.senderType,
@@ -151,6 +158,7 @@ export const getUnreadCount = asyncHandler(async (req, res) => {
             rideRequestId: access.ride.id,
             senderType: otherSenderType,
             isRead: false,
+            deletedAt: null,
         },
     });
 

@@ -81,6 +81,11 @@ import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
 import mobileDriverRoutes from './routes/driver/mobileDriverRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
 import { registerRideChatHandlers } from './utils/rideChatSocket.js';
+import {
+  subscribeSocketToRide,
+  unsubscribeSocketFromRide,
+  emitPresenceOfflineForSocketRooms,
+} from './utils/rideSocketRooms.js';
 import { runAutoComplete } from './utils/dedicatedBookingScheduler.js';
 import { requestContextMiddleware } from './middleware/requestContext.js';
 import { securityAuditMiddleware } from './middleware/securityAuditMiddleware.js';
@@ -766,54 +771,38 @@ io.on('connection', async (socket) => {
     socketLog('info', 'join_driver_room', { socketId: socket.id, room: `driver-${driverId}` });
   });
 
-  // Handle ride request updates
+  // Handle ride request updates (trip + ride-chat room `ride-{id}`)
   socket.on('subscribe-ride', async (rideId) => {
-    if (socketAuthEnforced) {
-      const currentUser = socket.data.user;
-      if (!currentUser) {
-        socketLog('error', 'subscribe_ride_denied_no_auth', { socketId: socket.id, rideId });
-        socket.emit('socket-auth-error', { success: false, message: 'Authentication required' });
-        return;
-      }
-
-      const rideIdInt = parseInt(String(rideId), 10);
-      if (Number.isNaN(rideIdInt)) {
-        socketLog('error', 'subscribe_ride_invalid_id', { socketId: socket.id, rideId });
-        socket.emit('socket-auth-error', { success: false, message: 'Invalid ride id' });
-        return;
-      }
-
-      // Admin/staff can subscribe to any ride; riders/drivers only to their own rides.
-      const isPrivileged = !['rider', 'driver'].includes(currentUser.userType);
-      if (!isPrivileged) {
-        const ride = await prisma.rideRequest.findUnique({
-          where: { id: rideIdInt },
-          select: { riderId: true, driverId: true },
-        });
-        const allowed =
-          !!ride &&
-          (Number(ride.riderId) === Number(currentUser.id) || Number(ride.driverId) === Number(currentUser.id));
-        if (!allowed) {
-          socketLog('error', 'subscribe_ride_denied', {
-            socketId: socket.id,
-            rideId: rideIdInt,
-            userId: currentUser.id,
-            userType: currentUser.userType,
-          });
-          socket.emit('socket-auth-error', { success: false, message: 'Not authorized for ride room' });
-          return;
-        }
-      }
+    const r = await subscribeSocketToRide(socket, rideId, { socketAuthEnforced, io });
+    if (r.ok) {
+      socketLog('info', 'subscribe_ride', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
+    } else if (socketAuthEnforced) {
+      socketLog('error', 'subscribe_ride_failed', { socketId: socket.id, rideId });
     }
-    socket.join(`ride-${rideId}`);
-    socketLog('info', 'subscribe_ride', { socketId: socket.id, room: `ride-${rideId}` });
+  });
+
+  /** Flutter alias — same behavior as `subscribe-ride` (accepts id or `{ rideRequestId }`). */
+  socket.on('joinChat', async (payload) => {
+    const r = await subscribeSocketToRide(socket, payload, { socketAuthEnforced, io });
+    if (r.ok) {
+      socketLog('info', 'join_chat', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
+    } else if (socketAuthEnforced) {
+      socketLog('error', 'join_chat_failed', { socketId: socket.id });
+    }
   });
 
   socket.on('unsubscribe-ride', (rideId) => {
-    const rideIdInt = parseInt(String(rideId), 10);
-    if (!Number.isNaN(rideIdInt)) {
-      socket.leave(`ride-${rideIdInt}`);
-      socketLog('info', 'unsubscribe_ride', { socketId: socket.id, room: `ride-${rideIdInt}` });
+    const r = unsubscribeSocketFromRide(socket, rideId, io);
+    if (r.ok) {
+      socketLog('info', 'unsubscribe_ride', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
+    }
+  });
+
+  /** Flutter alias — same as `unsubscribe-ride`. */
+  socket.on('leaveChat', (payload) => {
+    const r = unsubscribeSocketFromRide(socket, payload, io);
+    if (r.ok) {
+      socketLog('info', 'leave_chat', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
     }
   });
 
@@ -821,6 +810,7 @@ io.on('connection', async (socket) => {
   registerRideChatHandlers(socket, io);
 
   socket.on('disconnect', () => {
+    emitPresenceOfflineForSocketRooms(io, socket);
     socketLog('info', 'client_disconnected', {
       socketId: socket.id,
       userId: socket.data?.user?.id,

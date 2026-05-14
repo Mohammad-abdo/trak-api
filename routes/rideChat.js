@@ -25,16 +25,22 @@ const router = express.Router();
  *
  *       **During an active trip, messaging must go through Socket.IO** so the
  *       other party receives instantly: connect with the same JWT as REST,
- *       emit `subscribe-ride` with the numeric ride id, then emit `chat:send`
- *       `{ rideRequestId, message, attachmentUrl? }` and listen for `chat:message`,
- *       `chat:read`, `chat:typing`, and `chat:error`. REST `POST .../messages` is a
- *       supported fallback (it persists and broadcasts `chat:message` too) — use
+ *       emit `subscribe-ride` (legacy) or **`joinChat`** (Flutter) with the numeric ride id
+ *       or `{ rideRequestId }`, then emit **`chat:send`** or **`sendMessage`**
+ *       `{ rideRequestId, message, attachmentUrl? }` and listen for **`chat:message`**
+ *       and **`newMessage`** (same payload). Also: **`chat:read`** / **`messageSeenUpdated`**,
+ *       **`chat:typing`** / **`userTyping`**, **`chat:error`**. REST `POST .../messages` is a
+ *       supported fallback (it persists and dual-emits too) — use
  *       **GET** mainly for initial history and offline catch-up.
  *
- *       **Real-time (same connection):** room `ride-{rideId}` via `subscribe-ride`:
- *       - `chat:message` — new message persisted
- *       - `chat:read`    — someone read your messages
- *       - `chat:typing`  — typing indicator (ephemeral)
+ *       **Real-time (same connection):** room `ride-{rideId}` via `subscribe-ride` / `joinChat`:
+ *       - `chat:message` | `newMessage` — new message persisted
+ *       - `newAttachment` — convenience when message has `attachmentUrl`
+ *       - `chat:read` | `messageSeenUpdated` — read receipts
+ *       - `chat:typing` | `userTyping` — typing indicator (ephemeral)
+ *       - `messageDeleted` | `chat:message-deleted` — soft delete
+ *       - `messageDeliveredUpdated` | `chat:message-delivered` — delivery ack
+ *       - Presence (optional, `RIDE_CHAT_PRESENCE=1`): `onlineStatusChanged`, `userOnline`, `userOffline`
  */
 
 /**
