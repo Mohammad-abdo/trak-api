@@ -765,12 +765,18 @@ export const cancelRide = asyncHandler(async (req, res) => {
     });
 
     try {
-        const { emitToRide } = await import("../../utils/socketService.js");
         const io = req.app.get("io") || global.io;
-        if (io) emitToRide(io, ride.id, "trip-cancelled", { rideRequestId: ride.id, cancelBy: "driver", reason });
+        if (io) {
+            const { notifyRideCancelled } = await import("../../utils/notifyRideCancelled.js");
+            notifyRideCancelled(io, ride.id, {
+                driverId: req.user.id,
+                riderId: ride.riderId,
+                cancelledBy: "driver",
+                reason: reason || null,
+                syncReason: "ride_cancelled_driver",
+            });
+        }
     } catch (_) {}
-
-    emitDriverTripSyncFromReq(req, ride.id, "ride_cancelled_driver");
 
     return successResponse(res, null, "Ride cancelled");
 });

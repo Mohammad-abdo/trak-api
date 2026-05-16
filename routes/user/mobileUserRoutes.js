@@ -1570,6 +1570,10 @@ router.get('/offers/trip-status/:bookingId', authenticate, getTripStatus);
 /**
  * @swagger
  * /apimobile/user/offers/cancel-trip:
+ *     description: |
+ *       Cancels the trip. **`driver_id` is optional** — if omitted, the server notifies the
+ *       assigned driver from `booking.driverId` via `trip-cancelled` / `tripCancelled` on
+ *       `driver-{id}` and `ride-{bookingId}`. Also emits `driver-trip-sync` / `trip-sync`.
  *   post:
  *     tags: [Offers]
  *     summary: Cancel trip from user side. Notifies driver via Socket.IO.

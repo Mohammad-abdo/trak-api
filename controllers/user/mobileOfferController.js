@@ -626,6 +626,7 @@ export const cancelTrip = async (req, res) => {
 
         const booking = await prisma.rideRequest.findFirst({
             where: { id: rideId, riderId },
+            select: { id: true, status: true, driverId: true },
         });
 
         if (!booking) {
@@ -640,15 +641,29 @@ export const cancelTrip = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Trip is already cancelled' });
         }
 
+        const assignedDriverId = booking.driverId ?? null;
+        const notifyDriverId = driverId ?? assignedDriverId;
+
         await prisma.rideRequest.update({
             where: { id: rideId },
-            data: { status: 'cancelled', cancelBy: 'rider', reason: reason || null },
+            data: {
+                status: 'cancelled',
+                cancelBy: 'rider',
+                reason: reason || null,
+                driverId: null,
+            },
         });
 
-        // Notify driver
         const io = req.app.get('io');
-        if (io && driverId) {
-            io.to(`driver-${driverId}`).emit('trip-cancelled', { booking_id: rideId, cancelled_by: 'rider', reason });
+        if (io) {
+            const { notifyRideCancelled } = await import('../../utils/notifyRideCancelled.js');
+            notifyRideCancelled(io, rideId, {
+                driverId: notifyDriverId,
+                riderId,
+                cancelledBy: 'rider',
+                reason: reason || null,
+                syncReason: 'rider_cancel_trip',
+            });
         }
 
         return res.json({ success: true, message: 'Trip cancelled successfully' });
