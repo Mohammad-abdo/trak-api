@@ -14,7 +14,7 @@ export function parseRideIdForRoom(payload) {
         return Number.isNaN(n) ? null : n;
     }
     if (typeof payload === "object") {
-        const r = payload.rideRequestId ?? payload.rideId ?? payload.ride_id;
+        const r = payload.rideRequestId ?? payload.rideId ?? payload.ride_id ?? payload.tripId ?? payload.trip_id;
         if (r != null) return parseRideIdForRoom(r);
     }
     return null;
@@ -25,12 +25,30 @@ function ensureRideRoomsSet(socket) {
     return socket.data.rideRooms;
 }
 
-function presenceEnabled() {
+function chatPresenceEnabled() {
     return String(process.env.RIDE_CHAT_PRESENCE || "").trim() === "1";
 }
 
+function trackingPresenceEnabled() {
+    return String(process.env.RIDE_TRACKING_PRESENCE || "").trim() === "1";
+}
+
+function emitTrackingPresenceJoin(io, socket, rideIdInt, userId) {
+    if (!trackingPresenceEnabled() || !io) return;
+    const room = `ride-${rideIdInt}`;
+    const payload = { rideRequestId: rideIdInt, tripId: rideIdInt, userId };
+    socket.to(room).emit("trackingReconnected", payload);
+}
+
+function emitTrackingPresenceLeave(io, socket, rideIdInt, userId) {
+    if (!trackingPresenceEnabled() || !io) return;
+    const room = `ride-${rideIdInt}`;
+    const payload = { rideRequestId: rideIdInt, tripId: rideIdInt, userId };
+    socket.to(room).emit("trackingDisconnected", payload);
+}
+
 function emitRideChatPresenceJoin(io, socket, rideIdInt, userId) {
-    if (!presenceEnabled() || !io) return;
+    if (!chatPresenceEnabled() || !io) return;
     const room = `ride-${rideIdInt}`;
     const payload = { rideRequestId: rideIdInt, userId, online: true };
     socket.to(room).emit("onlineStatusChanged", payload);
@@ -38,7 +56,7 @@ function emitRideChatPresenceJoin(io, socket, rideIdInt, userId) {
 }
 
 function emitRideChatPresenceLeave(io, socket, rideIdInt, userId) {
-    if (!presenceEnabled() || !io) return;
+    if (!chatPresenceEnabled() || !io) return;
     const room = `ride-${rideIdInt}`;
     const payload = { rideRequestId: rideIdInt, userId, online: false };
     socket.to(room).emit("onlineStatusChanged", payload);
@@ -87,7 +105,10 @@ export async function subscribeSocketToRide(socket, rawPayload, { socketAuthEnfo
     socket.join(`ride-${rideIdInt}`);
     ensureRideRoomsSet(socket).add(rideIdInt);
     const uid = socket.data?.user?.id;
-    if (uid != null) emitRideChatPresenceJoin(io, socket, rideIdInt, uid);
+    if (uid != null) {
+        emitRideChatPresenceJoin(io, socket, rideIdInt, uid);
+        emitTrackingPresenceJoin(io, socket, rideIdInt, uid);
+    }
     return { ok: true, rideIdInt };
 }
 
@@ -104,7 +125,10 @@ export function unsubscribeSocketFromRide(socket, rawPayload, io) {
     socket.leave(`ride-${rideIdInt}`);
     if (socket.data.rideRooms) socket.data.rideRooms.delete(rideIdInt);
     const uid = socket.data?.user?.id;
-    if (uid != null) emitRideChatPresenceLeave(io, socket, rideIdInt, uid);
+    if (uid != null) {
+        emitRideChatPresenceLeave(io, socket, rideIdInt, uid);
+        emitTrackingPresenceLeave(io, socket, rideIdInt, uid);
+    }
     return { ok: true, rideIdInt };
 }
 
@@ -114,13 +138,22 @@ export function unsubscribeSocketFromRide(socket, rawPayload, io) {
  * @param {import("socket.io").Socket} socket
  */
 export function emitPresenceOfflineForSocketRooms(io, socket) {
-    if (!presenceEnabled() || !io) return;
+    if (!io) return;
     const uid = socket.data?.user?.id;
     const rooms = socket.data?.rideRooms;
     if (uid == null || !rooms || rooms.size === 0) return;
     for (const rideIdInt of rooms) {
-        const payload = { rideRequestId: rideIdInt, userId: uid, online: false };
-        io.to(`ride-${rideIdInt}`).emit("onlineStatusChanged", payload);
-        io.to(`ride-${rideIdInt}`).emit("userOffline", payload);
+        if (chatPresenceEnabled()) {
+            const payload = { rideRequestId: rideIdInt, userId: uid, online: false };
+            io.to(`ride-${rideIdInt}`).emit("onlineStatusChanged", payload);
+            io.to(`ride-${rideIdInt}`).emit("userOffline", payload);
+        }
+        if (trackingPresenceEnabled()) {
+            io.to(`ride-${rideIdInt}`).emit("trackingDisconnected", {
+                rideRequestId: rideIdInt,
+                tripId: rideIdInt,
+                userId: uid,
+            });
+        }
     }
 }

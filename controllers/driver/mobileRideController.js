@@ -11,7 +11,12 @@ import {
 import { calculateTripPrice } from "../../utils/pricingCalculator.js";
 import { getNegotiationSettings, validateFareBounds, computeExpiresAt } from "../../utils/negotiationHelper.js";
 import { emitDriverTripSyncFromReq } from "../../utils/driverTripSocketSync.js";
-import { replayPendingRidesForDriver } from "../../utils/replayPendingRidesForDriver.js";
+import {
+    updateDriverLocation as updateDriverLocationService,
+    updateRideStatusForDriver,
+    completeRideForDriver,
+} from "../../services/rideTrackingService.js";
+import { parseLocationFromPayload } from "../../utils/rideTrackingPayload.js";
 
 /**
  * Check if driver is currently blocked from rejecting/viewing rides.
@@ -707,88 +712,20 @@ const calculateEstimatedPrice = async (ride) => {
 export const updateRideStatus = asyncHandler(async (req, res) => {
     const rawId = pickRideRequestIdFromBody(req.body);
     const { status } = req.body || {};
-    const allowed = ["arrived", "started"];
-    if (!allowed.includes(status)) return errorResponse(res, `status must be one of: ${allowed.join(", ")}`, 400);
-
-    const rideId = parseRideRequestIdParam(rawId);
-    if (!rideId) return errorResponse(res, "Invalid rideRequestId (use numeric id or booking_id)", 400);
-    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
-    if (!ride) return errorResponse(res, "Ride not found", 404);
-    if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
-
-    const updated = await prisma.rideRequest.update({ where: { id: ride.id }, data: { status } });
-
-    try {
-        const { emitToRide } = await import("../../utils/socketService.js");
-        const io = req.app.get("io") || global.io;
-        if (io) emitToRide(io, ride.id, `ride-${status}`, { rideRequestId: ride.id, driverId: req.user.id, status });
-    } catch (_) {}
-
-    emitDriverTripSyncFromReq(req, ride.id, `ride_status_${status}`);
-
-    return successResponse(res, updated, `Ride status updated to ${status}`);
+    const io = req.app.get("io") || global.io;
+    const result = await updateRideStatusForDriver(req.user.id, rawId, status, io);
+    if (!result.ok) return errorResponse(res, result.message, result.statusCode);
+    return successResponse(res, result.data, result.message);
 });
 
 // Complete ride (driver ends trip)
 export const completeRide = asyncHandler(async (req, res) => {
     const rawId = pickRideRequestIdFromBody(req.body);
     const { tips } = req.body || {};
-    const rideId = parseRideRequestIdParam(rawId);
-    if (!rideId) return errorResponse(res, "Invalid rideRequestId (use numeric id or booking_id)", 400);
-
-    const ride = await prisma.rideRequest.findUnique({ where: { id: rideId } });
-    if (!ride) return errorResponse(res, "Ride not found", 404);
-    if (ride.driverId !== req.user.id) return errorResponse(res, "Not authorized", 403);
-
-    const effectiveFare =
-        ride.negotiationStatus === "accepted" && ride.negotiatedFare != null
-            ? parseFloat(ride.negotiatedFare)
-            : parseFloat(ride.totalAmount);
-    const totalAmount = effectiveFare + (parseFloat(tips) || 0);
-
-    await prisma.rideRequest.update({ where: { id: ride.id }, data: { status: "completed", tips: tips || 0, totalAmount } });
-
-    await prisma.payment.create({
-        data: {
-            rideRequestId: ride.id,
-            userId: ride.riderId,
-            driverId: ride.driverId,
-            amount: totalAmount,
-            paymentType: ride.paymentType,
-            paymentStatus: ride.paymentType === "cash" ? "paid" : "pending",
-        },
-    });
-
-    if (ride.paymentType === "cash" && ride.driverId && totalAmount > 0) {
-        const { driverShare } = await getDriverAndSystemShare(Number(totalAmount));
-        let wallet = await prisma.wallet.findUnique({ where: { userId: ride.driverId } });
-        if (!wallet) wallet = await prisma.wallet.create({ data: { userId: ride.driverId, balance: 0 } });
-        const newBalance = Math.round((parseFloat(wallet.balance) + (driverShare > 0 ? driverShare : 0)) * 100) / 100;
-        await prisma.wallet.update({ where: { id: wallet.id }, data: { balance: newBalance } });
-        await prisma.walletHistory.create({
-            data: {
-                walletId: wallet.id,
-                userId: ride.driverId,
-                type: "credit",
-                amount: Number(totalAmount),
-                balance: newBalance,
-                description: ride.negotiationStatus === "accepted" ? "Ride earnings (cash) — negotiated fare" : "Ride earnings (cash)",
-                transactionType: "ride_earnings",
-                rideRequestId: ride.id,
-            },
-        });
-    }
-
-    try {
-        const { emitToRide } = await import("../../utils/socketService.js");
-        const io = req.app.get("io") || global.io;
-        if (io) emitToRide(io, ride.id, "trip-completed", { rideRequestId: ride.id, driverId: req.user.id, totalAmount });
-    } catch (_) {}
-
-    emitDriverTripSyncFromReq(req, ride.id, "ride_completed");
-
-    const updated = await prisma.rideRequest.findUnique({ where: { id: ride.id } });
-    return successResponse(res, updated, "Ride completed successfully");
+    const io = req.app.get("io") || global.io;
+    const result = await completeRideForDriver(req.user.id, rawId, { tips }, io);
+    if (!result.ok) return errorResponse(res, result.message, result.statusCode);
+    return successResponse(res, result.data, result.message);
 });
 
 // Cancel ride from driver side
@@ -1121,62 +1058,16 @@ export const checkNegotiationStatus = asyncHandler(async (req, res) => {
 
 // Update driver location during a ride
 export const updateLocation = asyncHandler(async (req, res) => {
-    const { latitude, longitude, currentHeading } = req.body;
-    if (!latitude || !longitude) return errorResponse(res, "latitude and longitude are required", 400);
-
-    await prisma.user.update({
-        where: { id: req.user.id },
-        data: {
-            latitude: String(latitude),
-            longitude: String(longitude),
-            currentHeading: currentHeading ? parseFloat(currentHeading) : undefined,
-            lastLocationUpdateAt: new Date(),
-        },
-    });
-
-    const driverLat = parseFloat(latitude);
-    const driverLng = parseFloat(longitude);
-
-    try {
-        const { emitDriverLocationUpdate, emitToRide } = await import("../../utils/socketService.js");
-        const io = req.app.get("io") || global.io;
-        if (io) {
-            emitDriverLocationUpdate(io, req.user.id, {
-                latitude,
-                longitude,
-                currentHeading,
-                heading: currentHeading,
-            });
-            const activeRides = await prisma.rideRequest.findMany({
-                where: {
-                    driverId: req.user.id,
-                    status: { in: ["accepted", "arrived", "started"] },
-                },
-                select: { id: true },
-            });
-            const payload = {
-                driverId: req.user.id,
-                latitude: String(latitude),
-                longitude: String(longitude),
-                heading: currentHeading != null ? parseFloat(currentHeading) : null,
-            };
-            for (const r of activeRides) {
-                emitToRide(io, r.id, "driver-location-for-ride", { ...payload, rideRequestId: r.id });
-            }
-
-            prisma.user
-                .findUnique({
-                    where: { id: req.user.id },
-                    select: { isOnline: true, isAvailable: true },
-                })
-                .then((u) => {
-                    if (u?.isOnline && u?.isAvailable) {
-                        return replayPendingRidesForDriver(io, req.user.id, driverLat, driverLng);
-                    }
-                })
-                .catch(() => {});
-        }
-    } catch (_) {}
-
-    return successResponse(res, { latitude, longitude }, "Location updated");
+    const loc = parseLocationFromPayload(req.body) || {
+        latitude: req.body?.latitude,
+        longitude: req.body?.longitude,
+        currentHeading: req.body?.currentHeading,
+    };
+    if (!loc?.latitude || !loc?.longitude) {
+        return errorResponse(res, "latitude and longitude are required", 400);
+    }
+    const io = req.app.get("io") || global.io;
+    const result = await updateDriverLocationService(req.user.id, loc, io);
+    if (!result.ok) return errorResponse(res, result.message, result.statusCode);
+    return successResponse(res, result.data, result.message);
 });

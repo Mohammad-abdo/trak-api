@@ -81,6 +81,7 @@ import mobileUserRoutes from './routes/user/mobileUserRoutes.js';
 import mobileDriverRoutes from './routes/driver/mobileDriverRoutes.js';
 import { registerDedicatedBookingHandlers } from './utils/dedicatedBookingSocket.js';
 import { registerRideChatHandlers } from './utils/rideChatSocket.js';
+import { registerRideTrackingHandlers } from './utils/rideTrackingSocket.js';
 import {
   subscribeSocketToRide,
   unsubscribeSocketFromRide,
@@ -806,8 +807,26 @@ io.on('connection', async (socket) => {
     }
   });
 
+  /** Flutter trip tracking — same room as subscribe-ride (`ride-{id}`). */
+  socket.on('joinTracking', async (payload) => {
+    const r = await subscribeSocketToRide(socket, payload, { socketAuthEnforced, io });
+    if (r.ok) {
+      socketLog('info', 'join_tracking', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
+    } else if (socketAuthEnforced) {
+      socketLog('error', 'join_tracking_failed', { socketId: socket.id });
+    }
+  });
+
+  socket.on('leaveTracking', (payload) => {
+    const r = unsubscribeSocketFromRide(socket, payload, io);
+    if (r.ok) {
+      socketLog('info', 'leave_tracking', { socketId: socket.id, room: `ride-${r.rideIdInt}` });
+    }
+  });
+
   registerDedicatedBookingHandlers(socket, io);
   registerRideChatHandlers(socket, io);
+  registerRideTrackingHandlers(socket, io);
 
   socket.on('disconnect', () => {
     emitPresenceOfflineForSocketRooms(io, socket);

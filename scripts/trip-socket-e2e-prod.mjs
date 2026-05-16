@@ -114,6 +114,13 @@ function bindLogs(who, socket) {
     "trip-completed",
     "trip-cancelled",
     "driver-location-for-ride",
+    "driverLocationUpdated",
+    "driverArrived",
+    "tripStarted",
+    "tripEnded",
+    "trackingDisconnected",
+    "trackingReconnected",
+    "tracking:error",
     "trip-sync",
     "driver-trip-sync",
 

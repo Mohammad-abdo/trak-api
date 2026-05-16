@@ -785,6 +785,11 @@ router.post("/status/go-online", authenticate, goOnlineOffline);
  *   post:
  *     tags: [Driver Status]
  *     summary: Update GPS location (during ride or idle)
+ *     description: |
+ *       Persists driver GPS and broadcasts to active ride rooms.
+ *       **Socket (preferred during trip):** emit `updateDriverLocation` with `{ lat, lng }` or `{ latitude, longitude }`.
+ *       **Listen (rider):** `driverLocationUpdated` and legacy `driver-location-for-ride` on room `ride-{rideRequestId}`
+ *       after `subscribe-ride` / `joinTracking`. Errors on socket: `tracking:error`.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -796,7 +801,7 @@ router.post("/status/go-online", authenticate, goOnlineOffline);
  *             properties:
  *               latitude: { type: number, example: 24.7136 }
  *               longitude: { type: number, example: 46.6753 }
- *              
+ *               currentHeading: { type: number, example: 90 }
  *     responses:
  *       200: { description: Location updated }
  */
@@ -1078,6 +1083,9 @@ router.post("/rides/respond", authenticate, respondToRide);
  *   post:
  *     tags: [Driver Rides]
  *     summary: Update ride status (arrived / started)
+ *     description: |
+ *       **Socket aliases:** `arrivedToPickup` (status arrived), `startTrip` (status started).
+ *       **Room emits:** `ride-arrived` + `driverArrived`, or `ride-started` + `tripStarted`.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -1103,6 +1111,7 @@ router.post("/rides/update-status", authenticate, updateRideStatus);
  *     description: |
  *       Marks ride as completed, creates payment record, and credits
  *       driver wallet (for cash rides). Uses negotiated fare if accepted.
+ *       **Socket alias:** `endTrip` with `{ tripId, tips? }`. Emits `trip-completed` + `tripEnded`.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true

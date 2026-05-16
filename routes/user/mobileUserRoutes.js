@@ -1524,6 +1524,10 @@ router.post('/offers/cancel-driver-offer', authenticate, cancelDriverOffer);
  *   post:
  *     tags: [Offers]
  *     summary: Start tracking driver location via WebSocket. Returns driver's current location and WebSocket instructions.
+ *     description: |
+ *       Join room `ride-{bookingId}` via `subscribe-ride`, `joinChat`, or **`joinTracking`**.
+ *       Listen for **`driverLocationUpdated`** (Flutter) and legacy **`driver-location-for-ride`**,
+ *       plus **`driverArrived`**, **`tripStarted`**, **`tripEnded`** (and legacy `ride-arrived`, `ride-started`, `trip-completed`).
  *     security:
  *       - bearerAuth: []
  *     requestBody:
