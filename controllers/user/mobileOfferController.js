@@ -4,6 +4,7 @@ import { parseRideRequestIdParam } from '../../utils/rideRequestId.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { successResponse, errorResponse } from '../../utils/serverResponse.js';
 import { emitToDriver, emitToRide } from '../../utils/socketService.js';
+import { parseRejectedBidDriverIds } from '../../services/driverOfferRejectService.js';
 
 /** Throttle socket nudges when rider polls near-drivers (avoid flooding drivers). */
 const NEAR_DRIVERS_PULSE_MS = 12_000;
@@ -72,6 +73,7 @@ export const getNearDrivers = async (req, res) => {
                 scheduleDatetime: true,
                 startLatitude: true,
                 startLongitude: true,
+                rejectedBidDriverIds: true,
             },
         });
 
@@ -170,7 +172,9 @@ export const getNearDrivers = async (req, res) => {
         // Keep bids from any driver that exists.
         // Once a driver has submitted an offer, the rider must be able to see it
         // regardless of the driver's later online/availability/profile-status toggles.
-        const activeBids = bids.filter((b) => b.driver);
+        const rejectedDriverIds = new Set(parseRejectedBidDriverIds(booking.rejectedBidDriverIds));
+
+        const activeBids = bids.filter((b) => b.driver && !rejectedDriverIds.has(b.driver.id));
 
         // Fallback: include driver who responded via `/rides/respond` or `/negotiation/propose`.
         // These flows set driverId directly on the ride without creating a RideRequestBid row.
@@ -178,7 +182,7 @@ export const getNearDrivers = async (req, res) => {
         //   A) Driver counter-offered (negotiatedFare != null, status = negotiating / pending)
         //   B) Driver directly accepted (status = accepted, driverId set, no bid row)
         let respondFlowOffer = null;
-        if (booking.driverId) {
+        if (booking.driverId && !rejectedDriverIds.has(booking.driverId)) {
             const alreadyInBids = activeBids.some((b) => b.driverId === booking.driverId);
             if (!alreadyInBids) {
                 const driver = await prisma.user.findUnique({
@@ -434,53 +438,27 @@ export const cancelDriverOffer = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid booking_id' });
         }
 
-        const booking = await prisma.rideRequest.findFirst({
-            where: { id: rideId, riderId },
-            select: { id: true, status: true, driverId: true },
-        });
+        const { rejectDriverOfferForBooking } = await import("../../services/driverOfferRejectService.js");
+        const io = req.app.get('io') || global.io;
+        const result = await rejectDriverOfferForBooking({ rideId, riderId, driverId, io });
 
-        if (!booking) {
-            return res.status(404).json({ success: false, message: 'Booking not found' });
-        }
-
-        if (booking.status !== 'accepted' || !booking.driverId) {
-            return res.status(400).json({
+        if (!result.ok) {
+            return res.status(result.httpStatus).json({
                 success: false,
-                message: 'No driver is assigned to this booking, or booking is not in accepted state',
+                code: result.code,
+                message: result.message,
             });
         }
-
-        if (booking.driverId !== driverId) {
-            return res.status(400).json({ success: false, message: 'Driver does not match this booking' });
-        }
-
-        await prisma.rideRequest.update({
-            where: { id: rideId },
-            data: {
-                driverId: null,
-                riderequestInDriverId: null,
-                status: 'pending',
-                otp: null,
-            },
-        });
-
-        const io = req.app.get('io');
-        if (io) {
-            io.to(`driver-${driverId}`).emit('driver-offer-cancelled', {
-                booking_id: rideId,
-                rider_id: riderId,
-            });
-        }
-
-        try {
-            const { emitDriverTripSyncFromReq } = await import("../../utils/driverTripSocketSync.js");
-            emitDriverTripSyncFromReq(req, rideId, "rider_cancel_driver_offer", driverId);
-        } catch (_) {}
 
         return res.json({
             success: true,
-            message: 'Driver offer cancelled. You can select another driver.',
-            data: { booking_id: rideId, status: 'pending' },
+            message: result.message,
+            data: {
+                booking_id: rideId,
+                status: result.status,
+                branch: result.branch,
+                alreadyRejected: result.alreadyRejected ?? false,
+            },
         });
     } catch (error) {
         console.error('Cancel driver offer error:', error);

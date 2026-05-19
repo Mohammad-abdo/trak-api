@@ -135,9 +135,17 @@ Then listen:
 
 Listen on rider app:
 - `driver-offer-received`          (unified: bid/negotiation/direct accept)
+- `driver-offer-rejected` / `driverOfferRejected`  (rider rejected an offer — `rejectedBy: rider`)
 - `ride-negotiation-offer`         (counter offer)
 - `ride-negotiation-rejected`
+- `driver-offer-cancelled`         (rider unassigned an accepted driver)
 - `trip-tracking-started`
+
+Listen on driver app (offer reject):
+- `driver-offer-rejected` / `driverOfferRejected`
+- `driver-offer-cancelled`         (accepted unassign only)
+- `ride-negotiation-rejected`      (when rider rejects during negotiation)
+- `driver-trip-sync`               (`syncReason: rider_rejected_offer`)
 
 ## 8) Full “trip flow” (what to do, in order)
 

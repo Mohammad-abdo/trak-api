@@ -1479,11 +1479,16 @@ router.post('/offers/accept-driver', authenticate, acceptDriver);
  * /apimobile/user/offers/cancel-driver-offer:
  *   post:
  *     tags: [Offers]
- *     summary: Cancel driver offer (remove assigned driver from booking)
+ *     summary: Reject or cancel a driver offer
  *     description: |
- *       Removes the currently accepted driver from the booking and sets status back to pending.
- *       Use this when the rider wants to choose a different driver before the trip starts.
- *       Driver is notified via Socket.IO (driver-offer-cancelled). After success, rider can call near-drivers and accept-driver again.
+ *       **Reject offer from list** (`pending` + bid): removes bid, adds driver to `rejectedBidDriverIds`, ride stays pending.
+ *       **Reject negotiation** (`negotiating`): clears driver and negotiation, status `pending`.
+ *       **Unassign accepted driver** (`accepted`): same as before — status `pending`, driver cleared.
+ *
+ *       **Socket (rider + driver):** `driver-offer-rejected` / `driverOfferRejected`, `trip-sync` / `driver-trip-sync` (`syncReason: rider_rejected_offer`).
+ *       **Negotiating only:** also `ride-negotiation-rejected` (`rejectedBy: rider`).
+ *       **Accepted unassign:** also `driver-offer-cancelled` (driver + rider).
+ *       Rejected drivers are hidden from `near-drivers` for this booking.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
